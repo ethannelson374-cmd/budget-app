@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budget-backend"
+version = "0.1.0"
+description = "Phase 1 backend for the Budget personal finance application"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.16.4",
+  "argon2-cffi==25.1.0",
+  "email-validator==2.2.0",
+  "fastapi==0.116.1",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "PyMySQL==1.1.1",
+  "SQLAlchemy==2.0.43",
+  "tzdata==2025.2",
+  "uvicorn[standard]==0.35.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "mypy==1.17.1",
+  "pytest==8.4.1",
+  "pytest-cov==6.2.1",
+  "ruff==0.12.9",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --cov=app --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+markers = [
+  "mysql_integration: opt-in migration and TLS checks against an empty disposable MySQL schema",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/*.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+strict = true
+warn_unused_ignores = true
+exclude = ["migrations/"]

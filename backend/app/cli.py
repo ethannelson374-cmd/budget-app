@@ -1,0 +1,455 @@
+from __future__ import annotations
+
+import argparse
+import calendar
+import getpass
+import sys
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
+
+from app.core.config import Settings
+from app.core.database import Database, build_database_url
+from app.core.security import hash_password, normalize_identity, utc_now
+from app.models import (
+    Account,
+    AuditEvent,
+    Category,
+    FinancialInstitution,
+    InstallationState,
+    LoginThrottle,
+    SessionRecord,
+    Transaction,
+    User,
+    UserSettings,
+)
+from app.services.auth import add_audit_event, revoke_user_sessions
+from app.services.catalog import DEFAULT_CATEGORIES
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+
+def migrate(settings: Settings | None = None) -> None:
+    configuration = Config(str(BACKEND_ROOT / "alembic.ini"))
+    if settings is not None:
+        configuration.attributes["settings"] = settings
+    command.upgrade(configuration, "head")
+
+
+def _month_date(anchor: date, offset: int, day: int) -> date:
+    absolute_month = anchor.year * 12 + anchor.month - 1 + offset
+    year, zero_based_month = divmod(absolute_month, 12)
+    month = zero_based_month + 1
+    return date(year, month, min(day, calendar.monthrange(year, month)[1]))
+
+
+def _guard_demo_settings(settings: Settings) -> None:
+    url = build_database_url(settings)
+    if settings.is_production or not settings.demo_mode or url.get_backend_name() != "sqlite":
+        raise RuntimeError(
+            "Demo reset is permitted only for an explicit non-production SQLite demo"
+        )
+    database_path = Path(url.database or "")
+    if str(database_path) == ":memory:":
+        raise RuntimeError("Demo reset requires a dedicated on-disk SQLite database")
+    if database_path.name in {"", ".", ".."}:
+        raise RuntimeError("The demo database path is not safe")
+    if "demo" not in database_path.stem.casefold() or database_path.suffix.casefold() not in {
+        ".db",
+        ".sqlite",
+        ".sqlite3",
+    }:
+        raise RuntimeError("Demo reset requires a dedicated database filename containing 'demo'")
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def reset_demo(settings: Settings) -> None:
+    _guard_demo_settings(settings)
+    migrate(settings)
+    database = Database.from_settings(settings)
+    now = utc_now()
+    today = datetime.now(ZoneInfo("America/Chicago")).date()
+    try:
+        with database.session_factory() as db:
+            for model in (
+                Transaction,
+                Account,
+                FinancialInstitution,
+                Category,
+                SessionRecord,
+                LoginThrottle,
+                AuditEvent,
+                UserSettings,
+                User,
+            ):
+                db.execute(delete(model))
+            state = db.get(InstallationState, 1)
+            if state is None:
+                state = InstallationState(id=1)
+                db.add(state)
+
+            user = User(
+                username="demo",
+                normalized_username="demo",
+                email="demo@budget.local",
+                normalized_email="demo@budget.local",
+                password_hash=hash_password("DemoPassword!2026"),
+                settings=UserSettings(
+                    currency="USD",
+                    timezone="America/Chicago",
+                    theme="system",
+                    annual_gross_income=Decimal("78000.0000"),
+                    pay_frequency="biweekly",
+                    onboarding_complete=True,
+                ),
+            )
+            db.add(user)
+            db.flush()
+
+            categories: dict[str, Category] = {}
+            for definition in DEFAULT_CATEGORIES:
+                category = Category(
+                    user_id=user.id,
+                    stable_key=definition["key"],
+                    name=definition["name"],
+                    icon=definition["icon"],
+                    enabled=True,
+                )
+                db.add(category)
+                categories[definition["key"]] = category
+            db.flush()
+
+            institution = FinancialInstitution(
+                user_id=user.id,
+                external_id="demo-institution",
+                name="Demo Community Credit Union",
+            )
+            db.add(institution)
+            db.flush()
+            accounts = {
+                "checking": Account(
+                    user_id=user.id,
+                    institution_id=institution.id,
+                    external_id="demo-checking",
+                    name="Everyday Checking",
+                    official_name="Everyday Checking Account",
+                    account_type="depository",
+                    account_subtype="checking",
+                    current_balance=Decimal("3240.5200"),
+                    available_balance=Decimal("3090.5200"),
+                    credit_limit=None,
+                    currency="USD",
+                    mask_last4="1842",
+                    last_synced_at=now,
+                ),
+                "savings": Account(
+                    user_id=user.id,
+                    institution_id=institution.id,
+                    external_id="demo-savings",
+                    name="Emergency Savings",
+                    official_name="High Yield Savings",
+                    account_type="depository",
+                    account_subtype="savings",
+                    current_balance=Decimal("12850.0000"),
+                    available_balance=Decimal("12850.0000"),
+                    credit_limit=None,
+                    currency="USD",
+                    mask_last4="9027",
+                    last_synced_at=now,
+                ),
+                "credit": Account(
+                    user_id=user.id,
+                    institution_id=institution.id,
+                    external_id="demo-credit",
+                    name="Rewards Card",
+                    official_name="Rewards Signature Card",
+                    account_type="credit",
+                    account_subtype="credit card",
+                    current_balance=Decimal("-680.2400"),
+                    available_balance=Decimal("7319.7600"),
+                    credit_limit=Decimal("8000.0000"),
+                    currency="USD",
+                    mask_last4="4416",
+                    last_synced_at=now,
+                ),
+                "loan": Account(
+                    user_id=user.id,
+                    institution_id=institution.id,
+                    external_id="demo-loan",
+                    name="Auto Loan",
+                    official_name="Vehicle Installment Loan",
+                    account_type="loan",
+                    account_subtype="auto",
+                    current_balance=Decimal("-8200.0000"),
+                    available_balance=None,
+                    credit_limit=None,
+                    currency="USD",
+                    mask_last4="7319",
+                    last_synced_at=now,
+                ),
+            }
+            db.add_all(accounts.values())
+            db.flush()
+
+            def transaction(
+                suffix: str,
+                posted: date,
+                account_key: str,
+                category_key: str,
+                merchant: str,
+                description: str,
+                amount: str,
+                kind: str,
+                *,
+                pending: bool = False,
+            ) -> None:
+                if posted > today:
+                    return
+                db.add(
+                    Transaction(
+                        user_id=user.id,
+                        account_id=accounts[account_key].id,
+                        category_id=categories[category_key].id,
+                        external_id=f"demo-{suffix}",
+                        posted_date=posted,
+                        authorized_date=posted,
+                        merchant=merchant,
+                        description=description,
+                        amount=Decimal(amount),
+                        kind=kind,
+                        pending=pending,
+                        imported_at=now,
+                    )
+                )
+
+            for offset in range(-5, 1):
+                month_key = _month_date(today.replace(day=1), offset, 1).strftime("%Y%m")
+                transaction(
+                    f"pay-1-{month_key}",
+                    _month_date(today, offset, 1),
+                    "checking",
+                    "income",
+                    "Northstar Software",
+                    "Payroll direct deposit",
+                    "2250.0000",
+                    "income",
+                )
+                transaction(
+                    f"rent-{month_key}",
+                    _month_date(today, offset, 3),
+                    "checking",
+                    "housing",
+                    "Oak Street Apartments",
+                    "Monthly rent",
+                    "-1450.0000",
+                    "expense",
+                )
+                transaction(
+                    f"groceries-1-{month_key}",
+                    _month_date(today, offset, 7),
+                    "credit",
+                    "groceries",
+                    "Fresh Market",
+                    "Weekly groceries",
+                    str(Decimal("-112.50") - Decimal(abs(offset) * 3)),
+                    "expense",
+                )
+                transaction(
+                    f"gas-{month_key}",
+                    _month_date(today, offset, 10),
+                    "credit",
+                    "gas",
+                    "QuickFuel",
+                    "Fuel",
+                    "-58.4200",
+                    "expense",
+                )
+                transaction(
+                    f"dining-{month_key}",
+                    _month_date(today, offset, 12),
+                    "credit",
+                    "restaurants",
+                    "Juniper Kitchen",
+                    "Dinner",
+                    str(Decimal("-74.30") - Decimal(abs(offset) * 2)),
+                    "expense",
+                )
+                transaction(
+                    f"subscription-{month_key}",
+                    _month_date(today, offset, 14),
+                    "credit",
+                    "subscriptions",
+                    "Streambox",
+                    "Monthly streaming plan",
+                    "-15.9900",
+                    "expense",
+                )
+                transaction(
+                    f"pay-2-{month_key}",
+                    _month_date(today, offset, 15),
+                    "checking",
+                    "income",
+                    "Northstar Software",
+                    "Payroll direct deposit",
+                    "2250.0000",
+                    "income",
+                )
+                transaction(
+                    f"utilities-{month_key}",
+                    _month_date(today, offset, 18),
+                    "checking",
+                    "utilities",
+                    "City Utilities",
+                    "Electric, water, and waste",
+                    str(Decimal("-168.00") - Decimal(abs(offset) * 4)),
+                    "expense",
+                )
+                transaction(
+                    f"loan-{month_key}",
+                    _month_date(today, offset, 20),
+                    "checking",
+                    "debt_payments",
+                    "Demo Community Credit Union",
+                    "Auto loan payment",
+                    "-325.0000",
+                    "expense",
+                )
+                transaction(
+                    f"groceries-2-{month_key}",
+                    _month_date(today, offset, 21),
+                    "credit",
+                    "groceries",
+                    "Neighborhood Foods",
+                    "Weekly groceries",
+                    "-96.1800",
+                    "expense",
+                )
+                transaction(
+                    f"transfer-out-{month_key}",
+                    _month_date(today, offset, 22),
+                    "checking",
+                    "transfers",
+                    "Transfer",
+                    "Transfer to savings",
+                    "-300.0000",
+                    "transfer",
+                )
+                transaction(
+                    f"transfer-in-{month_key}",
+                    _month_date(today, offset, 22),
+                    "savings",
+                    "transfers",
+                    "Transfer",
+                    "Transfer from checking",
+                    "300.0000",
+                    "transfer",
+                )
+
+            transaction(
+                "grocery-refund-current",
+                _month_date(today, 0, 23),
+                "credit",
+                "groceries",
+                "Fresh Market",
+                "Grocery return",
+                "23.5000",
+                "refund",
+            )
+            transaction(
+                "pending-grocery-current",
+                today,
+                "credit",
+                "groceries",
+                "Fresh Market",
+                "Pending groceries",
+                "-67.1400",
+                "expense",
+                pending=True,
+            )
+
+            state.initialized_at = now
+            add_audit_event(
+                db,
+                settings,
+                action="demo.reset",
+                outcome="success",
+                request_id=None,
+                user_id=user.id,
+            )
+            db.commit()
+    finally:
+        database.engine.dispose()
+
+
+def reset_password(settings: Settings, username: str) -> None:
+    if not sys.stdin.isatty():
+        raise RuntimeError("Password reset requires an interactive terminal")
+    password = getpass.getpass("New password: ")
+    confirmation = getpass.getpass("Confirm new password: ")
+    if password != confirmation:
+        raise ValueError("Passwords do not match")
+    if not 12 <= len(password) <= 128:
+        raise ValueError("Password must contain between 12 and 128 characters")
+
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            user = db.scalar(
+                select(User)
+                .options(selectinload(User.settings))
+                .where(User.normalized_username == normalize_identity(username))
+                .with_for_update()
+            )
+            if user is None:
+                raise LookupError("No matching user was found")
+            user.password_hash = hash_password(password)
+            revoke_user_sessions(db, user.id)
+            add_audit_event(
+                db,
+                settings,
+                action="auth.password_reset",
+                outcome="success",
+                request_id=None,
+                user_id=user.id,
+                detail="interactive_cli",
+            )
+            db.commit()
+    finally:
+        database.engine.dispose()
+
+
+def parser() -> argparse.ArgumentParser:
+    command_parser = argparse.ArgumentParser(prog="python -m app.cli")
+    subcommands = command_parser.add_subparsers(dest="command", required=True)
+    subcommands.add_parser("demo-reset", help="Migrate and rebuild the guarded demo database")
+    reset = subcommands.add_parser(
+        "reset-password", help="Interactively reset an owner password and revoke sessions"
+    )
+    reset.add_argument("--username", required=True, help="Owner username (password is prompted)")
+    return command_parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    settings = Settings()
+    try:
+        if args.command == "demo-reset":
+            reset_demo(settings)
+            print("Demo database migrated and reset successfully.")
+        elif args.command == "reset-password":
+            reset_password(settings, args.username)
+            print("Password reset and active sessions revoked.")
+    except (LookupError, RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,69 @@
+[Unit]
+Description=Budget FastAPI API
+Documentation=file:/opt/budget-app/current/deploy/README.md
+Wants=network-online.target
+After=network-online.target
+ConditionPathIsDirectory=/opt/budget-app/current/backend
+ConditionPathExists=/etc/budget-app/budget.env
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=budgetapp
+Group=budgetapp
+WorkingDirectory=/opt/budget-app/current/backend
+EnvironmentFile=/etc/budget-app/budget.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/budget-app/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1 --limit-concurrency 8 --timeout-keep-alive 5 --no-access-log
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=budget-api
+UMask=0077
+
+# The process needs outbound network access to HeatWave and read-only access to
+# the release. StateDirectory remains available for tightly scoped runtime state.
+StateDirectory=budget-app
+StateDirectoryMode=0700
+RuntimeDirectory=budget-app
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RemoveIPC=yes
+
+# Leave most of the 1 GB VM available to Ubuntu, Nginx, and the page cache.
+MemoryHigh=300M
+MemoryMax=384M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
