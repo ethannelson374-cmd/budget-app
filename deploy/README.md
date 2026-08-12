@@ -94,6 +94,8 @@ DB_NAME=<database-name>
 DB_USER=<database-user>
 DB_PASSWORD=<database-password>
 DB_SSL_REQUIRED=true
+DB_SSL_MODE=REQUIRED
+DB_SSL_CA=
 ```
 
 Keep the public hostname and both loopback names in `ALLOWED_HOSTS`. The public
@@ -129,13 +131,17 @@ installation-complete marker, never the token itself.
 active sessions. `ENCRYPTION_KEY` is loaded and redacted but reserved for Phase
 2 Plaid-token encryption. Secret values must never appear in logs or API output.
 
-Use a private HeatWave DNS name whose certificate identity matches
-`DB_HOST` and which resolves inside the VCN to `10.0.1.14`. Use the private IP as
-`DB_HOST` only when the server certificate contains `10.0.1.14` as an IP subject
-alternative name. With `DB_SSL_REQUIRED=true`, certificate and hostname
-verification are mandatory; an encrypted connection without identity
-verification is not sufficient. The application constructs its SQLAlchemy URL
-from the individual `DB_*` fields. `DATABASE_URL` is never the source of truth.
+Use the private HeatWave internal FQDN for `DB_HOST`; in the current OCI
+deployment it resolves inside the VCN to `10.0.1.14`. `DB_SSL_REQUIRED=true` is
+always mandatory in production. The current HeatWave service-defined
+certificate deployment uses `DB_SSL_MODE=REQUIRED`, which enforces encrypted
+transport and verifies after connect that a TLS cipher was negotiated.
+
+For a future certificate chain that can be explicitly trusted, set
+`DB_SSL_MODE=VERIFY_CA` or preferably `VERIFY_IDENTITY` and set `DB_SSL_CA` to
+the readable CA file path. `VERIFY_IDENTITY` also validates `DB_HOST` against
+the certificate identity. The application constructs its SQLAlchemy URL from
+the individual `DB_*` fields. `DATABASE_URL` is never the source of truth.
 
 Lock down the file after editing:
 

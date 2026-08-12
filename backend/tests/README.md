@@ -24,3 +24,10 @@ pytest -m mysql_integration tests/test_mysql_integration.py
 The unprefixed `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and
 `DB_SSL_REQUIRED` variables may be used instead only when no `TEST_DB_*` value is
 present. The `_test`, empty-schema, and TLS guards still apply.
+
+### TLS mode overrides
+
+The guarded MySQL integration test defaults to `DB_SSL_MODE=REQUIRED`. To test
+certificate validation, set `TEST_DB_SSL_MODE=VERIFY_CA` or
+`TEST_DB_SSL_MODE=VERIFY_IDENTITY` and provide `TEST_DB_SSL_CA` with the CA file
+path. `DB_SSL_REQUIRED=true` remains mandatory.

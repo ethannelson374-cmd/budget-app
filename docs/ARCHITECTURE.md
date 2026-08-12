@@ -29,7 +29,8 @@ local development.
 
 Configuration comes from individually named environment fields. Production
 requires `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and
-`DB_SSL_REQUIRED=true`. The application creates a SQLAlchemy `URL` object
+`DB_SSL_REQUIRED=true`. `DB_SSL_MODE` defaults to `REQUIRED`; optional
+`DB_SSL_CA` is mandatory for `VERIFY_CA` and `VERIFY_IDENTITY`. The application creates a SQLAlchemy `URL` object
 programmatically with `URL.create("mysql+pymysql", ...)`; runtime and Alembic use
 the same factory. `DATABASE_URL` is neither read nor treated as authoritative.
 This avoids ambiguous precedence and safely represents reserved characters in
@@ -41,12 +42,13 @@ small-VM MySQL engine uses a bounded pool (two persistent connections, one
 overflow connection), pre-ping, LIFO reuse, recycling, and finite connect/read/
 write timeouts.
 
-For HeatWave, TLS must validate both the certificate chain and server identity.
-`DB_HOST` should be the private internal FQDN that resolves to `10.0.1.14` and
-appears on the certificate. The IP may be used directly only if the certificate
-has the matching IP SAN. Readiness verifies database connectivity and a
-non-empty negotiated TLS cipher but never returns hostnames, credentials, or
-connection strings.
+For HeatWave, production always requires TLS. `DB_SSL_MODE=REQUIRED` encrypts
+the connection and is the current mode for the OCI service-defined certificate
+deployment. `VERIFY_CA` validates a CA file supplied by `DB_SSL_CA`, while
+`VERIFY_IDENTITY` additionally validates `DB_HOST` against the certificate and
+is the preferred future mode with a user-defined/trusted certificate chain.
+Readiness verifies database connectivity and a non-empty negotiated TLS cipher
+but never returns hostnames, credentials, or connection strings.
 
 The initial migration establishes:
 

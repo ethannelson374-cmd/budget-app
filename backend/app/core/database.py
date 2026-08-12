@@ -39,10 +39,29 @@ def build_database_url(settings: Settings) -> URL:
     )
 
 
-def create_verified_ssl_context() -> ssl.SSLContext:
-    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-    context.check_hostname = True
-    context.verify_mode = ssl.CERT_REQUIRED
+def create_ssl_context(settings: Settings) -> ssl.SSLContext:
+    """Create the TLS policy requested by DB_SSL_MODE.
+
+    REQUIRED encrypts the connection but intentionally does not authenticate the
+    server certificate. VERIFY_CA authenticates the configured CA chain, while
+    VERIFY_IDENTITY additionally checks DB_HOST against the certificate identity.
+    """
+
+    if settings.db_ssl_mode == "REQUIRED":
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    else:
+        if settings.db_ssl_ca is None:
+            raise RuntimeError(f"DB_SSL_CA is required when DB_SSL_MODE={settings.db_ssl_mode}")
+        context = ssl.create_default_context(
+            purpose=ssl.Purpose.SERVER_AUTH,
+            cafile=str(settings.db_ssl_ca.expanduser()),
+        )
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = settings.db_ssl_mode == "VERIFY_IDENTITY"
+
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     return context
 
 
@@ -53,7 +72,7 @@ def _mysql_connect_args(settings: Settings) -> dict[str, Any]:
         "write_timeout": 30,
     }
     if settings.db_ssl_required:
-        args["ssl"] = create_verified_ssl_context()
+        args["ssl"] = create_ssl_context(settings)
     return args
 
 

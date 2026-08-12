@@ -11,6 +11,7 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "production"]
+DatabaseSSLMode = Literal["REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"]
 
 
 def _strict_bool(value: Any) -> bool:
@@ -79,6 +80,8 @@ class Settings(BaseSettings):
     db_user: str | None = None
     db_password: SecretStr | None = None
     db_ssl_required: bool | None = None
+    db_ssl_mode: DatabaseSSLMode = "REQUIRED"
+    db_ssl_ca: Path | None = None
 
     @field_validator("demo_mode", "db_ssl_required", mode="before")
     @classmethod
@@ -86,6 +89,11 @@ class Settings(BaseSettings):
         if value is None:
             return value
         return _strict_bool(value)
+
+    @field_validator("db_ssl_mode", mode="before")
+    @classmethod
+    def normalize_database_ssl_mode(cls, value: Any) -> Any:
+        return value.strip().upper() if isinstance(value, str) else value
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -120,7 +128,7 @@ class Settings(BaseSettings):
             raise ValueError("must contain hostnames only, not URLs or paths")
         return ",".join(hosts)
 
-    @field_validator("db_host", "db_name", "db_user", mode="before")
+    @field_validator("db_host", "db_name", "db_user", "db_ssl_ca", mode="before")
     @classmethod
     def blank_string_is_missing(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
@@ -170,6 +178,8 @@ class Settings(BaseSettings):
                 )
             if self.db_ssl_required is not True:
                 raise ValueError("DB_SSL_REQUIRED must be true in production")
+            if self.db_ssl_mode in {"VERIFY_CA", "VERIFY_IDENTITY"} and self.db_ssl_ca is None:
+                raise ValueError(f"DB_SSL_CA is required when DB_SSL_MODE={self.db_ssl_mode}")
             required_secrets = {
                 "APP_SECRET": self.app_secret,
                 "SESSION_SECRET": self.session_secret,

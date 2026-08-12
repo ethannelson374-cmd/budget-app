@@ -12,7 +12,7 @@ from app.core.config import Settings, bootstrap_token_has_256_bits
 from app.core.database import (
     build_database_url,
     create_database_engine,
-    create_verified_ssl_context,
+    create_ssl_context,
     verify_tls_cipher,
 )
 
@@ -138,10 +138,65 @@ def test_sqlite_is_only_selected_for_demo_or_test(tmp_path: Path) -> None:
         build_database_url(Settings(_env_file=None, app_env="development", demo_mode=False))
 
 
-def test_ssl_context_verifies_certificate_and_hostname() -> None:
-    context = create_verified_ssl_context()
+def test_database_ssl_mode_defaults_to_required() -> None:
+    settings = Settings(**production_values())
+    assert settings.db_ssl_mode == "REQUIRED"
+    assert settings.db_ssl_ca is None
+
+
+def test_database_ssl_mode_normalizes_and_rejects_unknown_values() -> None:
+    values = production_values()
+    values["db_ssl_mode"] = " verify_identity "
+    values["db_ssl_ca"] = "/etc/budget-app/heatwave-ca.crt"
+    settings = Settings(**values)
+    assert settings.db_ssl_mode == "VERIFY_IDENTITY"
+
+    values["db_ssl_mode"] = "disabled"
+    with pytest.raises(ValidationError):
+        Settings(**values)
+
+
+def test_verification_modes_require_ca_in_production() -> None:
+    for mode in ("VERIFY_CA", "VERIFY_IDENTITY"):
+        values = production_values()
+        values["db_ssl_mode"] = mode
+        with pytest.raises(ValidationError, match="DB_SSL_CA is required"):
+            Settings(**values)
+
+
+def test_required_ssl_context_encrypts_without_certificate_validation() -> None:
+    context = create_ssl_context(Settings(**production_values()))
+    assert context.verify_mode == ssl.CERT_NONE
+    assert context.check_hostname is False
+    assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+
+
+@pytest.mark.parametrize(
+    ("mode", "check_hostname"),
+    [("VERIFY_CA", False), ("VERIFY_IDENTITY", True)],
+)
+def test_verification_ssl_context_uses_explicit_ca(
+    monkeypatch: pytest.MonkeyPatch, mode: str, check_hostname: bool
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_create_default_context(*, purpose: ssl.Purpose, cafile: str) -> ssl.SSLContext:
+        captured.update(purpose=purpose, cafile=cafile)
+        return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    monkeypatch.setattr(database_module.ssl, "create_default_context", fake_create_default_context)
+    values = production_values()
+    values["db_ssl_mode"] = mode
+    values["db_ssl_ca"] = "/etc/budget-app/heatwave-ca.crt"
+    context = create_ssl_context(Settings(**values))
+
+    assert captured == {
+        "purpose": ssl.Purpose.SERVER_AUTH,
+        "cafile": str(Path("/etc/budget-app/heatwave-ca.crt")),
+    }
     assert context.verify_mode == ssl.CERT_REQUIRED
-    assert context.check_hostname is True
+    assert context.check_hostname is check_hostname
+    assert context.minimum_version == ssl.TLSVersion.TLSv1_2
 
 
 def test_heatwave_pool_and_timeouts_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -173,6 +228,8 @@ def test_heatwave_pool_and_timeouts_are_bounded(monkeypatch: pytest.MonkeyPatch)
     assert connect_args["read_timeout"] == 30
     assert connect_args["write_timeout"] == 30
     assert isinstance(connect_args["ssl"], ssl.SSLContext)
+    assert connect_args["ssl"].verify_mode == ssl.CERT_NONE
+    assert connect_args["ssl"].check_hostname is False
     assert listeners == [(sentinel, "connect")]
 
 

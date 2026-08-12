@@ -14,6 +14,7 @@ from app.core.database import create_database_engine
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 MYSQL_FIELDS = ("HOST", "PORT", "NAME", "USER", "PASSWORD", "SSL_REQUIRED")
+MYSQL_OPTIONAL_FIELDS = ("SSL_MODE", "SSL_CA")
 
 
 def mysql_test_settings(environ: Mapping[str, str]) -> Settings | None:
@@ -25,6 +26,7 @@ def mysql_test_settings(environ: Mapping[str, str]) -> Settings | None:
     has_test_values = any(environ.get(f"TEST_DB_{field}") for field in MYSQL_FIELDS)
     prefix = "TEST_DB_" if has_test_values else "DB_"
     values = {field: environ.get(f"{prefix}{field}") for field in MYSQL_FIELDS}
+    optional = {field: environ.get(f"{prefix}{field}") for field in MYSQL_OPTIONAL_FIELDS}
     missing = [f"{prefix}{field}" for field, value in values.items() if not value]
     if missing:
         raise RuntimeError(
@@ -47,6 +49,8 @@ def mysql_test_settings(environ: Mapping[str, str]) -> Settings | None:
         db_user=values["USER"],
         db_password=values["PASSWORD"],
         db_ssl_required=values["SSL_REQUIRED"],
+        db_ssl_mode=optional["SSL_MODE"] or "REQUIRED",
+        db_ssl_ca=optional["SSL_CA"] or None,
     )
 
 

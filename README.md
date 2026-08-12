@@ -101,6 +101,8 @@ repository `.env` file.
 | `DB_USER` | Least-privilege application database user |
 | `DB_PASSWORD` | Database password |
 | `DB_SSL_REQUIRED` | Strict `true`/`false`; production requires `true` |
+| `DB_SSL_MODE` | `REQUIRED` (default), `VERIFY_CA`, or `VERIFY_IDENTITY` |
+| `DB_SSL_CA` | CA file path required by `VERIFY_CA` / `VERIFY_IDENTITY` |
 
 The database connection is assembled with `sqlalchemy.URL.create()` from the
 individual `DB_*` settings. A combined database URL is not a supported setting
@@ -129,6 +131,10 @@ Do not reuse one generated value across multiple variables.
 
 SQLite is allowed only in explicit demo and test modes. Production refuses to
 start with demo mode, missing `DB_*` settings, or database TLS disabled.
+`DB_SSL_MODE` defaults to `REQUIRED` for backward compatibility. The current OCI
+HeatWave service-defined certificate deployment uses `REQUIRED`; use
+`VERIFY_IDENTITY` with an explicit `DB_SSL_CA` when the DB is moved to a
+certificate chain that the application can trust.
 
 Run migrations from `backend`:
 
@@ -233,9 +239,10 @@ HTTPS-required and rate-limit responses.
 - **Database connection fails:** verify `DB_HOST` resolves from the VM, the
   database subnet Security List allows `10.0.0.16/32` to TCP `3306`, and E2
   egress permits the connection.
-- **TLS verification fails:** use the internal FQDN represented in the HeatWave
-  certificate and ensure its issuing CA is trusted by Ubuntu. Do not disable
-  verification in production.
+- **TLS connection fails:** confirm `DB_SSL_REQUIRED=true`. The current OCI
+  service-defined certificate deployment uses `DB_SSL_MODE=REQUIRED`. If using
+  `VERIFY_CA` or `VERIFY_IDENTITY`, configure `DB_SSL_CA` with the trusted CA
+  file; `VERIFY_IDENTITY` also requires `DB_HOST` to match the certificate.
 - **Login cookie is missing:** production cookies require HTTPS, and Uvicorn
   must trust forwarded headers only from loopback Nginx.
 - **Frontend routes return 404:** install the supplied Nginx SPA fallback while
