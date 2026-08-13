@@ -3,10 +3,10 @@
 Budget is a single-user-first personal finance dashboard built as a lightweight
 modular monolith. Phase 1 provides secure first-run account setup, a persistent
 demo environment, category and income settings, and a calculated monthly
-dashboard. Phase 2A adds writeable manual accounts and transactions so the
-production dashboard can use real user-entered financial data before bank sync
-is enabled. It is designed to run on an Oracle Cloud E2 Micro VM without
-containers.
+dashboard. Phase 2A adds writeable manual accounts and transactions, Phase 2B
+adds secure Plaid bank connections, and Phase 2C adds cursor-based Plaid
+transaction synchronization with manual and scheduled refresh. It is designed to
+run on an Oracle Cloud E2 Micro VM without containers.
 
 ## Phase 1 features
 
@@ -31,9 +31,26 @@ containers.
   Plaid is introduced while preserving manual adjustments.
 - Dashboard, account, and transaction views immediately reflect manual records.
 
-Plaid/live bank synchronization, recurring-charge analysis, budgets, goals,
+## Phase 2B features
+
+- Plaid Link and OAuth return handling for Sandbox/Production bank connections.
+- AES-GCM encrypted Plaid access tokens, connected institutions/accounts, balance
+  import, duplicate-Item prevention, and disconnect.
+
+## Phase 2C features
+
+- Incremental `/transactions/sync` ingestion with a persisted cursor per Plaid
+  Item and atomic added/modified/removed patching.
+- Pending-to-posted reconciliation through Plaid transaction identifiers, PFCv2
+  metadata storage, category mapping, and Budget's inflow/outflow sign convention.
+- Manual **Sync now** on connected institutions plus a lightweight systemd timer
+  that runs the same CLI sync path every 15 minutes.
+- Connected account balances are refreshed from transaction-sync responses while
+  manual records remain unaffected and Plaid transactions remain read-only.
+
+Webhook-triggered synchronization, recurring-charge analysis, budgets, goals,
 debt workflows, forecasts, AI insights, reports, and deployment automation are
-still intentionally deferred to later Phase 2/3 work.
+still intentionally deferred to later work.
 
 ## Architecture
 
@@ -147,7 +164,7 @@ Do not reuse one generated value across multiple variables.
 
 ### Phase 2B bank connections
 
-Phase 2B adds Plaid Link, encrypted Item credentials, connected institution/account import, OAuth return handling, duplicate-Item prevention, and disconnect. It intentionally does not synchronize transaction history yet; incremental `/transactions/sync`, webhooks, and scheduled synchronization are Phase 2C. Start in Plaid Sandbox.
+Phase 2B adds Plaid Link, encrypted Item credentials, connected institution/account import, OAuth return handling, duplicate-Item prevention, and disconnect. Start in Plaid Sandbox.
 
 Phase 2B adds the `cryptography` runtime dependency. After applying this change, refresh both committed Python lock artifacts from `backend` before committing or deploying:
 
@@ -155,6 +172,30 @@ Phase 2B adds the `cryptography` runtime dependency. After applying this change,
 uv lock
 uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file requirements.lock
 ```
+
+
+### Phase 2C transaction synchronization
+
+Each Plaid Item stores its `/transactions/sync` cursor and only advances it after
+all pages of one update have been collected and applied atomically. A mutation-
+during-pagination response restarts the entire page loop from the original
+cursor. A newly connected Item may initially report `NOT_READY` with an empty
+cursor; Budget records the status without treating that normal warm-up response
+as a failure and retries on a later sync. The importer requests PFCv2 plus
+original descriptions, negates Plaid's outflow-positive amount convention at the
+provider boundary, reconciles pending/posted transactions, and maps high-level
+PFC categories into Budget's existing category set with `Other` as a fallback.
+
+Manual sync is available from **Accounts → Sync now**. Production can also run:
+
+```bash
+python -m app.cli sync-plaid
+python -m app.cli sync-plaid --item-id <connection-id>
+```
+
+The supplied `budget-sync.timer` runs the same CLI path approximately every 15
+minutes. Webhook-triggered sync is intentionally deferred so polling and webhooks
+share one tested synchronization engine later.
 
 
 ## Database and migrations

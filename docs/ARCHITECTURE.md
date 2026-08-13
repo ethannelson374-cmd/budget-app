@@ -165,7 +165,7 @@ Mutations require the existing authenticated session, CSRF token, and same-origi
 checks and write sanitized audit events. Account deletion relies on the existing
 database ownership foreign keys and cascades its transactions.
 
-Plaid and live synchronization, advanced category rules, budgets, recurring
+Webhook-driven synchronization, advanced category rules, budgets, recurring
 detection, forecasting, goals, debt workflows, snapshots, AI, reports,
 MFA/social login/email recovery, offline financial access, full OCI
 provisioning, certificate automation, backup/restore automation, and automated
@@ -176,4 +176,24 @@ rollback remain deferred.
 
 Plaid credentials are server-only. FastAPI creates Link tokens and exchanges one-time public tokens. The resulting long-lived access token is encrypted with AES-GCM using a purpose-derived key from `ENCRYPTION_KEY`, with per-token random nonces and authenticated context binding the owner and Plaid Item. HeatWave stores ciphertext and nonce, never plaintext access tokens.
 
-Connected accounts are marked `source_type=plaid` and attached to a user-owned `plaid_items` record. Manual CRUD continues to reject provider-managed accounts. Disconnect calls Plaid `/item/remove` before deleting the local Item and its connected accounts. Phase 2B imports account/balance metadata only; transaction synchronization, webhook verification, update mode, and background refresh are deferred to Phase 2C.
+Connected accounts are marked `source_type=plaid` and attached to a user-owned `plaid_items` record. Manual CRUD continues to reject provider-managed accounts. Disconnect calls Plaid `/item/remove` before deleting the local Item and its connected accounts.
+
+## Plaid transaction synchronization (Phase 2C)
+
+Each Item owns one incremental Transactions cursor. The sync service retrieves all
+available pages before mutating local transaction state or advancing the cursor;
+if Plaid reports a mutation during pagination, collection restarts from the
+original cursor. This keeps the cursor and the local added/modified/removed patch
+atomic from Budget's perspective.
+
+Plaid transaction amounts are normalized once at the integration boundary to
+Budget's signed convention. PFCv2 primary/detailed/confidence metadata and the raw
+original description are retained for later categorization and recurring-charge
+work. Pending-to-posted replacements delete the earlier pending record when the
+posted transaction references its Plaid identifier. Plaid transactions remain
+provider-managed and read-only through manual CRUD endpoints.
+
+Automatic polling uses a short-lived systemd oneshot invoked by a persistent
+timer rather than adding a queue or long-running scheduler to the E2 Micro VM.
+The authenticated **Sync now** API uses the same service. Webhook verification can
+later trigger this same engine without duplicating transaction reconciliation.

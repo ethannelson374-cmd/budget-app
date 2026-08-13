@@ -101,6 +101,11 @@ export interface TransactionItem {
   authorized_date: string | null;
   merchant: string | null;
   description: string;
+  original_description: string | null;
+  payment_channel: string | null;
+  pfc_primary: string | null;
+  pfc_detailed: string | null;
+  pfc_confidence: string | null;
   amount: string;
   kind: TransactionKind;
   source_type: SourceType;
@@ -226,6 +231,9 @@ export interface PlaidConnection {
   status: "active" | "error";
   last_error_code: string | null;
   last_synced_at: string | null;
+  transactions_update_status: string | null;
+  transactions_last_synced_at: string | null;
+  transactions_last_error_code: string | null;
   institution: PlaidInstitution;
   accounts: AccountSummary[];
 }
@@ -239,4 +247,13 @@ export interface PlaidConnectionsResponse {
 export interface PlaidLinkTokenResponse {
   link_token: string;
   environment: "sandbox" | "production";
+}
+
+export interface PlaidSyncResult {
+  connection_id: number;
+  added: number;
+  modified: number;
+  removed: number;
+  update_status: string | null;
+  last_synced_at: string;
 }

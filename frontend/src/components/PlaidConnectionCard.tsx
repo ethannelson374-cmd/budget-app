@@ -1,13 +1,26 @@
 import type { PlaidConnection } from "../api/types";
 import { formatDateTime, formatMoney, maskAccount } from "../lib/format";
 
+function syncStatus(connection: PlaidConnection): string {
+  if (connection.transactions_last_error_code) return "Transaction sync needs attention";
+  if (!connection.transactions_last_synced_at) return "Transactions not synced yet";
+  if (connection.transactions_update_status === "NOT_READY") return "Plaid is preparing transaction history";
+  if (connection.transactions_update_status === "INITIAL_UPDATE_COMPLETE") return "Recent transaction history synced";
+  if (connection.transactions_update_status === "HISTORICAL_UPDATE_COMPLETE") return "Transaction history synced";
+  return `Transactions synced ${formatDateTime(connection.transactions_last_synced_at)}`;
+}
+
 export function PlaidConnectionCard({
   connection,
-  busy,
+  syncBusy,
+  disconnectBusy,
+  onSync,
   onDisconnect,
 }: {
   connection: PlaidConnection;
-  busy: boolean;
+  syncBusy: boolean;
+  disconnectBusy: boolean;
+  onSync: (connection: PlaidConnection) => void;
   onDisconnect: (connection: PlaidConnection) => void;
 }) {
   const logo = connection.institution.logo
@@ -37,10 +50,18 @@ export function PlaidConnectionCard({
         ))}
       </div>
       <footer className="connection-card-footer">
-        <span>{connection.last_synced_at ? `Balances updated ${formatDateTime(connection.last_synced_at)}` : "Connected"}</span>
-        <button className="button danger" type="button" disabled={busy} onClick={() => onDisconnect(connection)}>
-          {busy ? "Disconnecting…" : "Disconnect"}
-        </button>
+        <div className="connection-sync-copy">
+          <span>{syncStatus(connection)}</span>
+          {connection.last_synced_at && <span>Balances updated {formatDateTime(connection.last_synced_at)}</span>}
+        </div>
+        <div className="connection-actions">
+          <button className="button secondary" type="button" disabled={syncBusy || disconnectBusy} onClick={() => onSync(connection)}>
+            {syncBusy ? "Syncing…" : "Sync now"}
+          </button>
+          <button className="button danger" type="button" disabled={syncBusy || disconnectBusy} onClick={() => onDisconnect(connection)}>
+            {disconnectBusy ? "Disconnecting…" : "Disconnect"}
+          </button>
+        </div>
       </footer>
     </article>
   );

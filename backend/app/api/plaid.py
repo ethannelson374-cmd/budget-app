@@ -5,14 +5,17 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_settings_from_request, require_csrf, require_principal
 from app.core.config import Settings
+from app.core.errors import ApiError
 from app.schemas.api import (
     OkView,
     PlaidConnectionsView,
     PlaidExchangeRequest,
     PlaidLinkTokenView,
+    PlaidSyncResultView,
 )
 from app.services.auth import Principal, add_audit_event
 from app.services.plaid import create_link_token, disconnect, exchange_and_import, list_connections
+from app.services.plaid_transactions import sync_outcome_view, sync_plaid_item
 
 router = APIRouter(prefix="/plaid", tags=["plaid"])
 
@@ -61,6 +64,37 @@ def connections(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     return list_connections(db, settings, principal.user)
+
+
+@router.post("/connections/{item_id}/sync", response_model=PlaidSyncResultView)
+def sync_connection(
+    item_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    try:
+        outcome = sync_plaid_item(db, settings, principal.user, item_id)
+    except ApiError:
+        # sync_plaid_item applies no transaction changes until all Plaid pages are collected.
+        # Commit provider error state when present, then preserve the API error.
+        db.commit()
+        raise
+    add_audit_event(
+        db,
+        settings,
+        action="plaid.transactions_sync",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=(
+            f"item:{item_id};added:{outcome.added};modified:{outcome.modified};"
+            f"removed:{outcome.removed}"
+        ),
+    )
+    db.commit()
+    return sync_outcome_view(outcome)
 
 
 @router.delete("/connections/{item_id}", response_model=OkView)

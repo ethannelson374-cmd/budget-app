@@ -60,3 +60,48 @@ describe("AccountsPage Plaid connection", () => {
     expect(handler.destroy).toHaveBeenCalled();
   });
 });
+
+it("syncs a connected Plaid institution on demand", async () => {
+  vi.mocked(apiRequest).mockReset().mockImplementation(async (path, init) => {
+    if (path === "/accounts") return { accounts: [] };
+    if (path === "/plaid/connections") return {
+      configured: true,
+      environment: "sandbox",
+      connections: [{
+        id: 7,
+        status: "active",
+        last_error_code: null,
+        last_synced_at: "2026-08-13T06:00:00Z",
+        transactions_update_status: null,
+        transactions_last_synced_at: null,
+        transactions_last_error_code: null,
+        institution: { id: 1, name: "First Platypus Bank", logo: null, primary_color: null, url: null },
+        accounts: [],
+      }],
+    };
+    if (path === "/plaid/connections/7/sync" && init?.method === "POST") return {
+      connection_id: 7,
+      added: 12,
+      modified: 2,
+      removed: 1,
+      update_status: "HISTORICAL_UPDATE_COMPLETE",
+      last_synced_at: "2026-08-13T06:05:00Z",
+    };
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter><AccountsPage /></MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Sync now" }));
+  await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith(
+    "/plaid/connections/7/sync",
+    expect.objectContaining({ method: "POST" }),
+  ));
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Transaction sync complete: 12 added, 2 updated, 1 removed.",
+  );
+});

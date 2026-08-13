@@ -334,6 +334,11 @@ def connection_view(db: Session, user: User, item: PlaidItem) -> dict[str, objec
         "status": item.status,
         "last_error_code": item.last_error_code,
         "last_synced_at": as_utc(item.last_synced_at) if item.last_synced_at else None,
+        "transactions_update_status": item.transactions_update_status,
+        "transactions_last_synced_at": (
+            as_utc(item.transactions_last_synced_at) if item.transactions_last_synced_at else None
+        ),
+        "transactions_last_error_code": item.transactions_last_error_code,
         "institution": {
             "id": institution.id if institution else None,
             "name": institution.name if institution else "Connected institution",

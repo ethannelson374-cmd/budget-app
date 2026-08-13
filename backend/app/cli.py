@@ -24,6 +24,7 @@ from app.models import (
     FinancialInstitution,
     InstallationState,
     LoginThrottle,
+    PlaidItem,
     SessionRecord,
     Transaction,
     User,
@@ -31,6 +32,7 @@ from app.models import (
 )
 from app.services.auth import add_audit_event, revoke_user_sessions
 from app.services.catalog import DEFAULT_CATEGORIES
+from app.services.plaid_transactions import sync_all_plaid_items
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -80,6 +82,7 @@ def reset_demo(settings: Settings) -> None:
             for model in (
                 Transaction,
                 Account,
+                PlaidItem,
                 FinancialInstitution,
                 Category,
                 SessionRecord,
@@ -429,6 +432,17 @@ def reset_password(settings: Settings, username: str) -> None:
         database.engine.dispose()
 
 
+
+def sync_plaid(settings: Settings, item_id: int | None = None) -> dict[str, int]:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            return sync_all_plaid_items(db, settings, item_id=item_id)
+    finally:
+        database.engine.dispose()
+
+
+
 def parser() -> argparse.ArgumentParser:
     command_parser = argparse.ArgumentParser(prog="python -m app.cli")
     subcommands = command_parser.add_subparsers(dest="command", required=True)
@@ -437,6 +451,14 @@ def parser() -> argparse.ArgumentParser:
         "reset-password", help="Interactively reset an owner password and revoke sessions"
     )
     reset.add_argument("--username", required=True, help="Owner username (password is prompted)")
+    sync = subcommands.add_parser(
+        "sync-plaid", help="Synchronize Plaid transactions for active bank connections"
+    )
+    sync.add_argument(
+        "--item-id",
+        type=int,
+        help="Synchronize only one internal Plaid connection id",
+    )
     return command_parser
 
 
@@ -450,6 +472,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "reset-password":
             reset_password(settings, args.username)
             print("Password reset and active sessions revoked.")
+        elif args.command == "sync-plaid":
+            result = sync_plaid(settings, args.item_id)
+            print(
+                f"Plaid transaction sync complete: {result['succeeded']} succeeded, "
+                f"{result['failed']} failed."
+            )
+            if result["failed"]:
+                return 1
     except (LookupError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

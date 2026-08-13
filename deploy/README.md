@@ -327,3 +327,38 @@ PLAID_COUNTRY_CODES=US
 5. Keep Sandbox Items separate from Production; changing `PLAID_ENV` does not migrate an Item.
 
 The frontend receives only the short-lived Link token and one-time public token flow. Long-lived Plaid access tokens stay server-side and encrypted at rest.
+
+## Phase 2C Plaid transaction synchronization
+
+After applying migration `20260813_0004`, install the timer units alongside the
+API service:
+
+```bash
+sudo install -o root -g root -m 0644 \
+  /opt/budget-app/current/deploy/systemd/budget-sync.service \
+  /etc/systemd/system/budget-sync.service
+sudo install -o root -g root -m 0644 \
+  /opt/budget-app/current/deploy/systemd/budget-sync.timer \
+  /etc/systemd/system/budget-sync.timer
+sudo systemd-analyze verify /etc/systemd/system/budget-sync.service \
+  /etc/systemd/system/budget-sync.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now budget-sync.timer
+```
+
+The timer runs a one-shot `python -m app.cli sync-plaid` process roughly every
+15 minutes and does not add Redis, Celery, or a persistent worker. Verify it with:
+
+```bash
+systemctl list-timers budget-sync.timer
+sudo systemctl start budget-sync.service
+sudo journalctl -u budget-sync.service -n 50 --no-pager
+```
+
+The Accounts page also exposes **Sync now** for an authenticated, CSRF-protected
+manual refresh. Both paths use the same cursor-based sync service. A first sync
+can legitimately return `NOT_READY` with no cursor while Plaid prepares history;
+leave the Item active and allow a later timer/manual run to retry it. Plaid Item
+credentials remain encrypted at rest and neither the CLI nor journal output logs
+access tokens. Do not add `/transactions/refresh` to the periodic timer; it is a
+separate optional Plaid refresh operation rather than normal incremental sync.

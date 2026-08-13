@@ -1,0 +1,40 @@
+[Unit]
+Description=Budget Plaid transaction synchronization
+Documentation=file:/opt/budget-app/current/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsDirectory=/opt/budget-app/current/backend
+ConditionPathExists=/etc/budget-app/budget.env
+
+[Service]
+Type=oneshot
+User=budgetapp
+Group=budgetapp
+WorkingDirectory=/opt/budget-app/current/backend
+EnvironmentFile=/etc/budget-app/budget.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/budget-app/venv/bin/python -m app.cli sync-plaid
+TimeoutStartSec=10min
+Nice=10
+UMask=0077
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=budget-sync
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

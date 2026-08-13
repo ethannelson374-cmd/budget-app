@@ -103,5 +103,20 @@ class PlaidClient:
             },
         )
 
+    def transactions_sync(
+        self, access_token: str, *, cursor: str | None = None, count: int = 500
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "access_token": access_token,
+            "count": count,
+            "options": {
+                "include_original_description": True,
+                "personal_finance_category_version": "v2",
+            },
+        }
+        if cursor:
+            payload["cursor"] = cursor
+        return self._post("/transactions/sync", payload)
+
     def item_remove(self, access_token: str) -> dict[str, Any]:
         return self._post("/item/remove", {"access_token": access_token})

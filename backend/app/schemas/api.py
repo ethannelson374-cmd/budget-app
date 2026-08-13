@@ -269,8 +269,20 @@ class PlaidConnectionView(ViewModel):
     status: Literal["active", "error"]
     last_error_code: str | None
     last_synced_at: datetime | None
+    transactions_update_status: str | None
+    transactions_last_synced_at: datetime | None
+    transactions_last_error_code: str | None
     institution: PlaidInstitutionView
     accounts: list[AccountView]
+
+
+class PlaidSyncResultView(ViewModel):
+    connection_id: int
+    added: int
+    modified: int
+    removed: int
+    update_status: str | None
+    last_synced_at: datetime
 
 
 class PlaidConnectionsView(ViewModel):
@@ -299,6 +311,11 @@ class TransactionView(ViewModel):
     authorized_date: date | None
     merchant: str | None
     description: str
+    original_description: str | None
+    payment_channel: str | None
+    pfc_primary: str | None
+    pfc_detailed: str | None
+    pfc_confidence: str | None
     amount: str
     kind: str
     source_type: SourceType

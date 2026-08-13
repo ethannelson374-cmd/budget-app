@@ -9,6 +9,7 @@ import type {
   PlaidConnection,
   PlaidConnectionsResponse,
   PlaidLinkTokenResponse,
+  PlaidSyncResult,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { AccountCard } from "../components/AccountCard";
@@ -27,6 +28,7 @@ export function AccountsPage() {
   const { user } = useAuth();
   const [editor, setEditor] = useState<AccountSummary | null | undefined>(undefined);
   const [plaidError, setPlaidError] = useState<string | null>(null);
+  const [plaidNotice, setPlaidNotice] = useState<string | null>(null);
   const accounts = useQuery({ queryKey: queryKeys.accounts, queryFn: () => apiRequest<AccountsResponse>("/accounts") });
   const connections = useQuery({
     queryKey: queryKeys.plaidConnections,
@@ -112,6 +114,20 @@ export function AccountsPage() {
     onError: (error) => setPlaidError(errorMessage(error)),
   });
 
+  const syncPlaid = useMutation({
+    mutationFn: (connection: PlaidConnection) =>
+      apiRequest<PlaidSyncResult>(`/plaid/connections/${connection.id}/sync`, { method: "POST" }),
+    onSuccess: async (result) => {
+      setPlaidError(null);
+      setPlaidNotice(`Transaction sync complete: ${result.added} added, ${result.modified} updated, ${result.removed} removed.`);
+      await refreshFinancialData();
+    },
+    onError: (error) => {
+      setPlaidNotice(null);
+      setPlaidError(errorMessage(error));
+    },
+  });
+
   const disconnectPlaid = useMutation({
     mutationFn: (connection: PlaidConnection) => apiRequest<{ ok: boolean }>(`/plaid/connections/${connection.id}`, { method: "DELETE" }),
     onSuccess: refreshFinancialData,
@@ -154,6 +170,7 @@ export function AccountsPage() {
         <div className="inline-notice">Plaid is not configured on this server yet. Manual accounts are still available.</div>
       )}
       {plaidError && <ErrorState title="Bank connection issue" message={plaidError} />}
+      {plaidNotice && <div className="inline-notice" role="status">{plaidNotice}</div>}
       {connections.data && connections.data.connections.length > 0 && (
         <section className="account-section" aria-labelledby="connected-institutions-title">
           <div className="section-heading">
@@ -168,7 +185,9 @@ export function AccountsPage() {
               <PlaidConnectionCard
                 key={connection.id}
                 connection={connection}
-                busy={disconnectPlaid.isPending && disconnectPlaid.variables?.id === connection.id}
+                syncBusy={syncPlaid.isPending && syncPlaid.variables?.id === connection.id}
+                disconnectBusy={disconnectPlaid.isPending && disconnectPlaid.variables?.id === connection.id}
+                onSync={(item) => { setPlaidNotice(null); syncPlaid.mutate(item); }}
                 onDisconnect={requestDisconnect}
               />
             ))}
