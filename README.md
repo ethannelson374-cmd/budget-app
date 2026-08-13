@@ -4,9 +4,11 @@ Budget is a single-user-first personal finance dashboard built as a lightweight
 modular monolith. Phase 1 provides secure first-run account setup, a persistent
 demo environment, category and income settings, and a calculated monthly
 dashboard. Phase 2A adds writeable manual accounts and transactions, Phase 2B
-adds secure Plaid bank connections, and Phase 2C adds cursor-based Plaid
-transaction synchronization with manual and scheduled refresh. It is designed to
-run on an Oracle Cloud E2 Micro VM without containers.
+adds secure Plaid bank connections, Phase 2C adds cursor-based transaction sync,
+Phase 2D adds transaction intelligence and signed webhook refresh, Phase 3A adds
+annual/monthly budgets, and Phase 3B adds goals, debt planning, and cash-flow
+forecasting. It is designed to run on an Oracle Cloud E2 Micro VM without
+containers.
 
 ## Phase 1 features
 
@@ -44,13 +46,12 @@ run on an Oracle Cloud E2 Micro VM without containers.
 - Pending-to-posted reconciliation through Plaid transaction identifiers, PFCv2
   metadata storage, category mapping, and Budget's inflow/outflow sign convention.
 - Manual **Sync now** on connected institutions plus a lightweight systemd timer
-  that runs the same CLI sync path every 15 minutes.
+  that runs the same CLI sync path for webhook-requested or stale Items.
 - Connected account balances are refreshed from transaction-sync responses while
   manual records remain unaffected and Plaid transactions remain read-only.
 
-Webhook-triggered synchronization, recurring-charge analysis, budgets, goals,
-debt workflows, forecasts, AI insights, reports, and deployment automation are
-still intentionally deferred to later work.
+AI-generated insights, reports, Plaid Production cutover, and deployment
+automation are intentionally deferred to later work.
 
 ## Architecture
 
@@ -194,9 +195,9 @@ python -m app.cli sync-plaid
 python -m app.cli sync-plaid --item-id <connection-id>
 ```
 
-The supplied `budget-sync.timer` runs the same CLI path approximately every 15
-minutes. Webhook-triggered sync is intentionally deferred so polling and webhooks
-share one tested synchronization engine later.
+The supplied `budget-sync.timer` wakes every minute. Phase 2D marks Items from a
+verified Plaid webhook for prompt synchronization and keeps a 15-minute stale
+fallback, so polling and webhook refresh share the same tested sync engine.
 
 
 ## Database and migrations
@@ -388,3 +389,51 @@ Budget APIs:
 Migration `20260813_0006` creates the annual-plan, custom-month-distribution,
 monthly-budget, and category-allocation tables. All records are owner-scoped
 with composite category ownership foreign keys.
+
+## Phase 3B financial planning and forecasting
+
+Phase 3B adds a **Plan** workspace for savings goals, debt payoff planning,
+forward-looking cash projections, and read-only what-if scenarios. Goals may be
+tracked manually or linked to one depository/investment account; linked balances
+update automatically and one account can back only one linked goal. Manual goals
+can record contributions without creating artificial bank transactions.
+
+Debt records can be manual or linked to a credit/loan account. Budget compares a
+minimum-payment baseline with avalanche, snowball, or custom priority plans.
+Per-debt extra payments stay earmarked to that debt first; the global strategy
+extra pool and payment capacity freed by paid-off debts then roll toward the
+selected strategy target. The payoff simulator reports projected payoff dates
+and interest savings without changing the user's real budget.
+
+Forecasting combines depository cash, Phase 2D recurring income/expenses, Phase
+3A flexible budget reserves, active goal contributions, and planned debt
+payments into 30/60/90-day projections. Linked goal balances are treated as
+earmarked reserves rather than spendable cash. If no recurring income pattern
+has been detected, planned budget income is used as a conservative fallback.
+Forecasts are estimates based on current balances and assumptions, not guaranteed
+future balances.
+
+Scenario mode can temporarily model extra debt payments, goal-contribution
+changes, spending reductions, and a new monthly expense. Scenario calculations
+are rolled back after the response and do not mutate goals, debts, budgets, or
+forecast assumptions.
+
+Phase 3B also tightens Phase 3A safe-to-spend: linked goal reserves are protected,
+and goal/debt monthly commitments are added only to the extent they are not
+already covered by remaining `Savings` or `Debt payments` category budgets.
+
+Planning APIs:
+
+- `GET/POST /api/v1/planning/goals`
+- `PATCH/DELETE /api/v1/planning/goals/{goal_id}`
+- `POST /api/v1/planning/goals/{goal_id}/contributions`
+- `GET/POST /api/v1/planning/debts`
+- `PATCH/DELETE /api/v1/planning/debts/{debt_id}`
+- `PUT /api/v1/planning/debts/strategy`
+- `GET /api/v1/planning/forecast`
+- `PUT /api/v1/planning/forecast/assumptions`
+- `POST /api/v1/planning/forecast/scenario`
+
+Migration `20260813_0007` creates financial goals/contributions, debts, debt
+strategy settings, and forecast assumptions. No new runtime dependency is
+required for Phase 3B.

@@ -392,6 +392,8 @@ export interface MonthlyBudgetView {
   unallocated: string;
   cash_available: string;
   upcoming_recurring: string;
+  planning_commitments: string;
+  goal_reserves: string;
   safe_to_spend: string;
   notes: string | null;
   categories: MonthlyBudgetCategory[];
@@ -429,4 +431,135 @@ export interface YearBudgetView {
   remaining: string;
   unallocated: string;
   categories: YearBudgetCategory[];
+}
+
+export type GoalType = "emergency_fund" | "savings" | "down_payment" | "vacation" | "purchase" | "custom";
+export type DebtType = "credit_card" | "auto" | "student" | "personal" | "mortgage" | "medical" | "other";
+export type DebtStrategy = "avalanche" | "snowball" | "custom";
+
+export interface FinancialGoal {
+  id: number;
+  name: string;
+  goal_type: GoalType;
+  target_amount: string;
+  current_amount: string;
+  remaining_amount: string;
+  monthly_contribution: string;
+  progress_pct: string;
+  target_date: string | null;
+  projected_date: string | null;
+  priority: number;
+  active: boolean;
+  notes: string | null;
+  linked_account: AccountSummary | null;
+}
+
+export interface FinancialGoalsResponse {
+  currency: string;
+  total_target: string;
+  total_current: string;
+  monthly_contributions: string;
+  goals: FinancialGoal[];
+}
+
+export interface FinancialGoalWrite {
+  name: string;
+  goal_type: GoalType;
+  target_amount: string;
+  current_amount: string;
+  monthly_contribution: string;
+  target_date: string | null;
+  linked_account_id: number | null;
+  priority: number;
+  active: boolean;
+  notes: string | null;
+}
+
+export interface DebtItem {
+  id: number;
+  name: string;
+  debt_type: DebtType;
+  balance: string;
+  apr: string;
+  minimum_payment: string;
+  extra_payment: string;
+  strategy_priority: number;
+  due_day: number | null;
+  active: boolean;
+  notes: string | null;
+  linked_account: AccountSummary | null;
+  minimum_payoff_date: string | null;
+  planned_payoff_date: string | null;
+  interest_saved: string;
+}
+
+export interface DebtsResponse {
+  currency: string;
+  strategy: DebtStrategy;
+  monthly_extra_budget: string;
+  total_balance: string;
+  total_minimums: string;
+  planned_monthly_payment: string;
+  minimum_total_interest: string;
+  planned_total_interest: string;
+  interest_saved: string;
+  minimum_debt_free_date: string | null;
+  planned_debt_free_date: string | null;
+  debts: DebtItem[];
+}
+
+export interface DebtWrite {
+  name: string;
+  debt_type: DebtType;
+  balance: string;
+  apr: string;
+  minimum_payment: string;
+  extra_payment: string;
+  linked_account_id: number | null;
+  strategy_priority: number;
+  due_day: number | null;
+  active: boolean;
+  notes: string | null;
+}
+
+export interface ForecastHorizon {
+  days: number;
+  date: string;
+  starting_cash: string;
+  income: string;
+  recurring_expenses: string;
+  budget_reserve: string;
+  debt_payments: string;
+  goal_contributions: string;
+  new_expenses: string;
+  projected_balance: string;
+  above_reserve: string;
+}
+
+export interface ForecastUpcoming {
+  date: string;
+  name: string;
+  kind: "income" | "expense";
+  amount: string;
+}
+
+export interface ForecastResponse {
+  currency: string;
+  as_of: string;
+  cash_available: string;
+  goal_reserves: string;
+  spendable_cash: string;
+  reserve_balance: string;
+  include_budget_reserve: boolean;
+  horizons: ForecastHorizon[];
+  upcoming: ForecastUpcoming[];
+}
+
+export interface ForecastScenarioResponse {
+  baseline: ForecastResponse;
+  scenario: ForecastResponse;
+  cash_impact_90_days: string;
+  baseline_debt_free_date: string | null;
+  scenario_debt_free_date: string | null;
+  interest_saved: string;
 }

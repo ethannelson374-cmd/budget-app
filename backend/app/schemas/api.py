@@ -624,6 +624,8 @@ class MonthlyBudgetView(ViewModel):
     unallocated: str
     cash_available: str
     upcoming_recurring: str
+    planning_commitments: str
+    goal_reserves: str
     safe_to_spend: str
     notes: str | None
     categories: list[MonthlyBudgetCategoryView]
@@ -650,3 +652,201 @@ class YearBudgetView(ViewModel):
     remaining: str
     unallocated: str
     categories: list[YearBudgetCategoryView]
+
+
+GoalType = Literal[
+    "emergency_fund", "savings", "down_payment", "vacation", "purchase", "custom"
+]
+DebtType = Literal[
+    "credit_card", "auto", "student", "personal", "mortgage", "medical", "other"
+]
+DebtStrategy = Literal["avalanche", "snowball", "custom"]
+
+
+class FinancialGoalCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    goal_type: GoalType = "savings"
+    target_amount: Annotated[Decimal, Field(gt=0, max_digits=19, decimal_places=4)]
+    current_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
+    monthly_contribution: Annotated[
+        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
+    ] = Decimal("0")
+    target_date: date | None = None
+    linked_account_id: Annotated[int, Field(gt=0)] | None = None
+    priority: Annotated[int, Field(ge=1, le=10000)] = 100
+    active: bool = True
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+
+
+class FinancialGoalPatch(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    goal_type: GoalType | None = None
+    target_amount: Annotated[Decimal, Field(gt=0, max_digits=19, decimal_places=4)] | None = None
+    current_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    monthly_contribution: Annotated[
+        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
+    ] | None = None
+    target_date: date | None = None
+    linked_account_id: Annotated[int, Field(gt=0)] | None = None
+    priority: Annotated[int, Field(ge=1, le=10000)] | None = None
+    active: bool | None = None
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+
+
+class GoalContributionCreate(StrictModel):
+    amount: Annotated[Decimal, Field(gt=0, max_digits=19, decimal_places=4)]
+    contribution_date: date
+    notes: Annotated[str, Field(max_length=255)] | None = None
+
+
+class FinancialGoalView(ViewModel):
+    id: int
+    name: str
+    goal_type: GoalType
+    target_amount: str
+    current_amount: str
+    remaining_amount: str
+    monthly_contribution: str
+    progress_pct: str
+    target_date: date | None
+    projected_date: date | None
+    priority: int
+    active: bool
+    notes: str | None
+    linked_account: AccountView | None
+
+
+class FinancialGoalsView(ViewModel):
+    currency: str
+    total_target: str
+    total_current: str
+    monthly_contributions: str
+    goals: list[FinancialGoalView]
+
+
+class DebtCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    debt_type: DebtType = "other"
+    balance: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)]
+    apr: Annotated[Decimal, Field(ge=0, le=100, max_digits=7, decimal_places=4)] = Decimal("0")
+    minimum_payment: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
+    extra_payment: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
+    linked_account_id: Annotated[int, Field(gt=0)] | None = None
+    strategy_priority: Annotated[int, Field(ge=1, le=10000)] = 100
+    due_day: Annotated[int, Field(ge=1, le=31)] | None = None
+    active: bool = True
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+
+
+class DebtPatch(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    debt_type: DebtType | None = None
+    balance: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    apr: Annotated[Decimal, Field(ge=0, le=100, max_digits=7, decimal_places=4)] | None = None
+    minimum_payment: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    extra_payment: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    linked_account_id: Annotated[int, Field(gt=0)] | None = None
+    strategy_priority: Annotated[int, Field(ge=1, le=10000)] | None = None
+    due_day: Annotated[int, Field(ge=1, le=31)] | None = None
+    active: bool | None = None
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+
+
+class DebtStrategyWrite(StrictModel):
+    strategy: DebtStrategy
+    monthly_extra_budget: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)]
+
+
+class DebtView(ViewModel):
+    id: int
+    name: str
+    debt_type: DebtType
+    balance: str
+    apr: str
+    minimum_payment: str
+    extra_payment: str
+    strategy_priority: int
+    due_day: int | None
+    active: bool
+    notes: str | None
+    linked_account: AccountView | None
+    minimum_payoff_date: date | None
+    planned_payoff_date: date | None
+    interest_saved: str
+
+
+class DebtsView(ViewModel):
+    currency: str
+    strategy: DebtStrategy
+    monthly_extra_budget: str
+    total_balance: str
+    total_minimums: str
+    planned_monthly_payment: str
+    minimum_total_interest: str
+    planned_total_interest: str
+    interest_saved: str
+    minimum_debt_free_date: date | None
+    planned_debt_free_date: date | None
+    debts: list[DebtView]
+
+
+class ForecastAssumptionsWrite(StrictModel):
+    reserve_balance: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
+    include_budget_reserve: bool = True
+
+
+class ForecastHorizonView(ViewModel):
+    days: int
+    date: date
+    starting_cash: str
+    income: str
+    recurring_expenses: str
+    budget_reserve: str
+    debt_payments: str
+    goal_contributions: str
+    new_expenses: str
+    projected_balance: str
+    above_reserve: str
+
+
+class ForecastUpcomingView(ViewModel):
+    date: date
+    name: str
+    kind: Literal["income", "expense"]
+    amount: str
+
+
+class ForecastView(ViewModel):
+    currency: str
+    as_of: date
+    cash_available: str
+    goal_reserves: str
+    spendable_cash: str
+    reserve_balance: str
+    include_budget_reserve: bool
+    horizons: list[ForecastHorizonView]
+    upcoming: list[ForecastUpcomingView]
+
+
+class ForecastScenarioWrite(StrictModel):
+    extra_debt_payment: Annotated[
+        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
+    ] = Decimal("0")
+    goal_contribution_adjustment: Annotated[
+        Decimal, Field(max_digits=19, decimal_places=4)
+    ] = Decimal("0")
+    spending_reduction: Annotated[
+        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
+    ] = Decimal("0")
+    new_monthly_expense: Annotated[
+        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
+    ] = Decimal("0")
+
+
+class ForecastScenarioView(ViewModel):
+    baseline: ForecastView
+    scenario: ForecastView
+    cash_impact_90_days: str
+    baseline_debt_free_date: date | None
+    scenario_debt_free_date: date | None
+    interest_saved: str

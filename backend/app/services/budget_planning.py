@@ -17,6 +17,9 @@ from app.models import (
     AnnualBudgetMonthAllocation,
     AnnualBudgetPlan,
     Category,
+    Debt,
+    DebtStrategySettings,
+    FinancialGoal,
     MonthlyBudget,
     MonthlyBudgetCategory,
     RecurringStream,
@@ -576,7 +579,78 @@ def month_budget_view(db: Session, user: User, month: str) -> dict[str, object]:
     )
     upcoming_recurring = _upcoming_recurring(db, user, month_start)
     cash_available = _cash_available(db, user)
-    reserve = max(remaining_planned, upcoming_recurring)
+
+    savings_remaining = Decimal("0")
+    debt_budget_remaining = Decimal("0")
+    for category_id, category in categories.items():
+        base_amount, _ = config.get(category_id, (Decimal("0"), "off"))
+        available = base_amount + carries.get(category_id, Decimal("0"))
+        remaining = max(available - actuals.get(category_id, Decimal("0")), Decimal("0"))
+        if category.stable_key == "savings":
+            savings_remaining += remaining
+        elif category.stable_key == "debt_payments":
+            debt_budget_remaining += remaining
+
+    goals = list(
+        db.scalars(
+            select(FinancialGoal)
+            .options(joinedload(FinancialGoal.linked_account))
+            .where(FinancialGoal.user_id == user.id, FinancialGoal.active.is_(True))
+        ).all()
+    )
+    goal_reserves = _q(
+        sum(
+            (
+                min(max(goal.linked_account.current_balance, Decimal("0")), goal.target_amount)
+                for goal in goals
+                if goal.linked_account is not None
+            ),
+            Decimal("0"),
+        )
+    )
+    goal_commitment = sum(
+        (
+            goal.monthly_contribution
+            for goal in goals
+            if (
+                max(goal.linked_account.current_balance, Decimal("0"))
+                if goal.linked_account is not None
+                else goal.current_amount
+            )
+            < goal.target_amount
+        ),
+        Decimal("0"),
+    )
+    debts = list(
+        db.scalars(
+            select(Debt)
+            .options(joinedload(Debt.linked_account))
+            .where(Debt.user_id == user.id, Debt.active.is_(True))
+        ).all()
+    )
+    debt_commitment = sum(
+        (
+            debt.minimum_payment + debt.extra_payment
+            for debt in debts
+            if (
+                abs(debt.linked_account.current_balance)
+                if debt.linked_account is not None
+                else debt.balance
+            )
+            > 0
+        ),
+        Decimal("0"),
+    )
+    debt_strategy = db.get(DebtStrategySettings, user.id)
+    if debt_strategy is not None:
+        debt_commitment += debt_strategy.monthly_extra_budget
+    planning_commitments = _q(
+        max(goal_commitment - savings_remaining, Decimal("0"))
+        + max(debt_commitment - debt_budget_remaining, Decimal("0"))
+    )
+    reserve = (
+        max(remaining_planned, upcoming_recurring) + planning_commitments + goal_reserves
+    )
     safe_to_spend = _q(cash_available - reserve)
     monthly = _monthly_budget(db, user, month_start)
     return {
@@ -598,6 +672,8 @@ def month_budget_view(db: Session, user: User, month: str) -> dict[str, object]:
         "unallocated": money(unallocated),
         "cash_available": money(cash_available),
         "upcoming_recurring": money(upcoming_recurring),
+        "planning_commitments": money(planning_commitments),
+        "goal_reserves": money(goal_reserves),
         "safe_to_spend": money(safe_to_spend),
         "notes": monthly.notes if monthly else None,
         "categories": rows,

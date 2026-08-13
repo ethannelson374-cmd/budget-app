@@ -546,3 +546,59 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .custom-month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .budget-toolbar > div { grid-template-columns: 1fr; }
 }
+
+/* Phase 3B — goals, debt planning, and forecasting */
+.plan-tabs { flex-wrap: wrap; }
+.planning-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.planning-action-row { display: flex; justify-content: flex-end; margin: 0 0 14px; }
+.plan-editor, .strategy-panel, .forecast-settings, .scenario-builder { margin-bottom: 17px; padding: 22px; }
+.plan-editor .form-actions { margin-top: 18px; }
+.full-width { grid-column: 1 / -1; }
+.planning-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.goal-card, .debt-card { padding: 22px; }
+.goal-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.goal-card-heading h2 { margin-top: 3px; }
+.goal-card-heading > strong { white-space: nowrap; font-size: 1.1rem; }
+.goal-progress { height: 8px; margin: 18px 0; overflow: hidden; border-radius: 99px; background: var(--surface-muted); }
+.goal-progress > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brand), #3ab8ac); }
+.planning-stat-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.planning-stat-pair > div { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); }
+.planning-stat-pair span { color: var(--text-muted); font-size: .69rem; }
+.planning-stat-pair strong { font-size: .92rem; }
+.planning-muted, .planning-linked { margin: 14px 0 0; font-size: .75rem; }
+.planning-linked { color: var(--brand); }
+.card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.strategy-panel, .forecast-settings { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(150px, .55fr) minmax(150px, .55fr) auto; align-items: end; gap: 14px; }
+.strategy-panel p, .forecast-settings p, .scenario-builder p { margin-bottom: 0; font-size: .78rem; }
+.checkbox-row { display: flex !important; min-height: 42px; align-items: center; gap: 9px; }
+.checkbox-row input { width: 17px; min-height: 17px; margin: 0; }
+.forecast-horizon-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px; margin-bottom: 17px; }
+.forecast-card { padding: 22px; }
+.forecast-card h2 { margin: 8px 0 5px; font-size: 1.75rem; }
+.forecast-card > p { margin: 0 0 16px; font-size: .75rem; }
+.forecast-card dl { display: grid; gap: 8px; margin: 0; }
+.forecast-card dl div { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border); font-size: .72rem; }
+.forecast-card dt { color: var(--text-muted); }
+.forecast-card dd { margin: 0; font-weight: 700; }
+.upcoming-panel { padding: 22px; }
+.upcoming-list { display: grid; }
+.upcoming-list > div { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); }
+.upcoming-list span { color: var(--text-muted); font-size: .72rem; }
+.upcoming-list strong { font-size: .8rem; }
+.scenario-builder > .form-grid { margin: 18px 0; }
+.scenario-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.scenario-results article { padding: 22px; }
+.scenario-results h2 { margin: 7px 0; font-size: 1.6rem; }
+.scenario-results p { margin-bottom: 0; font-size: .78rem; }
+@media (max-width: 980px) {
+  .planning-metrics, .forecast-horizon-grid { grid-template-columns: 1fr; }
+  .planning-card-grid, .scenario-results { grid-template-columns: 1fr; }
+  .strategy-panel, .forecast-settings { grid-template-columns: 1fr 1fr; }
+  .strategy-panel > div, .forecast-settings > div { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .strategy-panel, .forecast-settings { grid-template-columns: 1fr; }
+  .planning-stat-pair { grid-template-columns: 1fr; }
+  .upcoming-list > div { grid-template-columns: 72px minmax(0, 1fr); }
+  .upcoming-list .amount { grid-column: 2; }
+}

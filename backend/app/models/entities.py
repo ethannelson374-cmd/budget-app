@@ -513,3 +513,132 @@ class MonthlyBudgetCategory(TimestampMixin, Base):
     rollover_mode: Mapped[str] = mapped_column(String(24), default="off", nullable=False)
 
     category: Mapped[Category] = relationship(viewonly=True)
+class FinancialGoal(TimestampMixin, Base):
+    __tablename__ = "financial_goals"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_financial_goal_id_user"),
+        UniqueConstraint(
+            "user_id", "linked_account_id", name="uq_financial_goal_linked_account"
+        ),
+        CheckConstraint(
+            "goal_type IN ('emergency_fund','savings','down_payment','vacation',"
+            "'purchase','custom')",
+            name="financial_goal_type_allowed",
+        ),
+        CheckConstraint("target_amount > 0", name="financial_goal_target_positive"),
+        CheckConstraint("current_amount >= 0", name="financial_goal_current_nonnegative"),
+        CheckConstraint("monthly_contribution >= 0", name="financial_goal_monthly_nonnegative"),
+        Index("ix_financial_goals_user_active", "user_id", "active", "priority"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    linked_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    goal_type: Mapped[str] = mapped_column(String(24), default="savings", nullable=False)
+    target_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    current_amount: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    monthly_contribution: Mapped[Decimal] = mapped_column(
+        MONEY, default=Decimal("0"), nullable=False
+    )
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    linked_account: Mapped[Account | None] = relationship(viewonly=True)
+
+
+class GoalContribution(Base):
+    __tablename__ = "goal_contributions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["goal_id", "user_id"],
+            ["financial_goals.id", "financial_goals.user_id"],
+            name="fk_goal_contribution_goal_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("amount > 0", name="goal_contribution_amount_positive"),
+        Index("ix_goal_contributions_user_date", "user_id", "contribution_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    goal_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    contribution_date: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Debt(TimestampMixin, Base):
+    __tablename__ = "debts"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_debt_id_user"),
+        UniqueConstraint("user_id", "linked_account_id", name="uq_debt_linked_account"),
+        CheckConstraint(
+            "debt_type IN ('credit_card','auto','student','personal','mortgage','medical','other')",
+            name="debt_type_allowed",
+        ),
+        CheckConstraint("balance >= 0", name="debt_balance_nonnegative"),
+        CheckConstraint("apr >= 0 AND apr <= 100", name="debt_apr_range"),
+        CheckConstraint("minimum_payment >= 0", name="debt_minimum_nonnegative"),
+        CheckConstraint("extra_payment >= 0", name="debt_extra_nonnegative"),
+        CheckConstraint(
+            "due_day IS NULL OR (due_day >= 1 AND due_day <= 31)",
+            name="debt_due_day_range",
+        ),
+        Index("ix_debts_user_active", "user_id", "active", "strategy_priority"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    linked_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    debt_type: Mapped[str] = mapped_column(String(24), default="other", nullable=False)
+    balance: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    apr: Mapped[Decimal] = mapped_column(Numeric(7, 4), default=Decimal("0"), nullable=False)
+    minimum_payment: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    extra_payment: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    strategy_priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    due_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    linked_account: Mapped[Account | None] = relationship(viewonly=True)
+
+
+class DebtStrategySettings(TimestampMixin, Base):
+    __tablename__ = "debt_strategy_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "strategy IN ('avalanche','snowball','custom')",
+            name="debt_strategy_allowed",
+        ),
+        CheckConstraint("monthly_extra_budget >= 0", name="debt_strategy_extra_nonnegative"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    strategy: Mapped[str] = mapped_column(String(16), default="avalanche", nullable=False)
+    monthly_extra_budget: Mapped[Decimal] = mapped_column(
+        MONEY, default=Decimal("0"), nullable=False
+    )
+
+
+class ForecastAssumptions(TimestampMixin, Base):
+    __tablename__ = "forecast_assumptions"
+    __table_args__ = (
+        CheckConstraint("reserve_balance >= 0", name="forecast_reserve_nonnegative"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    reserve_balance: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    include_budget_reserve: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

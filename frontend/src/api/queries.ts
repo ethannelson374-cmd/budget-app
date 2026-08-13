@@ -16,6 +16,9 @@ export const queryKeys = {
   budgetMonth: (month: string) => ["budget-month", month] as const,
   budgetYear: (year: number) => ["budget-year", year] as const,
   annualBudgetPlan: (year: number) => ["annual-budget-plan", year] as const,
+  goals: ["planning-goals"] as const,
+  debts: ["planning-debts"] as const,
+  forecast: ["planning-forecast"] as const,
 };
 
 export function useSetupStatus() {

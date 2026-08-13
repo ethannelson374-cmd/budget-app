@@ -24,7 +24,12 @@ from app.models import (
     AnnualBudgetPlan,
     AuditEvent,
     Category,
+    Debt,
+    DebtStrategySettings,
+    FinancialGoal,
     FinancialInstitution,
+    ForecastAssumptions,
+    GoalContribution,
     InstallationState,
     LoginThrottle,
     MonthlyBudget,
@@ -85,6 +90,11 @@ def reset_demo(settings: Settings) -> None:
     try:
         with database.session_factory() as db:
             for model in (
+                GoalContribution,
+                Debt,
+                DebtStrategySettings,
+                FinancialGoal,
+                ForecastAssumptions,
                 AnnualBudgetMonthAllocation,
                 AnnualBudgetCategory,
                 MonthlyBudgetCategory,
@@ -245,6 +255,70 @@ def reset_demo(settings: Settings) -> None:
                 ),
             }
             db.add_all(accounts.values())
+            db.flush()
+
+            db.add_all(
+                [
+                    FinancialGoal(
+                        user_id=user.id,
+                        linked_account_id=accounts["savings"].id,
+                        name="Emergency fund",
+                        goal_type="emergency_fund",
+                        target_amount=Decimal("18000.0000"),
+                        current_amount=Decimal("0"),
+                        monthly_contribution=Decimal("500.0000"),
+                        priority=10,
+                        active=True,
+                        notes="Six months of core expenses",
+                    ),
+                    FinancialGoal(
+                        user_id=user.id,
+                        name="House down payment",
+                        goal_type="down_payment",
+                        target_amount=Decimal("25000.0000"),
+                        current_amount=Decimal("4200.0000"),
+                        monthly_contribution=Decimal("650.0000"),
+                        priority=20,
+                        active=True,
+                    ),
+                    Debt(
+                        user_id=user.id,
+                        linked_account_id=accounts["loan"].id,
+                        name="Auto loan",
+                        debt_type="auto",
+                        balance=Decimal("8200.0000"),
+                        apr=Decimal("7.2000"),
+                        minimum_payment=Decimal("325.0000"),
+                        extra_payment=Decimal("75.0000"),
+                        strategy_priority=20,
+                        due_day=20,
+                        active=True,
+                    ),
+                    Debt(
+                        user_id=user.id,
+                        linked_account_id=accounts["credit"].id,
+                        name="Rewards card",
+                        debt_type="credit_card",
+                        balance=Decimal("680.2400"),
+                        apr=Decimal("22.9900"),
+                        minimum_payment=Decimal("45.0000"),
+                        extra_payment=Decimal("25.0000"),
+                        strategy_priority=10,
+                        due_day=16,
+                        active=True,
+                    ),
+                    DebtStrategySettings(
+                        user_id=user.id,
+                        strategy="avalanche",
+                        monthly_extra_budget=Decimal("100.0000"),
+                    ),
+                    ForecastAssumptions(
+                        user_id=user.id,
+                        reserve_balance=Decimal("1500.0000"),
+                        include_budget_reserve=True,
+                    ),
+                ]
+            )
             db.flush()
 
             def transaction(
