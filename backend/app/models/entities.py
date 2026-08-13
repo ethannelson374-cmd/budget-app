@@ -642,3 +642,40 @@ class ForecastAssumptions(TimestampMixin, Base):
     )
     reserve_balance: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
     include_budget_reserve: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class InsightRecord(TimestampMixin, Base):
+    __tablename__ = "insight_records"
+    __table_args__ = (
+        UniqueConstraint("user_id", "fingerprint", name="uq_insight_user_fingerprint"),
+        CheckConstraint(
+            "priority IN ('critical','important','opportunity','info')",
+            name="insight_priority_allowed",
+        ),
+        CheckConstraint(
+            "status IN ('active','dismissed','resolved')",
+            name="insight_status_allowed",
+        ),
+        CheckConstraint("score >= 0 AND score <= 100", name="insight_score_range"),
+        Index("ix_insight_records_user_status_score", "user_id", "status", "score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    signal_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    action_route: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

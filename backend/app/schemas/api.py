@@ -850,3 +850,43 @@ class ForecastScenarioView(ViewModel):
     baseline_debt_free_date: date | None
     scenario_debt_free_date: date | None
     interest_saved: str
+
+
+InsightPriority = Literal["critical", "important", "opportunity", "info"]
+InsightStatus = Literal["active", "dismissed", "resolved"]
+
+
+class InsightEvidenceView(ViewModel):
+    label: str
+    value: str
+    detail: str | None = None
+
+
+class InsightView(ViewModel):
+    id: int
+    signal_type: str
+    category: str
+    priority: InsightPriority
+    score: int
+    status: InsightStatus
+    title: str
+    summary: str
+    recommendation: str | None
+    evidence: list[InsightEvidenceView]
+    action_route: str | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    dismissed_at: datetime | None
+    resolved_at: datetime | None
+
+
+class InsightsView(ViewModel):
+    generated_at: datetime
+    active_count: int
+    dismissed_count: int
+    resolved_count: int
+    insights: list[InsightView]
+
+
+class InsightStatusPatch(StrictModel):
+    status: Literal["active", "dismissed"]

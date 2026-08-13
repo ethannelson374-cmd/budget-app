@@ -563,3 +563,39 @@ export interface ForecastScenarioResponse {
   scenario_debt_free_date: string | null;
   interest_saved: string;
 }
+
+
+export type InsightPriority = "critical" | "important" | "opportunity" | "info";
+export type InsightStatus = "active" | "dismissed" | "resolved";
+
+export interface InsightEvidence {
+  label: string;
+  value: string;
+  detail: string | null;
+}
+
+export interface InsightItem {
+  id: number;
+  signal_type: string;
+  category: string;
+  priority: InsightPriority;
+  score: number;
+  status: InsightStatus;
+  title: string;
+  summary: string;
+  recommendation: string | null;
+  evidence: InsightEvidence[];
+  action_route: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  dismissed_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface InsightsResponse {
+  generated_at: string;
+  active_count: number;
+  dismissed_count: number;
+  resolved_count: number;
+  insights: InsightItem[];
+}

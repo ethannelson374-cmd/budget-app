@@ -19,6 +19,7 @@ export const queryKeys = {
   goals: ["planning-goals"] as const,
   debts: ["planning-debts"] as const,
   forecast: ["planning-forecast"] as const,
+  insights: (status: string) => ["insights", status] as const,
 };
 
 export function useSetupStatus() {

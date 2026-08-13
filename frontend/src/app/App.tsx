@@ -9,6 +9,7 @@ import { AccountsPage } from "../pages/AccountsPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { BudgetPage } from "../pages/BudgetPage";
 import { LoginPage } from "../pages/LoginPage";
+import { InsightsPage } from "../pages/InsightsPage";
 import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
 import { PlanPage } from "../pages/PlanPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -103,6 +104,7 @@ export function App() {
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/plan" element={<PlanPage />} />
         <Route path="/recurring" element={<RecurringPage />} />
+        <Route path="/insights" element={<InsightsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

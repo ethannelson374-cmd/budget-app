@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { DashboardData, MonthlyBudgetView } from "../api/types";
+import type { DashboardData, InsightsResponse, MonthlyBudgetView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState, EmptyState } from "../components/States";
 import { CashFlowChart } from "../components/CashFlowChart";
 import { CategoryBars } from "../components/CategoryBars";
+import { InsightCard } from "../components/InsightCard";
 import { TransactionList } from "../components/TransactionList";
 import { formatDateTime, formatMoney, formatPercent, currentMonth, maskAccount, monthLabel, numberFromMoney } from "../lib/format";
 import { useState } from "react";
@@ -27,18 +28,23 @@ export function DashboardPage() {
     queryKey: queryKeys.budgetMonth(month),
     queryFn: () => apiRequest<MonthlyBudgetView>(`/budget/months/${month}`),
   });
+  const insights = useQuery({
+    queryKey: queryKeys.insights("active"),
+    queryFn: () => apiRequest<InsightsResponse>("/insights/refresh", { method: "POST" }),
+    staleTime: 60_000,
+  });
 
   return (
     <div className="page-container dashboard-page">
       <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
-      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} />}
+      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} />}
     </div>
   );
 }
 
-function DashboardContent({ data, budget }: { data: DashboardData; budget?: MonthlyBudgetView }) {
+function DashboardContent({ data, budget, insights }: { data: DashboardData; budget?: MonthlyBudgetView; insights?: InsightsResponse }) {
   const { summary } = data;
   const savingsTone = summary.savings_rate === null ? "neutral" : numberFromMoney(summary.savings_rate) >= 0 ? "positive" : "negative";
   return (
@@ -59,6 +65,10 @@ function DashboardContent({ data, budget }: { data: DashboardData; budget?: Mont
       {budget && budget.source !== "unplanned" && <section className="panel dashboard-budget-panel">
         <div className="panel-heading"><div><span className="eyebrow">Monthly budget</span><h2>{formatMoney(budget.spent, budget.currency)} spent of {formatMoney(budget.available_with_rollover, budget.currency)}</h2></div><Link className="text-link" to="/budget">Open budget <span aria-hidden="true">→</span></Link></div>
         <div className="dashboard-budget-summary"><div><strong>{formatMoney(budget.remaining, budget.currency)}</strong><span>Remaining</span></div><div><strong>{formatMoney(budget.safe_to_spend, budget.currency)}</strong><span>Safe to spend</span></div><div><strong>{budget.categories.filter((row) => row.status === "close").length}</strong><span>Getting close</span></div><div><strong>{budget.categories.filter((row) => row.status === "over").length}</strong><span>Over budget</span></div></div>
+      </section>}
+      {insights && insights.insights.length > 0 && <section className="panel dashboard-insights">
+        <div className="panel-heading"><div><span className="eyebrow">Financial intelligence</span><h2>What needs your attention</h2></div><Link className="text-link" to="/insights">View all {insights.active_count} <span aria-hidden="true">→</span></Link></div>
+        <div className="dashboard-insight-list">{insights.insights.slice(0, 3).map((insight) => <InsightCard key={insight.id} insight={insight} compact />)}</div>
       </section>}
       <section className="panel recent-panel">
         <div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent transactions</h2></div><Link className="text-link" to="/transactions">View all <span aria-hidden="true">→</span></Link></div>

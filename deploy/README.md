@@ -368,3 +368,11 @@ separate optional Plaid refresh operation rather than normal incremental sync.
 ### Phase 2D webhook deployment
 
 Set `PLAID_WEBHOOK_URI=https://budget.od3ssa.com/api/v1/plaid/webhook` and restart `budget-api`. The next `budget-sync.service` run updates pre-existing Plaid Items with `/item/webhook/update`; newly linked Items receive the webhook URL during Link-token creation. Keep `budget-sync.timer` enabled: it checks every minute, services webhook-marked Items quickly, and falls back to a sync when an Item has been stale for 15 minutes. Webhook requests are unauthenticated at the application-session layer but are rejected unless the `Plaid-Verification` ES256 JWT validates against Plaid's JWK and its body hash matches the exact raw request bytes.
+
+## Phase 3C-1 insight engine deployment
+
+Apply migration `20260813_0008` before restarting `budget-api`. No new daemon, queue, Node
+process, external AI service, environment variable, or public listener is required. Insight
+refresh runs synchronously through the authenticated API and stores only deterministic,
+owner-scoped signal history in MySQL. Build the Vite frontend off-host and replace the live
+`frontend/dist` bundle using the normal manual release procedure.

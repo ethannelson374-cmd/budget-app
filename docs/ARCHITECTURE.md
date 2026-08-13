@@ -218,3 +218,18 @@ interpretation rather than raw Plaid metadata. Transfers and excluded
 transactions do not consume spending budgets, refunds reduce spending, and
 category/kind overrides are honored. Safe-to-spend is intentionally
 deterministic and explainable; no AI inference is involved in Phase 3A.
+
+## Phase 3C-1 insight boundary
+
+Financial insights remain deterministic and inside the modular monolith. The insight engine
+consumes normalized transaction interpretation, budget views, recurring streams, financial
+goals, debt simulations, and cash forecasts; it does not call a language model or send
+financial data to an external AI provider. Each signal stores an owner-scoped fingerprint,
+priority score, explanation evidence, recommended next step, history state, and a route back
+to the underlying Budget feature.
+
+Refreshing insights upserts currently applicable signals and resolves conditions that no
+longer apply. Dismissed signals stay dismissed while the same fingerprint remains active, so
+a refresh cannot immediately resurrect something the user intentionally hid. The sanitized
+explanation payload is the intended future boundary for Phase 3C-2 rather than raw Plaid
+payloads, credentials, account numbers, or provider tokens.

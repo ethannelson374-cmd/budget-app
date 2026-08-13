@@ -602,3 +602,52 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .upcoming-list > div { grid-template-columns: 72px minmax(0, 1fr); }
   .upcoming-list .amount { grid-column: 2; }
 }
+
+
+/* Phase 3C-1 — deterministic financial insight engine */
+.insight-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 17px; }
+.insight-toolbar p { max-width: 560px; margin: 0; color: var(--text-muted); font-size: .73rem; text-align: right; }
+.insight-filters { flex-wrap: wrap; }
+.insight-list { display: grid; gap: 14px; }
+.insight-card { display: grid; gap: 11px; padding: 19px; border: 1px solid var(--border); border-left-width: 4px; border-radius: 12px; background: var(--surface); }
+.insight-card.priority-critical { border-left-color: var(--negative); }
+.insight-card.priority-important { border-left-color: var(--warning); }
+.insight-card.priority-opportunity { border-left-color: var(--brand); }
+.insight-card.priority-info { border-left-color: var(--text-soft); }
+.insight-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.insight-card-heading > div { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.insight-priority, .insight-category, .insight-score { display: inline-flex; align-items: center; min-height: 24px; padding: 4px 8px; border-radius: 999px; font-size: .64rem; font-weight: 800; }
+.insight-priority.critical { color: var(--negative); background: var(--danger-soft); }
+.insight-priority.important { color: var(--warning); background: color-mix(in srgb, var(--warning) 13%, transparent); }
+.insight-priority.opportunity { color: var(--brand); background: var(--surface-teal); }
+.insight-priority.info, .insight-category, .insight-score { color: var(--text-muted); background: var(--surface-muted); }
+.insight-category { text-transform: capitalize; }
+.insight-score { min-width: 30px; justify-content: center; }
+.insight-card h3 { margin: 0; font-size: 1rem; }
+.insight-card > p { margin: 0; color: var(--text-muted); font-size: .79rem; line-height: 1.55; }
+.insight-evidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 2px 0 0; }
+.insight-evidence > div { display: grid; gap: 3px; padding: 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); }
+.insight-evidence dt { color: var(--text-muted); font-size: .66rem; }
+.insight-evidence dd { display: grid; gap: 2px; margin: 0; font-size: .82rem; font-weight: 800; }
+.insight-evidence small { color: var(--text-soft); font-size: .62rem; font-weight: 500; }
+.insight-recommendation { padding: 12px 14px; border-radius: 9px; background: var(--surface-teal); }
+.insight-recommendation strong { font-size: .7rem; }
+.insight-recommendation p { margin: 4px 0 0; color: var(--text-muted); font-size: .75rem; line-height: 1.5; }
+.insight-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 3px; }
+.insight-actions .button { min-height: 34px; padding: 6px 10px; font-size: .68rem; }
+.dashboard-insights { margin-bottom: 17px; padding: 22px; }
+.dashboard-insight-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+.dashboard-insight-list .insight-card { padding: 14px; }
+.dashboard-insight-list .insight-card h3 { font-size: .84rem; }
+.dashboard-insight-list .insight-card > p { font-size: .71rem; }
+.dashboard-insight-list .insight-score { display: none; }
+@media (max-width: 980px) {
+  .dashboard-insight-list { grid-template-columns: 1fr; }
+  .insight-evidence { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .insight-toolbar { align-items: stretch; flex-direction: column; }
+  .insight-toolbar p { text-align: left; }
+  .insight-evidence { grid-template-columns: 1fr; }
+  .insight-actions { align-items: flex-start; flex-direction: column; }
+}

@@ -437,3 +437,17 @@ Planning APIs:
 Migration `20260813_0007` creates financial goals/contributions, debts, debt
 strategy settings, and forecast assumptions. No new runtime dependency is
 required for Phase 3B.
+
+
+## Phase 3C-1 deterministic insight engine
+
+Phase 3C-1 adds explainable, non-AI financial signals over the transaction-intelligence,
+budget, recurring, goal, debt, and forecasting layers. Budget scores active signals as
+critical, important, opportunity, or FYI; stores insight history and dismissal state; and
+surfaces the highest-priority items on the Dashboard and a dedicated Insights page.
+
+The engine never asks a language model to calculate financial facts. Every amount, date,
+variance, payoff opportunity, and forecast warning is produced by Budget's deterministic
+services. The stored evidence payload is intentionally sanitized and becomes the future
+input boundary for Phase 3C-2 Ask Budget. Migration `20260813_0008` creates the
+owner-scoped insight history table.

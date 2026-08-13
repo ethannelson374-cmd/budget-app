@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { DashboardData, MonthlyBudgetView } from "../api/types";
+import type { DashboardData, InsightsResponse, MonthlyBudgetView } from "../api/types";
 import { DashboardPage } from "./DashboardPage";
 
 vi.mock("../api/client", async (importOriginal) => {
@@ -22,6 +22,30 @@ const dashboard: DashboardData = {
   accounts: [],
   recent_transactions: [],
   excluded_currencies: ["CAD"],
+};
+
+const insights: InsightsResponse = {
+  generated_at: "2026-08-13T12:00:00Z",
+  active_count: 1,
+  dismissed_count: 0,
+  resolved_count: 0,
+  insights: [{
+    id: 1,
+    signal_type: "category_overspend",
+    category: "budget",
+    priority: "important",
+    score: 80,
+    status: "active",
+    title: "Restaurants spending is over budget",
+    summary: "Dining is above plan this month.",
+    recommendation: "Keep restaurant spending lower for the rest of the month.",
+    evidence: [],
+    action_route: "/budget",
+    first_seen_at: "2026-08-13T12:00:00Z",
+    last_seen_at: "2026-08-13T12:00:00Z",
+    dismissed_at: null,
+    resolved_at: null,
+  }],
 };
 
 const budget: MonthlyBudgetView = {
@@ -48,9 +72,11 @@ const budget: MonthlyBudgetView = {
 
 describe("DashboardPage", () => {
   beforeEach(() => {
-    vi.mocked(apiRequest).mockReset().mockImplementation((path) =>
-      Promise.resolve((path.startsWith("/budget/") ? budget : dashboard) as never),
-    );
+    vi.mocked(apiRequest).mockReset().mockImplementation((path) => {
+      if (path === "/insights/refresh") return Promise.resolve(insights as never);
+      if (path.startsWith("/budget/")) return Promise.resolve(budget as never);
+      return Promise.resolve(dashboard as never);
+    });
   });
 
   function renderDashboard() {
@@ -66,12 +92,14 @@ describe("DashboardPage", () => {
     expect(screen.getByText("37.5%")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open budget/ })).toBeInTheDocument();
     expect(screen.getByText("$4,400.00")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Restaurants spending is over budget" })).toBeInTheDocument();
   });
 
   it("offers a working retry after a dashboard server failure", async () => {
     const user = userEvent.setup();
     let dashboardCalls = 0;
     vi.mocked(apiRequest).mockImplementation((path) => {
+      if (path === "/insights/refresh") return Promise.resolve(insights as never);
       if (path.startsWith("/budget/")) return Promise.resolve(budget as never);
       dashboardCalls += 1;
       return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
