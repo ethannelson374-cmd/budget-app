@@ -92,6 +92,7 @@ export interface AccountSummary {
   credit_limit: string | null;
   currency: string;
   last_synced_at: string | null;
+  connection_id?: number | null;
 }
 
 export interface TransactionItem {
@@ -209,4 +210,33 @@ export interface TransactionFilters {
   pending?: "true" | "false" | "";
   sort?: "date" | "amount" | "merchant" | "description";
   direction?: "asc" | "desc";
+}
+
+
+export interface PlaidInstitution {
+  id: number | null;
+  name: string;
+  logo: string | null;
+  primary_color: string | null;
+  url: string | null;
+}
+
+export interface PlaidConnection {
+  id: number;
+  status: "active" | "error";
+  last_error_code: string | null;
+  last_synced_at: string | null;
+  institution: PlaidInstitution;
+  accounts: AccountSummary[];
+}
+
+export interface PlaidConnectionsResponse {
+  configured: boolean;
+  environment: "sandbox" | "production";
+  connections: PlaidConnection[];
+}
+
+export interface PlaidLinkTokenResponse {
+  link_token: string;
+  environment: "sandbox" | "production";
 }

@@ -37,6 +37,10 @@ def test_phase_one_success_routes_declare_response_models(client: TestClient) ->
         "/api/v1/accounts/{account_id}",
         "/api/v1/transactions",
         "/api/v1/transactions/{transaction_id}",
+        "/api/v1/plaid/link-token",
+        "/api/v1/plaid/exchange",
+        "/api/v1/plaid/connections",
+        "/api/v1/plaid/connections/{item_id}",
     }
     openapi_paths = client.app.openapi()["paths"]
     assert required_paths.issubset(openapi_paths)

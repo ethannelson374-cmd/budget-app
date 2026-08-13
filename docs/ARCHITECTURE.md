@@ -81,15 +81,12 @@ or serialized:
 | --- | --- |
 | `APP_SECRET` | Domain-separated HMAC key for privacy-preserving throttle and audit identifiers. |
 | `SESSION_SECRET` | HMAC key for session-token and CSRF-token digests. Rotation invalidates active sessions. |
-| `ENCRYPTION_KEY` | Accepted and redacted, but reserved for reversible Plaid-token encryption in Phase 2. |
+| `ENCRYPTION_KEY` | Derives the authenticated-encryption key for stored Plaid access tokens. |
 | `BOOTSTRAP_TOKEN` | Environment-only authorization for creation of the first owner. |
 | `DB_PASSWORD` | Passed only to programmatic database connection construction. |
 
 Logs, exception details, error responses, readiness output, audit metadata, and
-test snapshots must not contain these values. The current Phase 2A scope stores
-no value requiring
-reversible application encryption, so `ENCRYPTION_KEY` is intentionally unused
-beyond validation/redaction.
+test snapshots must not contain these values. Phase 2B uses `ENCRYPTION_KEY` only server-side to protect long-lived Plaid access tokens before they are written to the database.
 
 Before the first production start, the operator places a randomly generated
 256-bit-or-stronger `BOOTSTRAP_TOKEN` in `/etc/budget-app/budget.env`. The setup
@@ -173,3 +170,10 @@ detection, forecasting, goals, debt workflows, snapshots, AI, reports,
 MFA/social login/email recovery, offline financial access, full OCI
 provisioning, certificate automation, backup/restore automation, and automated
 rollback remain deferred.
+
+
+## Plaid Item boundary (Phase 2B)
+
+Plaid credentials are server-only. FastAPI creates Link tokens and exchanges one-time public tokens. The resulting long-lived access token is encrypted with AES-GCM using a purpose-derived key from `ENCRYPTION_KEY`, with per-token random nonces and authenticated context binding the owner and Plaid Item. HeatWave stores ciphertext and nonce, never plaintext access tokens.
+
+Connected accounts are marked `source_type=plaid` and attached to a user-owned `plaid_items` record. Manual CRUD continues to reject provider-managed accounts. Disconnect calls Plaid `/item/remove` before deleting the local Item and its connected accounts. Phase 2B imports account/balance metadata only; transaction synchronization, webhook verification, update mode, and background refresh are deferred to Phase 2C.

@@ -129,6 +129,41 @@ class FinancialInstitution(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    logo_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    primary_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
+class PlaidItem(TimestampMixin, Base):
+    __tablename__ = "plaid_items"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_plaid_item_id_user"),
+        UniqueConstraint("user_id", "external_id", name="uq_plaid_item_external"),
+        ForeignKeyConstraint(
+            ["institution_id", "user_id"],
+            ["financial_institutions.id", "financial_institutions.user_id"],
+            name="fk_plaid_item_institution_owner",
+        ),
+        CheckConstraint("status IN ('active','error')", name="plaid_item_status_allowed"),
+        Index("ix_plaid_items_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    institution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    access_token_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_nonce: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    consent_expiration_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    institution: Mapped[FinancialInstitution | None] = relationship(viewonly=True)
 
 
 class Account(TimestampMixin, Base):
@@ -141,6 +176,12 @@ class Account(TimestampMixin, Base):
             ["financial_institutions.id", "financial_institutions.user_id"],
             name="fk_account_institution_owner",
         ),
+        ForeignKeyConstraint(
+            ["plaid_item_id", "user_id"],
+            ["plaid_items.id", "plaid_items.user_id"],
+            name="fk_account_plaid_item_owner",
+            ondelete="CASCADE",
+        ),
         CheckConstraint(
             "account_type IN ('depository','credit','loan','investment','other')",
             name="account_type_allowed",
@@ -151,11 +192,13 @@ class Account(TimestampMixin, Base):
         ),
         Index("ix_accounts_user_type", "user_id", "account_type"),
         Index("ix_accounts_user_source", "user_id", "source_type"),
+        Index("ix_accounts_user_plaid_item", "user_id", "plaid_item_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     institution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plaid_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     official_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -170,6 +213,7 @@ class Account(TimestampMixin, Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     institution: Mapped[FinancialInstitution | None] = relationship(viewonly=True)
+    plaid_item: Mapped[PlaidItem | None] = relationship(viewonly=True)
 
 
 class Category(TimestampMixin, Base):

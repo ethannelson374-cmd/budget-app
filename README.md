@@ -103,7 +103,7 @@ repository `.env` file.
 | `DEMO_DB_PATH` | Local demo database path; never used in production |
 | `APP_SECRET` | HMAC root for privacy-preserving throttle/audit identifiers |
 | `SESSION_SECRET` | HMAC root for stored session and CSRF digests |
-| `ENCRYPTION_KEY` | Accepted and reserved for Phase 2 Plaid-token encryption |
+| `ENCRYPTION_KEY` | Encrypts stored Plaid access tokens with authenticated encryption |
 | `BOOTSTRAP_TOKEN` | One-time 256-bit production setup credential |
 | `ALLOWED_HOSTS` | Comma-separated public and loopback hosts accepted by FastAPI |
 | `LOG_LEVEL` | Application log level |
@@ -115,6 +115,12 @@ repository `.env` file.
 | `DB_SSL_REQUIRED` | Strict `true`/`false`; production requires `true` |
 | `DB_SSL_MODE` | `REQUIRED` (default), `VERIFY_CA`, or `VERIFY_IDENTITY` |
 | `DB_SSL_CA` | CA file path required by `VERIFY_CA` / `VERIFY_IDENTITY` |
+| `PLAID_CLIENT_ID` | Plaid API client ID; server-side only |
+| `PLAID_SECRET` | Plaid Sandbox or Production secret; server-side only |
+| `PLAID_ENV` | `sandbox` (default) or `production` |
+| `PLAID_REDIRECT_URI` | HTTPS OAuth return route, e.g. `https://budget.example.com/plaid/oauth` |
+| `PLAID_PRODUCTS` | Comma-separated Link products; Phase 2B defaults to `transactions` |
+| `PLAID_COUNTRY_CODES` | Comma-separated country codes; default `US` |
 
 The database connection is assembled with `sqlalchemy.URL.create()` from the
 individual `DB_*` settings. A combined database URL is not a supported setting
@@ -138,6 +144,18 @@ $bytes = New-Object byte[] 32
 ```
 
 Do not reuse one generated value across multiple variables.
+
+### Phase 2B bank connections
+
+Phase 2B adds Plaid Link, encrypted Item credentials, connected institution/account import, OAuth return handling, duplicate-Item prevention, and disconnect. It intentionally does not synchronize transaction history yet; incremental `/transactions/sync`, webhooks, and scheduled synchronization are Phase 2C. Start in Plaid Sandbox.
+
+Phase 2B adds the `cryptography` runtime dependency. After applying this change, refresh both committed Python lock artifacts from `backend` before committing or deploying:
+
+```powershell
+uv lock
+uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file requirements.lock
+```
+
 
 ## Database and migrations
 

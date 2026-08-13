@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "production"]
 DatabaseSSLMode = Literal["REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"]
+PlaidEnvironment = Literal["sandbox", "production"]
 
 
 def _strict_bool(value: Any) -> bool:
@@ -83,6 +84,13 @@ class Settings(BaseSettings):
     db_ssl_mode: DatabaseSSLMode = "REQUIRED"
     db_ssl_ca: Path | None = None
 
+    plaid_client_id: SecretStr | None = None
+    plaid_secret: SecretStr | None = None
+    plaid_env: PlaidEnvironment = "sandbox"
+    plaid_redirect_uri: str | None = None
+    plaid_products: str = "transactions"
+    plaid_country_codes: str = "US"
+
     @field_validator("demo_mode", "db_ssl_required", mode="before")
     @classmethod
     def validate_exact_boolean(cls, value: Any) -> bool | None:
@@ -94,6 +102,11 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_database_ssl_mode(cls, value: Any) -> Any:
         return value.strip().upper() if isinstance(value, str) else value
+
+    @field_validator("plaid_env", mode="before")
+    @classmethod
+    def normalize_plaid_environment(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -128,7 +141,32 @@ class Settings(BaseSettings):
             raise ValueError("must contain hostnames only, not URLs or paths")
         return ",".join(hosts)
 
-    @field_validator("db_host", "db_name", "db_user", "db_ssl_ca", mode="before")
+    @field_validator("plaid_products")
+    @classmethod
+    def validate_plaid_products(cls, value: str) -> str:
+        products = [item.strip().lower() for item in value.split(",") if item.strip()]
+        if not products:
+            raise ValueError("must contain at least one Plaid product")
+        if any(not re.fullmatch(r"[a-z0-9_]+", item) for item in products):
+            raise ValueError("contains an invalid Plaid product name")
+        return ",".join(dict.fromkeys(products))
+
+    @field_validator("plaid_country_codes")
+    @classmethod
+    def validate_plaid_country_codes(cls, value: str) -> str:
+        codes = [item.strip().upper() for item in value.split(",") if item.strip()]
+        if not codes or any(not re.fullmatch(r"[A-Z]{2}", item) for item in codes):
+            raise ValueError("must contain comma-separated ISO 3166-1 alpha-2 country codes")
+        return ",".join(dict.fromkeys(codes))
+
+    @field_validator(
+        "db_host",
+        "db_name",
+        "db_user",
+        "db_ssl_ca",
+        "plaid_redirect_uri",
+        mode="before",
+    )
     @classmethod
     def blank_string_is_missing(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
@@ -141,6 +179,8 @@ class Settings(BaseSettings):
         "session_secret",
         "encryption_key",
         "db_password",
+        "plaid_client_id",
+        "plaid_secret",
         mode="before",
     )
     @classmethod
@@ -158,6 +198,21 @@ class Settings(BaseSettings):
                     "BOOTSTRAP_TOKEN must be a generated 256-bit value encoded as "
                     "64 hexadecimal characters or a 32-byte base64url value"
                 )
+
+        plaid_values = (self.plaid_client_id, self.plaid_secret)
+        if any(value is not None for value in plaid_values) and not all(
+            value is not None for value in plaid_values
+        ):
+            raise ValueError("PLAID_CLIENT_ID and PLAID_SECRET must be configured together")
+        if self.plaid_configured and self.plaid_redirect_uri is None:
+            raise ValueError("PLAID_REDIRECT_URI is required when Plaid is configured")
+        if (
+            self.plaid_configured
+            and self.app_env == "production"
+            and self.plaid_redirect_uri is not None
+            and not self.plaid_redirect_uri.startswith("https://")
+        ):
+            raise ValueError("PLAID_REDIRECT_URI must use HTTPS in production")
 
         if self.app_env == "production":
             if self.demo_mode:
@@ -211,6 +266,18 @@ class Settings(BaseSettings):
     @property
     def host_list(self) -> list[str]:
         return self.allowed_hosts.split(",")
+
+    @property
+    def plaid_configured(self) -> bool:
+        return self.plaid_client_id is not None and self.plaid_secret is not None
+
+    @property
+    def plaid_product_list(self) -> list[str]:
+        return self.plaid_products.split(",")
+
+    @property
+    def plaid_country_code_list(self) -> list[str]:
+        return self.plaid_country_codes.split(",")
 
     @property
     def is_production(self) -> bool:

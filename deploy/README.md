@@ -103,7 +103,7 @@ APP_ENV=production
 DEMO_MODE=false
 APP_SECRET=<existing-secret>
 SESSION_SECRET=<existing-secret>
-ENCRYPTION_KEY=<existing-key-reserved-for-phase-2>
+ENCRYPTION_KEY=<existing-key>
 BOOTSTRAP_TOKEN=<random-256-bit-value>
 ALLOWED_HOSTS=budget.example.com,127.0.0.1,localhost
 LOG_LEVEL=INFO
@@ -148,8 +148,8 @@ installation-complete marker, never the token itself.
 
 `APP_SECRET` keys privacy-preserving throttle/audit identifiers.
 `SESSION_SECRET` protects session and CSRF token digests; rotating it invalidates
-active sessions. `ENCRYPTION_KEY` is loaded and redacted but reserved for Phase
-2 Plaid-token encryption. Secret values must never appear in logs or API output.
+active sessions. `ENCRYPTION_KEY` is loaded and redacted and encrypts Plaid access tokens with
+authenticated encryption. Secret values must never appear in logs or API output.
 
 Use the private HeatWave internal FQDN for `DB_HOST`; in the current OCI
 deployment it resolves inside the VCN to `10.0.1.14`. `DB_SSL_REQUIRED=true` is
@@ -306,3 +306,24 @@ restart `budget-api`, and check loopback liveness/readiness plus one HTTPS
 frontend/API smoke path. The repository intentionally supplies no automated rollback;
 database compatibility must be considered before switching back to an older
 release.
+
+
+## Phase 2B Plaid Sandbox configuration
+
+1. In the Plaid Dashboard, add `https://budget.od3ssa.com/plaid/oauth` to Allowed Redirect URIs.
+2. Add the Sandbox credentials only to `/etc/budget-app/budget.env` (never to Git):
+
+```text
+PLAID_CLIENT_ID=<sandbox-client-id>
+PLAID_SECRET=<sandbox-secret>
+PLAID_ENV=sandbox
+PLAID_REDIRECT_URI=https://budget.od3ssa.com/plaid/oauth
+PLAID_PRODUCTS=transactions
+PLAID_COUNTRY_CODES=US
+```
+
+3. Restart `budget-api` after updating the environment. The existing `ENCRYPTION_KEY` encrypts Plaid access tokens before they are written to HeatWave.
+4. Reinstall `budget-security-headers.conf` and reload Nginx; Phase 2B allows the official Plaid Link CDN and Sandbox/Production Plaid API origins required by Link.
+5. Keep Sandbox Items separate from Production; changing `PLAID_ENV` does not migrate an Item.
+
+The frontend receives only the short-lived Link token and one-time public token flow. Long-lived Plaid access tokens stay server-side and encrypted at rest.

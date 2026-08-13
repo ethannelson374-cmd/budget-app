@@ -51,6 +51,7 @@ def account_view(account: Account) -> dict[str, object]:
         "currency": account.currency,
         "mask": mask,
         "last_synced_at": as_utc(account.last_synced_at) if account.last_synced_at else None,
+        "connection_id": account.plaid_item_id,
     }
 
 

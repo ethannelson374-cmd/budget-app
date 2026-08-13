@@ -5,7 +5,15 @@ from decimal import Decimal
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 
 CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 Theme = Literal["light", "dark", "system"]
@@ -229,6 +237,46 @@ class AccountView(ViewModel):
     currency: str
     mask: str | None
     last_synced_at: datetime | None
+    connection_id: int | None
+
+
+class PlaidLinkAccountMetadata(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    mask: Annotated[str, Field(min_length=2, max_length=4, pattern=r"^[A-Za-z0-9]+$")] | None = None
+
+
+class PlaidExchangeRequest(StrictModel):
+    public_token: SecretStr = Field(min_length=1, max_length=1024)
+    institution_id: Annotated[str, Field(min_length=1, max_length=255)] | None = None
+    accounts: list[PlaidLinkAccountMetadata] = Field(default_factory=list, max_length=100)
+
+
+class PlaidLinkTokenView(ViewModel):
+    link_token: str
+    environment: Literal["sandbox", "production"]
+
+
+class PlaidInstitutionView(ViewModel):
+    id: int | None
+    name: str
+    logo: str | None
+    primary_color: str | None
+    url: str | None
+
+
+class PlaidConnectionView(ViewModel):
+    id: int
+    status: Literal["active", "error"]
+    last_error_code: str | None
+    last_synced_at: datetime | None
+    institution: PlaidInstitutionView
+    accounts: list[AccountView]
+
+
+class PlaidConnectionsView(ViewModel):
+    configured: bool
+    environment: Literal["sandbox", "production"]
+    connections: list[PlaidConnectionView]
 
 
 class TransactionAccountView(ViewModel):

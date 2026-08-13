@@ -14,14 +14,17 @@ def test_secret_filter_handles_overlapping_values() -> None:
         app_secret=prefix,
         session_secret=longer,
         encryption_key="independent-encryption-secret-value",
+        plaid_client_id="plaid-client-id-secret-value",
+        plaid_secret="plaid-api-secret-value",
+        plaid_redirect_uri="https://budget.example.com/plaid/oauth",
     )
     record = logging.LogRecord(
         "test",
         logging.ERROR,
         __file__,
         1,
-        "values %s and %s",
-        (prefix, longer),
+        "values %s and %s and %s",
+        (prefix, longer, "plaid-api-secret-value"),
         None,
     )
     assert SecretRedactionFilter(settings).filter(record)
@@ -29,3 +32,4 @@ def test_secret_filter_handles_overlapping_values() -> None:
     assert prefix not in message
     assert longer not in message
     assert "long-session-suffix" not in message
+    assert "plaid-api-secret-value" not in message

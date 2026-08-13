@@ -406,3 +406,33 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .transaction-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .record-editor { padding: 17px; }
 }
+
+/* Phase 2B Plaid connections */
+.account-section { display: grid; gap: 14px; margin-bottom: 24px; }
+.section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.section-heading h2 { margin: 2px 0 0; }
+.connection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.connection-card { display: grid; gap: 17px; padding: 21px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
+.connection-card-header, .connection-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.institution-identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.institution-identity h2 { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.institution-logo { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; object-fit: contain; background: #fff; }
+.institution-logo.fallback { display: grid; place-items: center; color: var(--brand); background: var(--surface-teal); font-weight: 900; }
+.connection-status, .environment-badge { padding: 5px 8px; border-radius: 999px; color: var(--positive); background: var(--positive-soft); font-size: 0.65rem; font-weight: 800; text-transform: capitalize; }
+.connection-status.error { color: var(--negative); background: var(--danger-soft); }
+.environment-badge { color: var(--text-muted); background: var(--surface-muted); }
+.connection-account-list { display: grid; border-top: 1px solid var(--border); }
+.connection-account-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.connection-account-row > div { display: grid; gap: 2px; }
+.connection-account-row span { color: var(--text-muted); font-size: 0.68rem; }
+.connection-card-footer { color: var(--text-soft); font-size: 0.68rem; }
+.inline-notice { margin-bottom: 17px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); background: var(--surface-teal); font-size: 0.8rem; }
+
+@media (max-width: 940px) {
+  .connection-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .section-heading, .connection-card-footer { align-items: flex-start; flex-direction: column; }
+  .connection-card-footer .button { width: 100%; }
+}

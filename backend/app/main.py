@@ -37,6 +37,8 @@ class SecretRedactionFilter(logging.Filter):
             settings.session_secret,
             settings.encryption_key,
             settings.db_password,
+            settings.plaid_client_id,
+            settings.plaid_secret,
         ]
         values = {
             value.get_secret_value()
