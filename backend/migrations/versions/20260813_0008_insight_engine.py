@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column("title", sa.String(180), nullable=False),
         sa.Column("summary", sa.Text(), nullable=False),
         sa.Column("recommendation", sa.Text(), nullable=True),
-        sa.Column("evidence_json", sa.Text(), nullable=False, server_default="[]"),
+        sa.Column("evidence_json", sa.Text(), nullable=False),
         sa.Column("action_route", sa.String(120), nullable=True),
         sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
