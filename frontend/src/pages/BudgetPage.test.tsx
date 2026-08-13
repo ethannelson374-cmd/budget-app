@@ -41,8 +41,10 @@ const monthBudget: MonthlyBudgetView = {
   spent: "1675.0000",
   remaining: "525.0000",
   unallocated: "2900.0000",
-  cash_available: "6200.0000",
+    cash_available: "6200.0000",
   upcoming_recurring: "300.0000",
+  planning_commitments: "0.0000",
+  goal_reserves: "0.0000",
   safe_to_spend: "5675.0000",
   notes: null,
   categories: [

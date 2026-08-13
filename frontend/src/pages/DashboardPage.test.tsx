@@ -33,6 +33,8 @@ const budget: MonthlyBudgetView = {
   planned_income: "5000.0000",
   actual_income: "4000.0000",
   budgeted: "3000.0000",
+  planning_commitments: "0.0000",
+  goal_reserves: "0.0000",
   available_with_rollover: "3100.0000",
   spent: "2500.0000",
   remaining: "600.0000",
