@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { DashboardData } from "../api/types";
+import type { DashboardData, MonthlyBudgetView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState, EmptyState } from "../components/States";
 import { CashFlowChart } from "../components/CashFlowChart";
@@ -23,18 +23,22 @@ export function DashboardPage() {
     queryKey: queryKeys.dashboard(month),
     queryFn: () => apiRequest<DashboardData>(`/dashboard?month=${encodeURIComponent(month)}`),
   });
+  const budget = useQuery({
+    queryKey: queryKeys.budgetMonth(month),
+    queryFn: () => apiRequest<MonthlyBudgetView>(`/budget/months/${month}`),
+  });
 
   return (
     <div className="page-container dashboard-page">
       <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
-      {dashboard.data && <DashboardContent data={dashboard.data} />}
+      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} />}
     </div>
   );
 }
 
-function DashboardContent({ data }: { data: DashboardData }) {
+function DashboardContent({ data, budget }: { data: DashboardData; budget?: MonthlyBudgetView }) {
   const { summary } = data;
   const savingsTone = summary.savings_rate === null ? "neutral" : numberFromMoney(summary.savings_rate) >= 0 ? "positive" : "negative";
   return (
@@ -52,6 +56,10 @@ function DashboardContent({ data }: { data: DashboardData }) {
         <section className="panel chart-panel"><div className="panel-heading"><div><span className="eyebrow">Daily movement</span><h2>Cash flow</h2></div><span className="as-of">As of {formatDateTime(data.as_of)}</span></div><CashFlowChart data={data.daily_cash_flow} currency={data.currency} /></section>
         <section className="panel"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Top spending</h2></div></div><CategoryBars categories={data.spending_by_category} currency={data.currency} /></section>
       </div>
+      {budget && budget.source !== "unplanned" && <section className="panel dashboard-budget-panel">
+        <div className="panel-heading"><div><span className="eyebrow">Monthly budget</span><h2>{formatMoney(budget.spent, budget.currency)} spent of {formatMoney(budget.available_with_rollover, budget.currency)}</h2></div><Link className="text-link" to="/budget">Open budget <span aria-hidden="true">→</span></Link></div>
+        <div className="dashboard-budget-summary"><div><strong>{formatMoney(budget.remaining, budget.currency)}</strong><span>Remaining</span></div><div><strong>{formatMoney(budget.safe_to_spend, budget.currency)}</strong><span>Safe to spend</span></div><div><strong>{budget.categories.filter((row) => row.status === "close").length}</strong><span>Getting close</span></div><div><strong>{budget.categories.filter((row) => row.status === "over").length}</strong><span>Over budget</span></div></div>
+      </section>}
       <section className="panel recent-panel">
         <div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent transactions</h2></div><Link className="text-link" to="/transactions">View all <span aria-hidden="true">→</span></Link></div>
         {data.recent_transactions.length ? <TransactionList transactions={data.recent_transactions} compact /> : <EmptyState title="No transactions yet" message="Transactions will appear here when financial data is available." />}

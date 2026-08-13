@@ -19,11 +19,16 @@ from app.core.database import Database, build_database_url
 from app.core.security import hash_password, normalize_identity, utc_now
 from app.models import (
     Account,
+    AnnualBudgetCategory,
+    AnnualBudgetMonthAllocation,
+    AnnualBudgetPlan,
     AuditEvent,
     Category,
     FinancialInstitution,
     InstallationState,
     LoginThrottle,
+    MonthlyBudget,
+    MonthlyBudgetCategory,
     PlaidItem,
     SessionRecord,
     Transaction,
@@ -80,6 +85,11 @@ def reset_demo(settings: Settings) -> None:
     try:
         with database.session_factory() as db:
             for model in (
+                AnnualBudgetMonthAllocation,
+                AnnualBudgetCategory,
+                MonthlyBudgetCategory,
+                MonthlyBudget,
+                AnnualBudgetPlan,
                 Transaction,
                 Account,
                 PlaidItem,
@@ -126,6 +136,39 @@ def reset_demo(settings: Settings) -> None:
                 )
                 db.add(category)
                 categories[definition["key"]] = category
+            db.flush()
+
+            annual_plan = AnnualBudgetPlan(
+                user_id=user.id,
+                year=today.year,
+                planned_income=Decimal("54000.0000"),
+                notes="Demo annual plan",
+            )
+            db.add(annual_plan)
+            db.flush()
+            demo_budget_amounts = {
+                "housing": "17400.0000",
+                "utilities": "2400.0000",
+                "groceries": "7200.0000",
+                "restaurants": "2400.0000",
+                "gas": "2400.0000",
+                "subscriptions": "240.0000",
+                "debt_payments": "3900.0000",
+                "shopping": "1800.0000",
+                "entertainment": "1200.0000",
+                "savings": "6000.0000",
+            }
+            for key, amount in demo_budget_amounts.items():
+                db.add(
+                    AnnualBudgetCategory(
+                        plan_id=annual_plan.id,
+                        user_id=user.id,
+                        category_id=categories[key].id,
+                        annual_amount=Decimal(amount),
+                        distribution="even",
+                        rollover_mode="surplus" if key in {"groceries", "shopping", "entertainment"} else "off",
+                    )
+                )
             db.flush()
 
             institution = FinancialInstitution(

@@ -202,3 +202,19 @@ later trigger this same engine without duplicating transaction reconciliation.
 ## Phase 2D intelligence boundary
 
 Plaid-originated values remain provider truth on each transaction. Budget stores display-merchant, category, kind, and spending-exclusion overrides separately and applies ordered user rules only to Plaid transactions that have not been explicitly tuned. Recurring streams are derived locally from posted, non-transfer, non-excluded transactions with at least three observations and a recognized cadence; they are projections, not provider guarantees. Plaid `SYNC_UPDATES_AVAILABLE` webhooks are signature/body-hash verified and only mark an Item as sync-needed. A lightweight systemd timer consumes those hints while retaining a 15-minute stale-item safety net.
+
+
+## Phase 3A budgeting boundary
+
+Budget planning remains inside the modular monolith and adds no background
+worker or external dependency. Annual plans provide the default monthly
+baseline; month records are either standalone budgets or explicit overrides.
+Annual category rows support even, fixed-monthly, and twelve-month custom
+distribution. Monthly availability is calculated as base allocation plus
+derived rollover, while annual goals remain stable.
+
+Actual budget spending is calculated from the Phase 2D effective transaction
+interpretation rather than raw Plaid metadata. Transfers and excluded
+transactions do not consume spending budgets, refunds reduce spending, and
+category/kind overrides are honored. Safe-to-spend is intentionally
+deterministic and explainable; no AI inference is involved in Phase 3A.

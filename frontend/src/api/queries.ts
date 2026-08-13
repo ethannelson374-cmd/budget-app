@@ -13,6 +13,9 @@ export const queryKeys = {
   categories: ["categories"] as const,
   transactionRules: ["transaction-rules"] as const,
   recurring: ["recurring"] as const,
+  budgetMonth: (month: string) => ["budget-month", month] as const,
+  budgetYear: (year: number) => ["budget-year", year] as const,
+  annualBudgetPlan: (year: number) => ["annual-budget-plan", year] as const,
 };
 
 export function useSetupStatus() {

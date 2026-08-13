@@ -516,3 +516,137 @@ class RecurringStreamsView(ViewModel):
     streams: list[RecurringStreamView]
     monthly_outflow_estimate: str
     monthly_inflow_estimate: str
+
+
+RolloverMode = Literal["off", "surplus", "surplus_and_deficit"]
+BudgetDistribution = Literal["even", "monthly", "custom"]
+MonthlyBudgetMode = Literal["standalone", "override"]
+BudgetStatus = Literal["on_track", "close", "over", "no_budget"]
+
+
+class BudgetCustomMonthAmount(StrictModel):
+    month: Annotated[int, Field(ge=1, le=12)]
+    amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)]
+
+
+class AnnualBudgetCategoryWrite(StrictModel):
+    category_id: Annotated[int, Field(gt=0)]
+    annual_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
+    distribution: BudgetDistribution = "even"
+    monthly_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    custom_months: list[BudgetCustomMonthAmount] = Field(default_factory=list, max_length=12)
+    rollover_mode: RolloverMode = "off"
+
+    @model_validator(mode="after")
+    def validate_distribution(self) -> AnnualBudgetCategoryWrite:
+        if self.distribution == "monthly" and self.monthly_amount is None:
+            raise ValueError("monthly_amount is required for monthly distribution")
+        if self.distribution == "custom":
+            months = [item.month for item in self.custom_months]
+            if len(months) != 12 or set(months) != set(range(1, 13)):
+                raise ValueError("custom_months must contain each month from 1 through 12")
+        return self
+
+
+class AnnualBudgetPlanWrite(StrictModel):
+    planned_income: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)]
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+    categories: list[AnnualBudgetCategoryWrite] = Field(default_factory=list, max_length=100)
+
+
+class BudgetCategoryRef(ViewModel):
+    id: int
+    key: str
+    name: str
+    group: str
+    enabled: bool
+
+
+class BudgetCustomMonthView(ViewModel):
+    month: int
+    amount: str
+
+
+class AnnualBudgetCategoryView(ViewModel):
+    category: BudgetCategoryRef
+    annual_amount: str
+    distribution: BudgetDistribution
+    monthly_amount: str | None
+    rollover_mode: RolloverMode
+    custom_months: list[BudgetCustomMonthView]
+
+
+class AnnualBudgetPlanView(ViewModel):
+    year: int
+    exists: bool
+    planned_income: str
+    notes: str | None
+    categories: list[AnnualBudgetCategoryView]
+
+
+class MonthlyBudgetCategoryWrite(StrictModel):
+    category_id: Annotated[int, Field(gt=0)]
+    planned_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)]
+    rollover_mode: RolloverMode = "off"
+
+
+class MonthlyBudgetWrite(StrictModel):
+    mode: MonthlyBudgetMode = "standalone"
+    planned_income: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    notes: Annotated[str, Field(max_length=2000)] | None = None
+    categories: list[MonthlyBudgetCategoryWrite] = Field(default_factory=list, max_length=100)
+
+
+class MonthlyBudgetCategoryView(ViewModel):
+    category: BudgetCategoryRef
+    base_amount: str
+    rollover_amount: str
+    available_amount: str
+    spent_amount: str
+    remaining_amount: str
+    percent_used: str | None
+    status: BudgetStatus
+    rollover_mode: RolloverMode
+
+
+class MonthlyBudgetView(ViewModel):
+    period: DashboardPeriodView
+    currency: str
+    source: Literal["annual", "standalone", "override", "unplanned"]
+    monthly_mode: MonthlyBudgetMode | None
+    has_annual_plan: bool
+    planned_income: str
+    actual_income: str
+    budgeted: str
+    available_with_rollover: str
+    spent: str
+    remaining: str
+    unallocated: str
+    cash_available: str
+    upcoming_recurring: str
+    safe_to_spend: str
+    notes: str | None
+    categories: list[MonthlyBudgetCategoryView]
+
+
+class YearBudgetCategoryView(ViewModel):
+    category: BudgetCategoryRef
+    planned_amount: str
+    ytd_planned_amount: str
+    spent_amount: str
+    remaining_amount: str
+    percent_used: str | None
+
+
+class YearBudgetView(ViewModel):
+    year: int
+    currency: str
+    has_annual_plan: bool
+    planned_income: str
+    ytd_planned_income: str
+    actual_income: str
+    budgeted: str
+    spent: str
+    remaining: str
+    unallocated: str
+    categories: list[YearBudgetCategoryView]

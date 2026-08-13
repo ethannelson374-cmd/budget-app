@@ -9,6 +9,7 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/accounts", label: "Accounts", icon: "accounts" },
   { to: "/transactions", label: "Transactions", icon: "transactions" },
+  { to: "/budget", label: "Budget", icon: "wallet" },
   { to: "/recurring", label: "Recurring", icon: "repeat" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];

@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { DashboardData } from "../api/types";
+import type { DashboardData, MonthlyBudgetView } from "../api/types";
 import { DashboardPage } from "./DashboardPage";
 
 vi.mock("../api/client", async (importOriginal) => {
@@ -24,29 +24,59 @@ const dashboard: DashboardData = {
   excluded_currencies: ["CAD"],
 };
 
+const budget: MonthlyBudgetView = {
+  period: { month: "2026-08", start: "2026-08-01", end: "2026-08-31" },
+  currency: "USD",
+  source: "annual",
+  monthly_mode: null,
+  has_annual_plan: true,
+  planned_income: "5000.0000",
+  actual_income: "4000.0000",
+  budgeted: "3000.0000",
+  available_with_rollover: "3100.0000",
+  spent: "2500.0000",
+  remaining: "600.0000",
+  unallocated: "2000.0000",
+  cash_available: "5000.0000",
+  upcoming_recurring: "350.0000",
+  safe_to_spend: "4400.0000",
+  notes: null,
+  categories: [],
+};
+
 describe("DashboardPage", () => {
-  beforeEach(() => vi.mocked(apiRequest).mockReset().mockResolvedValue(dashboard));
+  beforeEach(() => {
+    vi.mocked(apiRequest).mockReset().mockImplementation((path) =>
+      Promise.resolve((path.startsWith("/budget/") ? budget : dashboard) as never),
+    );
+  });
 
   function renderDashboard() {
     return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><DashboardPage /></MemoryRouter></QueryClientProvider>);
   }
 
-  it("renders summary arithmetic, excluded currencies, and honest empty states", async () => {
+  it("renders summary arithmetic, budget summary, excluded currencies, and honest empty states", async () => {
     renderDashboard();
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
     expect(screen.getByText(/Excluded: CAD/)).toBeInTheDocument();
     expect(screen.getByText("No cash flow activity in this period.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "No transactions yet" })).toBeInTheDocument();
     expect(screen.getByText("37.5%")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open budget/ })).toBeInTheDocument();
+    expect(screen.getByText("$4,400.00")).toBeInTheDocument();
   });
 
-  it("offers a working retry after a server failure", async () => {
+  it("offers a working retry after a dashboard server failure", async () => {
     const user = userEvent.setup();
-    vi.mocked(apiRequest).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(dashboard);
+    let dashboardCalls = 0;
+    vi.mocked(apiRequest).mockImplementation((path) => {
+      if (path.startsWith("/budget/")) return Promise.resolve(budget as never);
+      dashboardCalls += 1;
+      return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
+    });
     renderDashboard();
     const retry = await screen.findByRole("button", { name: "Try again" });
     await user.click(retry);
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
-    expect(apiRequest).toHaveBeenCalledTimes(2);
   });
 });

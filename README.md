@@ -353,3 +353,38 @@ security boundary.
 ## Phase 2D transaction intelligence
 
 Phase 2D adds signed Plaid `SYNC_UPDATES_AVAILABLE` webhook intake, user transaction overrides, reusable matching rules, merchant normalization, local recurring-pattern detection, and a Recurring screen. Provider merchant/category/kind values remain stored separately from Budget's interpretation so user changes are reversible. The Plaid webhook JWT is verified with the Plaid JWK, a five-minute replay window, and the raw request-body SHA-256 before any webhook is accepted. The periodic sync timer now runs every minute but only synchronizes Items explicitly marked by a webhook or whose last transaction sync is at least 15 minutes old.
+
+
+## Phase 3A budget planning
+
+Phase 3A adds annual and monthly budgeting on top of the transaction-intelligence
+layer. Users can set one annual plan and let Budget derive monthly baselines,
+use a fixed monthly amount, or distribute a category goal differently across
+all twelve months. Individual months can override the annual plan or become a
+standalone budget, and any month can copy the previous month's effective base
+plan.
+
+Budget category actuals always use the interpreted transaction values from
+Phase 2D: category overrides, kind overrides, transfer treatment, refunds, and
+spending exclusions are honored. Per-category rollover supports `off`,
+`surplus`, and `surplus_and_deficit`. Rollover changes monthly availability but
+does not rewrite the annual goal.
+
+The Budget screen exposes Month and Year views. Month view includes planned and
+actual income, base budget, rollover-adjusted availability, spending,
+unallocated income, remaining budget, upcoming recurring obligations, and a
+conservative safe-to-spend figure. Safe-to-spend reserves the larger of
+remaining category budgets or detected upcoming recurring expenses so the same
+obligation is not blindly double-counted. Year view reports annual goals and
+year-to-date progress.
+
+Budget APIs:
+
+- `GET/PUT /api/v1/budget/years/{year}/plan`
+- `GET /api/v1/budget/years/{year}`
+- `GET/PUT/DELETE /api/v1/budget/months/{YYYY-MM}`
+- `POST /api/v1/budget/months/{YYYY-MM}/copy-previous`
+
+Migration `20260813_0006` creates the annual-plan, custom-month-distribution,
+monthly-budget, and category-allocation tables. All records are owner-scoped
+with composite category ownership foreign keys.

@@ -7,6 +7,7 @@ import { Brand } from "../components/Brand";
 import { ErrorState, PageLoading } from "../components/States";
 import { AccountsPage } from "../pages/AccountsPage";
 import { DashboardPage } from "../pages/DashboardPage";
+import { BudgetPage } from "../pages/BudgetPage";
 import { LoginPage } from "../pages/LoginPage";
 import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -98,6 +99,7 @@ export function App() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/plaid/oauth" element={<PlaidOAuthPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/budget" element={<BudgetPage />} />
         <Route path="/recurring" element={<RecurringPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />

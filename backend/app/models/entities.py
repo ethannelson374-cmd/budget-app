@@ -390,3 +390,126 @@ class RecurringStream(TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     account: Mapped[Account] = relationship(viewonly=True)
+
+
+class AnnualBudgetPlan(TimestampMixin, Base):
+    __tablename__ = "annual_budget_plans"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_annual_budget_plan_id_user"),
+        UniqueConstraint("user_id", "year", name="uq_annual_budget_plan_user_year"),
+        CheckConstraint("year >= 2000 AND year <= 2200", name="annual_budget_plan_year_range"),
+        Index("ix_annual_budget_plans_user_year", "user_id", "year"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    planned_income: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AnnualBudgetCategory(TimestampMixin, Base):
+    __tablename__ = "annual_budget_categories"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["plan_id", "user_id"],
+            ["annual_budget_plans.id", "annual_budget_plans.user_id"],
+            name="fk_annual_budget_category_plan_owner",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["category_id", "user_id"],
+            ["categories.id", "categories.user_id"],
+            name="fk_annual_budget_category_category_owner",
+        ),
+        UniqueConstraint("plan_id", "category_id", name="uq_annual_budget_category_plan_category"),
+        CheckConstraint(
+            "distribution IN ('even','monthly','custom')",
+            name="annual_budget_category_distribution_allowed",
+        ),
+        CheckConstraint(
+            "rollover_mode IN ('off','surplus','surplus_and_deficit')",
+            name="annual_budget_category_rollover_allowed",
+        ),
+        Index("ix_annual_budget_categories_user_plan", "user_id", "plan_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    annual_amount: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
+    distribution: Mapped[str] = mapped_column(String(16), default="even", nullable=False)
+    monthly_amount: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    rollover_mode: Mapped[str] = mapped_column(String(24), default="off", nullable=False)
+
+    category: Mapped[Category] = relationship(viewonly=True)
+
+
+class AnnualBudgetMonthAllocation(Base):
+    __tablename__ = "annual_budget_month_allocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "annual_category_id", "month_number", name="uq_annual_budget_month_allocation"
+        ),
+        CheckConstraint(
+            "month_number >= 1 AND month_number <= 12",
+            name="annual_budget_month_number_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    annual_category_id: Mapped[int] = mapped_column(
+        ForeignKey("annual_budget_categories.id", ondelete="CASCADE"), nullable=False
+    )
+    month_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+
+
+class MonthlyBudget(TimestampMixin, Base):
+    __tablename__ = "monthly_budgets"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_monthly_budget_id_user"),
+        UniqueConstraint("user_id", "month", name="uq_monthly_budget_user_month"),
+        CheckConstraint("mode IN ('standalone','override')", name="monthly_budget_mode_allowed"),
+        Index("ix_monthly_budgets_user_month", "user_id", "month"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    month: Mapped[date] = mapped_column(Date, nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), default="standalone", nullable=False)
+    planned_income: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class MonthlyBudgetCategory(TimestampMixin, Base):
+    __tablename__ = "monthly_budget_categories"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["budget_id", "user_id"],
+            ["monthly_budgets.id", "monthly_budgets.user_id"],
+            name="fk_monthly_budget_category_budget_owner",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["category_id", "user_id"],
+            ["categories.id", "categories.user_id"],
+            name="fk_monthly_budget_category_category_owner",
+        ),
+        UniqueConstraint("budget_id", "category_id", name="uq_monthly_budget_category_budget_category"),
+        CheckConstraint(
+            "rollover_mode IN ('off','surplus','surplus_and_deficit')",
+            name="monthly_budget_category_rollover_allowed",
+        ),
+        Index("ix_monthly_budget_categories_user_budget", "user_id", "budget_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    planned_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    rollover_mode: Mapped[str] = mapped_column(String(24), default="off", nullable=False)
+
+    category: Mapped[Category] = relationship(viewonly=True)

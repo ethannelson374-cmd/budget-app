@@ -321,3 +321,112 @@ export interface RecurringStreamsResponse {
   monthly_outflow_estimate: string;
   monthly_inflow_estimate: string;
 }
+
+export type RolloverMode = "off" | "surplus" | "surplus_and_deficit";
+export type BudgetDistribution = "even" | "monthly" | "custom";
+export type MonthlyBudgetMode = "standalone" | "override";
+export type BudgetStatus = "on_track" | "close" | "over" | "no_budget";
+
+export interface BudgetCategoryRef {
+  id: number;
+  key: string;
+  name: string;
+  group: string;
+  enabled: boolean;
+}
+
+export interface AnnualBudgetCategory {
+  category: BudgetCategoryRef;
+  annual_amount: string;
+  distribution: BudgetDistribution;
+  monthly_amount: string | null;
+  rollover_mode: RolloverMode;
+  custom_months: Array<{ month: number; amount: string }>;
+}
+
+export interface AnnualBudgetPlan {
+  year: number;
+  exists: boolean;
+  planned_income: string;
+  notes: string | null;
+  categories: AnnualBudgetCategory[];
+}
+
+export interface AnnualBudgetPlanWrite {
+  planned_income: string;
+  notes: string | null;
+  categories: Array<{
+    category_id: number;
+    annual_amount: string;
+    distribution: BudgetDistribution;
+    monthly_amount: string | null;
+    custom_months: Array<{ month: number; amount: string }>;
+    rollover_mode: RolloverMode;
+  }>;
+}
+
+export interface MonthlyBudgetCategory {
+  category: BudgetCategoryRef;
+  base_amount: string;
+  rollover_amount: string;
+  available_amount: string;
+  spent_amount: string;
+  remaining_amount: string;
+  percent_used: string | null;
+  status: BudgetStatus;
+  rollover_mode: RolloverMode;
+}
+
+export interface MonthlyBudgetView {
+  period: { month: string; start: string; end: string };
+  currency: string;
+  source: "annual" | "standalone" | "override" | "unplanned";
+  monthly_mode: MonthlyBudgetMode | null;
+  has_annual_plan: boolean;
+  planned_income: string;
+  actual_income: string;
+  budgeted: string;
+  available_with_rollover: string;
+  spent: string;
+  remaining: string;
+  unallocated: string;
+  cash_available: string;
+  upcoming_recurring: string;
+  safe_to_spend: string;
+  notes: string | null;
+  categories: MonthlyBudgetCategory[];
+}
+
+export interface MonthlyBudgetWrite {
+  mode: MonthlyBudgetMode;
+  planned_income: string | null;
+  notes: string | null;
+  categories: Array<{
+    category_id: number;
+    planned_amount: string;
+    rollover_mode: RolloverMode;
+  }>;
+}
+
+export interface YearBudgetCategory {
+  category: BudgetCategoryRef;
+  planned_amount: string;
+  ytd_planned_amount: string;
+  spent_amount: string;
+  remaining_amount: string;
+  percent_used: string | null;
+}
+
+export interface YearBudgetView {
+  year: number;
+  currency: string;
+  has_annual_plan: boolean;
+  planned_income: string;
+  ytd_planned_income: string;
+  actual_income: string;
+  budgeted: string;
+  spent: string;
+  remaining: string;
+  unallocated: string;
+  categories: YearBudgetCategory[];
+}
