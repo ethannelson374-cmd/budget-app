@@ -13,7 +13,7 @@ from app.cli import _guard_demo_settings, migrate, reset_demo, reset_password
 from app.core.config import Settings
 from app.core.database import Database
 from app.core.security import verify_password
-from app.models import AuditEvent, SessionRecord, Transaction, User
+from app.models import Account, AuditEvent, SessionRecord, Transaction, User
 from app.services.auth import issue_session
 
 
@@ -78,9 +78,13 @@ def test_demo_reset_never_seeds_future_transactions(tmp_path: Path) -> None:
         with database.session_factory() as session:
             latest = session.scalar(select(func.max(Transaction.posted_date)))
             count = session.scalar(select(func.count(Transaction.id)))
+            account_sources = set(session.scalars(select(Account.source_type)).all())
+            transaction_sources = set(session.scalars(select(Transaction.source_type)).all())
         assert latest is not None
         assert latest <= datetime.now(ZoneInfo("America/Chicago")).date()
         assert count is not None and count > 0
+        assert account_sources == {"plaid"}
+        assert transaction_sources == {"plaid"}
     finally:
         database.engine.dispose()
 

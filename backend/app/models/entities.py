@@ -145,7 +145,12 @@ class Account(TimestampMixin, Base):
             "account_type IN ('depository','credit','loan','investment','other')",
             name="account_type_allowed",
         ),
+        CheckConstraint(
+            "source_type IN ('manual','plaid')",
+            name="account_source_type_allowed",
+        ),
         Index("ix_accounts_user_type", "user_id", "account_type"),
+        Index("ix_accounts_user_source", "user_id", "source_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -156,6 +161,7 @@ class Account(TimestampMixin, Base):
     official_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     account_type: Mapped[str] = mapped_column(String(20), nullable=False)
     account_subtype: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(12), default="manual", nullable=False)
     current_balance: Mapped[Decimal] = mapped_column(MONEY, default=Decimal("0"), nullable=False)
     available_balance: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
     credit_limit: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
@@ -199,6 +205,10 @@ class Transaction(TimestampMixin, Base):
         ),
         CheckConstraint("kind IN ('income','expense','transfer','refund')", name="kind_allowed"),
         CheckConstraint(
+            "source_type IN ('manual','plaid')",
+            name="transaction_source_type_allowed",
+        ),
+        CheckConstraint(
             "(kind IN ('income','refund') AND amount >= 0) "
             "OR (kind = 'expense' AND amount <= 0) OR kind = 'transfer'",
             name="amount_sign",
@@ -206,6 +216,7 @@ class Transaction(TimestampMixin, Base):
         Index("ix_transactions_user_posted", "user_id", "posted_date"),
         Index("ix_transactions_user_account_posted", "user_id", "account_id", "posted_date"),
         Index("ix_transactions_user_category_posted", "user_id", "category_id", "posted_date"),
+        Index("ix_transactions_user_source_posted", "user_id", "source_type", "posted_date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -219,6 +230,7 @@ class Transaction(TimestampMixin, Base):
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(12), default="manual", nullable=False)
     pending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -44,6 +44,7 @@ def account_view(account: Account) -> dict[str, object]:
         "display_name": display_name,
         "account_type": account.account_type,
         "account_subtype": account.account_subtype,
+        "source_type": account.source_type,
         "current_balance": money(account.current_balance),
         "available_balance": money(account.available_balance),
         "credit_limit": money(account.credit_limit),
@@ -67,7 +68,9 @@ def transaction_view(transaction: Transaction) -> dict[str, object]:
         "description": transaction.description,
         "amount": money(transaction.amount),
         "kind": transaction.kind,
+        "source_type": transaction.source_type,
         "pending": transaction.pending,
+        "notes": transaction.notes,
         "account": {
             "id": transaction.account.id,
             "name": transaction.account.name,

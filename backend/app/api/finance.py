@@ -13,19 +13,34 @@ from app.core.config import Settings
 from app.core.errors import ApiError
 from app.models import Account, Category
 from app.schemas.api import (
+    AccountCreate,
+    AccountPatch,
+    AccountView,
     AccountsView,
     CategorySelectionUpdate,
     CategorySelectionView,
     DashboardView,
+    OkView,
     SettingsPatch,
+    TransactionCreate,
+    TransactionPatch,
     TransactionPageView,
+    TransactionView,
     UserSettingsView,
 )
 from app.services.auth import Principal, add_audit_event
 from app.services.catalog import CATEGORY_BY_KEY, DEFAULT_CATEGORIES
 from app.services.finance import dashboard_data, transaction_page
+from app.services.manual_finance import (
+    create_manual_account,
+    create_manual_transaction,
+    delete_manual_account,
+    delete_manual_transaction,
+    update_manual_account,
+    update_manual_transaction,
+)
 from app.services.setup import validate_category_keys
-from app.services.views import account_view, settings_view
+from app.services.views import account_view, settings_view, transaction_view
 
 router = APIRouter(tags=["finance"])
 
@@ -153,6 +168,78 @@ def get_accounts(
     return {"accounts": [account_view(account) for account in accounts]}
 
 
+@router.post("/accounts", response_model=AccountView, status_code=201)
+def create_account(
+    payload: AccountCreate,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    account = create_manual_account(db, principal.user, payload.model_dump())
+    add_audit_event(
+        db,
+        settings,
+        action="account.create",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{account.id}",
+    )
+    db.commit()
+    return account_view(account)
+
+
+@router.patch("/accounts/{account_id}", response_model=AccountView)
+def update_account(
+    account_id: int,
+    payload: AccountPatch,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    account = update_manual_account(
+        db,
+        principal.user,
+        account_id,
+        payload.model_dump(exclude_unset=True),
+    )
+    add_audit_event(
+        db,
+        settings,
+        action="account.update",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{account.id}",
+    )
+    db.commit()
+    return account_view(account)
+
+
+@router.delete("/accounts/{account_id}", response_model=OkView)
+def delete_account(
+    account_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, bool]:
+    delete_manual_account(db, principal.user, account_id)
+    add_audit_event(
+        db,
+        settings,
+        action="account.delete",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{account_id}",
+    )
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/dashboard", response_model=DashboardView)
 def get_dashboard(
     month: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$")] = None,
@@ -197,3 +284,75 @@ def get_transactions(
         sort=sort,
         direction=direction,
     )
+
+
+@router.post("/transactions", response_model=TransactionView, status_code=201)
+def create_transaction(
+    payload: TransactionCreate,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    transaction = create_manual_transaction(db, principal.user, payload.model_dump())
+    add_audit_event(
+        db,
+        settings,
+        action="transaction.create",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{transaction.id}",
+    )
+    db.commit()
+    return transaction_view(transaction)
+
+
+@router.patch("/transactions/{transaction_id}", response_model=TransactionView)
+def update_transaction(
+    transaction_id: int,
+    payload: TransactionPatch,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    transaction = update_manual_transaction(
+        db,
+        principal.user,
+        transaction_id,
+        payload.model_dump(exclude_unset=True),
+    )
+    add_audit_event(
+        db,
+        settings,
+        action="transaction.update",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{transaction.id}",
+    )
+    db.commit()
+    return transaction_view(transaction)
+
+
+@router.delete("/transactions/{transaction_id}", response_model=OkView)
+def delete_transaction(
+    transaction_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, bool]:
+    delete_manual_transaction(db, principal.user, transaction_id)
+    add_audit_event(
+        db,
+        settings,
+        action="transaction.delete",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"manual:{transaction_id}",
+    )
+    db.commit()
+    return {"ok": True}

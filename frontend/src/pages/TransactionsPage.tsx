@@ -1,17 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { apiRequest } from "../api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ApiError, apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { AccountsResponse, CategorySelection, PaginatedTransactions } from "../api/types";
+import type { AccountsResponse, CategorySelection, PaginatedTransactions, TransactionItem, TransactionWritePayload } from "../api/types";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { PageHeader } from "../components/PageHeader";
+import { TransactionEditor } from "../components/TransactionEditor";
 import { TransactionList } from "../components/TransactionList";
 import { Icon } from "../components/Icon";
 
 const allowedParams = ["start_date", "end_date", "account_id", "category_id", "search", "min_amount", "max_amount", "kind", "pending", "sort", "direction", "page_size"];
 
+function mutationError(error: unknown): string {
+  return error instanceof ApiError ? error.message : "The transaction could not be saved.";
+}
+
 export function TransactionsPage() {
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [editor, setEditor] = useState<TransactionItem | null | undefined>(undefined);
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("page_size") ?? "25", 10) || 25));
   const canonical = new URLSearchParams(searchParams);
@@ -24,6 +32,30 @@ export function TransactionsPage() {
   const transactions = useQuery({ queryKey: queryKeys.transactions(search), queryFn: () => apiRequest<PaginatedTransactions>(`/transactions?${search}`) });
   const accounts = useQuery({ queryKey: queryKeys.accounts, queryFn: () => apiRequest<AccountsResponse>("/accounts") });
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: () => apiRequest<CategorySelection>("/categories/selection") });
+
+  const saveTransaction = useMutation({
+    mutationFn: ({ id, payload }: { id?: number; payload: TransactionWritePayload }) => apiRequest<TransactionItem>(id ? `/transactions/${id}` : "/transactions", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    }),
+    onSuccess: async () => {
+      setEditor(undefined);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+  });
+
+  const deleteTransaction = useMutation({
+    mutationFn: (transaction: TransactionItem) => apiRequest<{ ok: boolean }>(`/transactions/${transaction.id}`, { method: "DELETE" }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+  });
 
   const applyFilters = (form: HTMLFormElement) => {
     const data = new FormData(form);
@@ -43,9 +75,39 @@ export function TransactionsPage() {
     document.getElementById("main-content")?.focus();
   };
 
+  const requestDelete = (transaction: TransactionItem) => {
+    const label = transaction.merchant || transaction.description;
+    if (window.confirm(`Delete ${label}?`)) deleteTransaction.mutate(transaction);
+  };
+
+  const canAddTransaction = Boolean(accounts.data?.accounts.length);
+
   return (
     <div className="page-container">
-      <PageHeader title="Transactions" description="Search and review your financial activity." />
+      <PageHeader
+        title="Transactions"
+        description="Search, add, and maintain your manual financial activity."
+        actions={<button className="button primary" type="button" disabled={!canAddTransaction} onClick={() => { saveTransaction.reset(); setEditor(null); }}>Add transaction</button>}
+      />
+
+      {editor !== undefined && accounts.data && categories.data && (
+        <TransactionEditor
+          key={editor?.id ?? "new-transaction"}
+          transaction={editor ?? undefined}
+          accounts={accounts.data.accounts}
+          categories={categories.data.categories}
+          busy={saveTransaction.isPending}
+          error={saveTransaction.isError ? mutationError(saveTransaction.error) : null}
+          onCancel={() => { saveTransaction.reset(); setEditor(undefined); }}
+          onSubmit={(payload) => saveTransaction.mutate({ id: editor?.id, payload })}
+        />
+      )}
+
+      {!accounts.isPending && accounts.data?.accounts.length === 0 && (
+        <div className="info-banner">Add an account before creating transactions. <Link className="text-link" to="/accounts">Go to Accounts</Link></div>
+      )}
+      {deleteTransaction.isError && <ErrorState message={mutationError(deleteTransaction.error)} />}
+
       <form key={searchParams.toString()} className="filter-panel" aria-label="Transaction filters" onSubmit={(event) => { event.preventDefault(); applyFilters(event.currentTarget); }}>
         <label className="search-field"><span>Search</span><div><Icon name="search" /><input name="search" type="search" placeholder="Merchant or description" defaultValue={searchParams.get("search") ?? ""} /></div></label>
         <label><span>From</span><input name="start_date" type="date" defaultValue={searchParams.get("start_date") ?? ""} /></label>
@@ -67,7 +129,15 @@ export function TransactionsPage() {
       {transactions.data && (
         <section className="panel transactions-panel" aria-labelledby="results-heading">
           <div className="panel-heading"><div><span className="eyebrow">{transactions.data.total.toLocaleString()} results</span><h2 id="results-heading">Activity</h2></div></div>
-          {transactions.data.items.length ? <TransactionList transactions={transactions.data.items} /> : <EmptyState title="No matching transactions" message="Try clearing one or more filters." action={<button className="button secondary" type="button" onClick={() => setSearchParams({})}>Clear filters</button>} />}
+          {transactions.data.items.length ? (
+            <TransactionList
+              transactions={transactions.data.items}
+              onEdit={(item) => { saveTransaction.reset(); setEditor(item); }}
+              onDelete={requestDelete}
+            />
+          ) : (
+            <EmptyState title="No matching transactions" message={canAddTransaction ? "Try clearing filters or add a manual transaction." : "Add an account first, then record your financial activity."} action={canAddTransaction ? <button className="button secondary" type="button" onClick={() => setEditor(null)}>Add transaction</button> : undefined} />
+          )}
           {transactions.data.pages > 1 && <nav className="pagination" aria-label="Transaction pages"><button className="button secondary" type="button" disabled={page <= 1} onClick={() => goToPage(page - 1)}>Previous</button><span>Page <strong>{page}</strong> of {transactions.data.pages}</span><button className="button secondary" type="button" disabled={page >= transactions.data.pages} onClick={() => goToPage(page + 1)}>Next</button></nav>}
         </section>
       )}

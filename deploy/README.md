@@ -1,11 +1,11 @@
-# Manual Phase 1 deployment
+# Manual Budget deployment
 
 This directory contains the small-VM production configuration for the Budget
 application. The target is an Oracle Cloud E2 Micro VM running Ubuntu with 1 GB
 RAM. It deliberately uses no Docker, no Node process, one Uvicorn worker, and a
 same-origin Nginx frontend.
 
-This is a manual Phase 1 procedure. It does not automate provisioning,
+This is a manual deployment procedure. It does not automate provisioning,
 certificate issuance, releases, rollback, backups, or restore.
 
 ## Active OCI network topology
@@ -36,6 +36,26 @@ Confirm that the E2 subnet outbound rules permit the corresponding connection.
 Do not add public ingress for MySQL `3306`; Uvicorn binds only to loopback and
 must not expose `8000`. Public ingress should be limited to `80`/`443`, plus SSH
 from an explicitly restricted administration source.
+
+### OCI Ubuntu host-firewall note
+
+The deployed OCI Ubuntu image also has a host-level `iptables` policy in
+addition to UFW and the subnet Security List. On this VM the stock chain had a
+catch-all reject before UFW's later rules, so inbound HTTP/HTTPS reached the VNIC
+but was rejected before Nginx could answer. Keep explicit stateful accepts for
+TCP `80` and `443` above that reject and persist them:
+
+```bash
+sudo iptables -I INPUT 5 -m conntrack --ctstate NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 5 -m conntrack --ctstate NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+Verify ordering with `sudo iptables -L INPUT -n -v --line-numbers`; the 80/443
+ACCEPT entries must appear before the catch-all REJECT. UFW should still allow
+`Nginx Full`, and OCI Security List ingress for public HTTP/HTTPS remains
+`0.0.0.0/0` to destination TCP ports `80` and `443`. Never open `8000` or
+`3306` publicly.
 
 An NSG could replace the Security List rule in a later network revision if
 resource-scoped policy is desired. That is a future option, not a description of
@@ -203,7 +223,7 @@ setup credentials or the bootstrap token over cleartext HTTP. Do not open or use
 the setup form until the final HTTPS site is active.
 
 Obtain the certificate with the operator's chosen ACME client. Certificate
-automation is outside Phase 1. Then install `budget-https.conf`, update its host
+automation remains operator-managed. Then install `budget-https.conf`, update its host
 and certificate paths, disable the bootstrap site, and verify/reload:
 
 ```bash
@@ -269,8 +289,9 @@ ss -lnt
 Expected listeners are Nginx on public `80`/`443` and Uvicorn on
 `127.0.0.1:8000`; no listener on this VM should expose `3306`. From an approved
 external host, verify that neither `8000` nor `3306` is reachable. From the VM,
-verify MySQL TLS identity and its non-empty negotiated cipher using a client
-configured with certificate verification.
+verify that MySQL negotiates TLS and reports a non-empty cipher. If the
+deployment later moves to `VERIFY_IDENTITY`, also verify the configured CA and
+hostname identity using the same internal FQDN as the application.
 
 The unit caps the API at 384 MB, raises pressure at 300 MB, and limits
 concurrency and tasks. Prefer off-VM frontend builds. If an emergency on-VM
@@ -282,6 +303,6 @@ design.
 For each manual release: install locked dependencies, run migrations explicitly,
 verify `nginx -t` and `systemd-analyze verify`, switch the release symlink,
 restart `budget-api`, and check loopback liveness/readiness plus one HTTPS
-frontend/API smoke path. Phase 1 intentionally supplies no automated rollback;
+frontend/API smoke path. The repository intentionally supplies no automated rollback;
 database compatibility must be considered before switching back to an older
 release.

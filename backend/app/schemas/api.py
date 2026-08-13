@@ -11,6 +11,8 @@ CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 Theme = Literal["light", "dark", "system"]
 PayFrequency = Literal["weekly", "biweekly", "semimonthly", "monthly", "annual"]
 TransactionKind = Literal["income", "expense", "transfer", "refund"]
+AccountType = Literal["depository", "credit", "loan", "investment", "other"]
+SourceType = Literal["manual", "plaid"]
 
 
 class StrictModel(BaseModel):
@@ -92,6 +94,106 @@ class CategorySelectionUpdate(StrictModel):
     category_keys: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(max_length=50)
 
 
+class AccountCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    official_name: Annotated[str, Field(min_length=1, max_length=255)] | None = None
+    account_type: AccountType
+    account_subtype: Annotated[str, Field(min_length=1, max_length=40)] | None = None
+    current_balance: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] = Decimal("0")
+    available_balance: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] | None = None
+    credit_limit: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    currency: CurrencyCode = "USD"
+    mask_last4: Annotated[str, Field(pattern=r"^\d{4}$")] | None = None
+
+    @field_validator("name", "official_name", "account_subtype")
+    @classmethod
+    def strip_account_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def uppercase_account_currency(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
+
+class AccountPatch(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    official_name: Annotated[str, Field(min_length=1, max_length=255)] | None = None
+    account_type: AccountType | None = None
+    account_subtype: Annotated[str, Field(min_length=1, max_length=40)] | None = None
+    current_balance: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] | None = None
+    available_balance: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] | None = None
+    credit_limit: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
+    currency: CurrencyCode | None = None
+    mask_last4: Annotated[str, Field(pattern=r"^\d{4}$")] | None = None
+
+    @field_validator("name", "official_name", "account_subtype")
+    @classmethod
+    def strip_account_patch_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def uppercase_account_patch_currency(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def require_account_change(self) -> AccountPatch:
+        if not self.model_fields_set:
+            raise ValueError("at least one account field must be supplied")
+        return self
+
+
+class TransactionCreate(StrictModel):
+    account_id: Annotated[int, Field(gt=0)]
+    category_id: Annotated[int, Field(gt=0)] | None = None
+    posted_date: date
+    authorized_date: date | None = None
+    merchant: Annotated[str, Field(min_length=1, max_length=160)] | None = None
+    description: Annotated[str, Field(min_length=1, max_length=255)]
+    amount: Annotated[Decimal, Field(max_digits=19, decimal_places=4)]
+    kind: TransactionKind
+    pending: bool = False
+    notes: Annotated[str, Field(max_length=4000)] | None = None
+
+    @field_validator("merchant", "description", "notes")
+    @classmethod
+    def strip_transaction_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def validate_amount_sign(self) -> TransactionCreate:
+        if self.kind in {"income", "refund"} and self.amount < 0:
+            raise ValueError("income and refund amounts must be zero or positive")
+        if self.kind == "expense" and self.amount > 0:
+            raise ValueError("expense amounts must be zero or negative")
+        return self
+
+
+class TransactionPatch(StrictModel):
+    account_id: Annotated[int, Field(gt=0)] | None = None
+    category_id: Annotated[int, Field(gt=0)] | None = None
+    posted_date: date | None = None
+    authorized_date: date | None = None
+    merchant: Annotated[str, Field(min_length=1, max_length=160)] | None = None
+    description: Annotated[str, Field(min_length=1, max_length=255)] | None = None
+    amount: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] | None = None
+    kind: TransactionKind | None = None
+    pending: bool | None = None
+    notes: Annotated[str, Field(max_length=4000)] | None = None
+
+    @field_validator("merchant", "description", "notes")
+    @classmethod
+    def strip_transaction_patch_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def require_transaction_change(self) -> TransactionPatch:
+        if not self.model_fields_set:
+            raise ValueError("at least one transaction field must be supplied")
+        return self
+
+
 class UserSettingsView(ViewModel):
     currency: str
     timezone: str
@@ -120,6 +222,7 @@ class AccountView(ViewModel):
     display_name: str
     account_type: str
     account_subtype: str | None
+    source_type: SourceType
     current_balance: str
     available_balance: str | None
     credit_limit: str | None
@@ -150,7 +253,9 @@ class TransactionView(ViewModel):
     description: str
     amount: str
     kind: str
+    source_type: SourceType
     pending: bool
+    notes: str | None
     account: TransactionAccountView
     category: TransactionCategoryView | None
 

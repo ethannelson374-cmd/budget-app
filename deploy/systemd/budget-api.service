@@ -46,8 +46,8 @@ ProtectHostname=yes
 ProtectKernelLogs=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
-ProtectProc=invisible
-ProcSubset=pid
+# ProtectProc/ProcSubset are intentionally omitted for Ubuntu 20.04's systemd.
+# The remaining hardening directives are supported by the deployed E2 image.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=yes
 RestrictRealtime=yes

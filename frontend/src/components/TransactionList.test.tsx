@@ -12,7 +12,9 @@ const transaction: TransactionItem = {
   description: "Weekly groceries",
   amount: "-84.2300",
   kind: "expense",
+  source_type: "manual",
   pending: false,
+  notes: null,
   account: { id: 3, name: "Checking", display_name: "Checking •••• 9876", mask: "•••• 9876", currency: "USD" },
   category: { id: 4, key: "groceries", name: "Groceries" },
 };

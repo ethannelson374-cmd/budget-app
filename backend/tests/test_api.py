@@ -34,7 +34,9 @@ def test_phase_one_success_routes_declare_response_models(client: TestClient) ->
         "/api/v1/categories/selection",
         "/api/v1/dashboard",
         "/api/v1/accounts",
+        "/api/v1/accounts/{account_id}",
         "/api/v1/transactions",
+        "/api/v1/transactions/{transaction_id}",
     }
     openapi_paths = client.app.openapi()["paths"]
     assert required_paths.issubset(openapi_paths)
@@ -431,3 +433,205 @@ def test_settings_categories_and_cross_user_scope(
         db.commit()
     accounts = client.get("/api/v1/accounts").json()["accounts"]
     assert all(item["name"] != "Private account" for item in accounts)
+
+
+def test_manual_account_and_transaction_crud(
+    authenticated: tuple[TestClient, str], database: Database
+) -> None:
+    client, csrf = authenticated
+    headers = csrf_headers(csrf)
+
+    account_payload = {
+        "name": "Cash checking",
+        "official_name": "Primary checking",
+        "account_type": "depository",
+        "account_subtype": "checking",
+        "current_balance": "1250.0000",
+        "available_balance": "1200.0000",
+        "currency": "usd",
+        "mask_last4": "7788",
+    }
+    assert client.post("/api/v1/accounts", json=account_payload).status_code == 403
+    created_account = client.post("/api/v1/accounts", json=account_payload, headers=headers)
+    assert created_account.status_code == 201, created_account.text
+    account = created_account.json()
+    assert account["source_type"] == "manual"
+    assert account["currency"] == "USD"
+    assert account["mask"] == "•••• 7788"
+
+    updated_account = client.patch(
+        f"/api/v1/accounts/{account['id']}",
+        json={"current_balance": "1300.0000", "available_balance": None},
+        headers=headers,
+    )
+    assert updated_account.status_code == 200
+    assert updated_account.json()["current_balance"] == "1300.0000"
+    assert updated_account.json()["available_balance"] is None
+
+    categories = client.get("/api/v1/categories/selection").json()["categories"]
+    groceries = next(item for item in categories if item["key"] == "groceries")
+    transaction_payload = {
+        "account_id": account["id"],
+        "category_id": groceries["id"],
+        "posted_date": "2026-08-12",
+        "merchant": "Corner Market",
+        "description": "Groceries",
+        "amount": "-42.5000",
+        "kind": "expense",
+        "pending": False,
+        "notes": "Weekly grocery run",
+    }
+    created_transaction = client.post(
+        "/api/v1/transactions", json=transaction_payload, headers=headers
+    )
+    assert created_transaction.status_code == 201, created_transaction.text
+    transaction = created_transaction.json()
+    assert transaction["source_type"] == "manual"
+    assert transaction["amount"] == "-42.5000"
+    assert transaction["notes"] == "Weekly grocery run"
+
+    invalid_sign = client.patch(
+        f"/api/v1/transactions/{transaction['id']}",
+        json={"amount": "5.0000"},
+        headers=headers,
+    )
+    assert invalid_sign.status_code == 422
+    assert invalid_sign.json()["error"]["code"] == "invalid_transaction_amount"
+
+    updated_transaction = client.patch(
+        f"/api/v1/transactions/{transaction['id']}",
+        json={"merchant": "Neighborhood Market", "amount": "-50.0000", "category_id": None},
+        headers=headers,
+    )
+    assert updated_transaction.status_code == 200
+    assert updated_transaction.json()["merchant"] == "Neighborhood Market"
+    assert updated_transaction.json()["category"] is None
+
+    dashboard = client.get("/api/v1/dashboard?month=2026-08").json()
+    assert dashboard["summary"]["spending"] == "50.0000"
+    assert dashboard["summary"]["net_worth"] == "1300.0000"
+
+    deleted_transaction = client.delete(
+        f"/api/v1/transactions/{transaction['id']}", headers=headers
+    )
+    assert deleted_transaction.status_code == 200
+    assert deleted_transaction.json() == {"ok": True}
+    assert client.get("/api/v1/transactions").json()["total"] == 0
+
+    cascade_candidate = dict(transaction_payload)
+    cascade_candidate.update(description="Deleted with account", amount="-3.0000")
+    assert (
+        client.post("/api/v1/transactions", json=cascade_candidate, headers=headers).status_code
+        == 201
+    )
+    assert client.get("/api/v1/transactions").json()["total"] == 1
+
+    deleted_account = client.delete(f"/api/v1/accounts/{account['id']}", headers=headers)
+    assert deleted_account.status_code == 200
+    assert deleted_account.json() == {"ok": True}
+    assert client.get("/api/v1/accounts").json()["accounts"] == []
+    assert client.get("/api/v1/transactions").json()["total"] == 0
+
+    with database.session_factory() as db:
+        actions = set(db.scalars(select(AuditEvent.action)).all())
+        assert {
+            "account.create",
+            "account.update",
+            "account.delete",
+            "transaction.create",
+            "transaction.update",
+            "transaction.delete",
+        }.issubset(actions)
+
+
+def test_manual_write_scope_and_provider_managed_protection(
+    authenticated: tuple[TestClient, str], database: Database
+) -> None:
+    client, csrf = authenticated
+    headers = csrf_headers(csrf)
+    with database.session_factory() as db:
+        owner = db.scalar(select(User).where(User.normalized_username == "owner"))
+        assert owner is not None
+        from app.models import UserSettings
+
+        other = User(
+            username="finance-other",
+            normalized_username="finance-other",
+            email="finance-other@example.com",
+            normalized_email="finance-other@example.com",
+            password_hash="unused",
+            settings=UserSettings(currency="USD", timezone="UTC", theme="system"),
+        )
+        db.add(other)
+        db.flush()
+        other_account = Account(
+            user_id=other.id,
+            name="Other checking",
+            account_type="depository",
+            source_type="manual",
+            current_balance=Decimal("1"),
+            currency="USD",
+        )
+        plaid_account = Account(
+            user_id=owner.id,
+            name="Future connected account",
+            account_type="depository",
+            source_type="plaid",
+            current_balance=Decimal("100"),
+            currency="USD",
+            external_id="plaid-account-test",
+        )
+        db.add_all([other_account, plaid_account])
+        db.flush()
+        plaid_transaction = Transaction(
+            user_id=owner.id,
+            account_id=plaid_account.id,
+            external_id="plaid-transaction-test",
+            posted_date=date(2026, 8, 12),
+            description="Provider transaction",
+            amount=Decimal("-10"),
+            kind="expense",
+            source_type="plaid",
+            pending=False,
+            imported_at=utc_now(),
+        )
+        db.add(plaid_transaction)
+        db.commit()
+        other_account_id = other_account.id
+        plaid_account_id = plaid_account.id
+        plaid_transaction_id = plaid_transaction.id
+
+    cross_user = client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": other_account_id,
+            "posted_date": "2026-08-12",
+            "description": "Not mine",
+            "amount": "-1.0000",
+            "kind": "expense",
+        },
+        headers=headers,
+    )
+    assert cross_user.status_code == 404
+
+    managed_patch = client.patch(
+        f"/api/v1/accounts/{plaid_account_id}",
+        json={"name": "Do not edit"},
+        headers=headers,
+    )
+    assert managed_patch.status_code == 409
+    assert managed_patch.json()["error"]["code"] == "account_managed_externally"
+    managed_delete = client.delete(f"/api/v1/accounts/{plaid_account_id}", headers=headers)
+    assert managed_delete.status_code == 409
+
+    managed_transaction_patch = client.patch(
+        f"/api/v1/transactions/{plaid_transaction_id}",
+        json={"description": "Do not edit"},
+        headers=headers,
+    )
+    assert managed_transaction_patch.status_code == 409
+    assert managed_transaction_patch.json()["error"]["code"] == "transaction_managed_externally"
+    managed_transaction_delete = client.delete(
+        f"/api/v1/transactions/{plaid_transaction_id}", headers=headers
+    )
+    assert managed_transaction_delete.status_code == 409

@@ -1,4 +1,4 @@
-# Phase 1 architecture and security decisions
+# Budget architecture and security decisions
 
 ## System shape
 
@@ -16,7 +16,8 @@ Browser --HTTPS--> Nginx :443 --HTTP/loopback--> Uvicorn/FastAPI :8000
 Nginx serves the React/Vite static bundle and is the only public application
 listener. FastAPI runs synchronously as a single Uvicorn worker under systemd.
 SQLAlchemy/PyMySQL owns database access. There is no Docker, Redis, Celery,
-scheduler, production Node process, or multi-service orchestration in Phase 1.
+scheduler, production Node process, or multi-service orchestration in the
+current deployment.
 
 Backend modules separate configuration/database setup, ORM models, schemas,
 authentication/session services, dashboard calculations, and API routers while
@@ -50,7 +51,7 @@ is the preferred future mode with a user-defined/trusted certificate chain.
 Readiness verifies database connectivity and a non-empty negotiated TLS cipher
 but never returns hostnames, credentials, or connection strings.
 
-The initial migration establishes:
+The Phase 1 migration establishes:
 
 - a singleton installation-complete record;
 - users, one-to-one user settings, opaque sessions, persistent login throttles,
@@ -66,6 +67,11 @@ values; transactions use positive inflows and negative outflows. Transfers are
 excluded from spending and refunds reduce spending. Cross-currency values are
 reported separately rather than implicitly converted.
 
+The Phase 2A migration adds `source_type` to accounts and transactions, with
+`manual` and `plaid` as the only accepted values. This lets manual CRUD remain
+available without making future provider-managed records mutable through the
+same endpoints.
+
 ## Secret, bootstrap, and authentication design
 
 All secret settings are opaque/redacted and the settings object is never logged
@@ -80,7 +86,8 @@ or serialized:
 | `DB_PASSWORD` | Passed only to programmatic database connection construction. |
 
 Logs, exception details, error responses, readiness output, audit metadata, and
-test snapshots must not contain these values. Phase 1 stores no value requiring
+test snapshots must not contain these values. The current Phase 2A scope stores
+no value requiring
 reversible application encryption, so `ENCRYPTION_KEY` is intentionally unused
 beyond validation/redaction.
 
@@ -153,8 +160,16 @@ Journald records application operational events without environment values,
 request bodies, cookies, authorization headers, bootstrap headers, or CSRF
 headers.
 
-Phase 1 deliberately defers Plaid and live synchronization, manual financial
-CRUD, advanced category rules, budgets, recurring detection, forecasting,
-goals, debt workflows, snapshots, AI, reports, MFA/social login/email recovery,
-offline financial access, full OCI provisioning, certificate automation,
-backup/restore automation, and automated rollback.
+Phase 2A adds owner-scoped manual financial CRUD without changing the one-worker
+runtime model. Accounts and transactions now carry a `source_type` of `manual`
+or `plaid`. Only `manual` records may be edited or deleted through these CRUD
+endpoints; this is a forward-compatible boundary for Plaid-managed records.
+Mutations require the existing authenticated session, CSRF token, and same-origin
+checks and write sanitized audit events. Account deletion relies on the existing
+database ownership foreign keys and cascades its transactions.
+
+Plaid and live synchronization, advanced category rules, budgets, recurring
+detection, forecasting, goals, debt workflows, snapshots, AI, reports,
+MFA/social login/email recovery, offline financial access, full OCI
+provisioning, certificate automation, backup/restore automation, and automated
+rollback remain deferred.

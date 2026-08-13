@@ -2,9 +2,11 @@
 
 Budget is a single-user-first personal finance dashboard built as a lightweight
 modular monolith. Phase 1 provides secure first-run account setup, a persistent
-demo environment, account and transaction browsing, category and income
-settings, and a calculated monthly dashboard. It is designed to run on an
-Oracle Cloud E2 Micro VM without containers.
+demo environment, category and income settings, and a calculated monthly
+dashboard. Phase 2A adds writeable manual accounts and transactions so the
+production dashboard can use real user-entered financial data before bank sync
+is enabled. It is designed to run on an Oracle Cloud E2 Micro VM without
+containers.
 
 ## Phase 1 features
 
@@ -15,13 +17,23 @@ Oracle Cloud E2 Micro VM without containers.
 - Deterministic demo data that works without Oracle or other external services.
 - MySQL-compatible SQLAlchemy models and Alembic migrations.
 - Oracle MySQL HeatWave production connectivity over the private VCN with
-  verified TLS.
+  required encrypted TLS and negotiated-cipher enforcement.
 - Nginx static hosting/reverse proxy and a hardened single-worker systemd unit.
 - Backend, frontend, accessibility, and browser smoke tests.
 
-Plaid, live bank synchronization, writeable financial records, budgets,
-recurring-charge analysis, goals, debt workflows, forecasts, AI insights,
-reports, and deployment automation are intentionally deferred.
+## Phase 2A features
+
+- Create, edit, and delete manual accounts with signed balances, optional
+  available balance/credit limit, currency, subtype, and masked last four.
+- Create, edit, and delete manual transactions with account/category ownership
+  checks, signed amount rules, pending state, notes, and audit events.
+- `manual`/`plaid` source markers keep provider-managed records read-only once
+  Plaid is introduced while preserving manual adjustments.
+- Dashboard, account, and transaction views immediately reflect manual records.
+
+Plaid/live bank synchronization, recurring-charge analysis, budgets, goals,
+debt workflows, forecasts, AI insights, reports, and deployment automation are
+still intentionally deferred to later Phase 2/3 work.
 
 ## Architecture
 
@@ -222,6 +234,21 @@ script starts them through Playwright configuration.
 - `GET /api/ready` verifies database readiness. Production Nginx blocks public
   access; deployment checks it directly on `127.0.0.1:8000`.
 
+## Manual financial records
+
+Phase 2A adds authenticated, CSRF-protected write routes alongside the existing
+read routes:
+
+- `POST /api/v1/accounts`, `PATCH /api/v1/accounts/{account_id}`, and
+  `DELETE /api/v1/accounts/{account_id}` for manual accounts.
+- `POST /api/v1/transactions`, `PATCH /api/v1/transactions/{transaction_id}`,
+  and `DELETE /api/v1/transactions/{transaction_id}` for manual transactions.
+
+Every write is owner-scoped and audited. Records marked `source_type=plaid` are
+provider-managed and return `409` from manual edit/delete routes. Deleting a
+manual account cascades its transactions through the existing account-owner
+foreign key.
+
 All application-generated API failures use a request-correlated envelope:
 
 ```json
@@ -259,5 +286,5 @@ opaque and only keyed digests are stored. Unsafe authenticated requests require
 a session-bound CSRF token and same-origin validation. Never commit `.env`
 files, database dumps, credentials, or generated secrets.
 
-See [Architecture](docs/ARCHITECTURE.md) for residual risks and the Phase 1
+See [Architecture](docs/ARCHITECTURE.md) for residual risks and the current
 security boundary.

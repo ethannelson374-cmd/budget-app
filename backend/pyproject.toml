@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "budget-backend"
 version = "0.1.0"
-description = "Phase 1 backend for the Budget personal finance application"
+description = "Backend for the Budget personal finance application"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "alembic==1.16.4",

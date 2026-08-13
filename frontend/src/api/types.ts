@@ -1,6 +1,8 @@
 export type ThemePreference = "light" | "dark" | "system";
 export type PayFrequency = "weekly" | "biweekly" | "semimonthly" | "monthly" | "annual";
 export type TransactionKind = "income" | "expense" | "transfer" | "refund";
+export type AccountType = "depository" | "credit" | "loan" | "investment" | "other";
+export type SourceType = "manual" | "plaid";
 
 export interface SelectOption<T extends string = string> {
   value: T;
@@ -81,8 +83,9 @@ export interface AccountSummary {
   name: string;
   official_name: string | null;
   display_name: string;
-  account_type: string;
+  account_type: AccountType;
   account_subtype: string | null;
+  source_type: SourceType;
   mask: string | null;
   current_balance: string;
   available_balance: string | null;
@@ -99,7 +102,9 @@ export interface TransactionItem {
   description: string;
   amount: string;
   kind: TransactionKind;
+  source_type: SourceType;
   pending: boolean;
+  notes: string | null;
   account: {
     id: number;
     name: string;
@@ -154,6 +159,31 @@ export interface DashboardData {
 
 export interface AccountsResponse {
   accounts: AccountSummary[];
+}
+
+export interface AccountWritePayload {
+  name: string;
+  official_name: string | null;
+  account_type: AccountType;
+  account_subtype: string | null;
+  current_balance: string;
+  available_balance: string | null;
+  credit_limit: string | null;
+  currency: string;
+  mask_last4: string | null;
+}
+
+export interface TransactionWritePayload {
+  account_id: number;
+  category_id: number | null;
+  posted_date: string;
+  authorized_date: string | null;
+  merchant: string | null;
+  description: string;
+  amount: string;
+  kind: TransactionKind;
+  pending: boolean;
+  notes: string | null;
 }
 
 export interface ApiErrorPayload {

@@ -384,3 +384,25 @@ legend { margin-bottom: 10px; font-size: 0.88rem; font-weight: 700; }
   .page-container { width: 100%; padding: 0; }
   .panel, .metric-card, .account-card { break-inside: avoid; box-shadow: none; }
 }
+
+/* Phase 2A manual financial records */
+textarea { width: 100%; margin-top: 7px; padding: 10px 11px; border: 1px solid var(--border-strong); border-radius: 9px; color: var(--text); background: var(--surface); font: inherit; resize: vertical; transition: border-color 150ms ease, box-shadow 150ms ease; }
+textarea:hover { border-color: color-mix(in srgb, var(--brand) 60%, var(--border)); }
+textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 17%, transparent); }
+.button.danger { border-color: color-mix(in srgb, var(--negative) 30%, var(--border)); color: var(--negative); background: transparent; }
+.button.danger:hover:not(:disabled) { border-color: var(--negative); background: var(--danger-soft); }
+.record-editor { margin-bottom: 20px; padding: 22px; }
+.record-editor .panel-heading p { max-width: 720px; margin: 4px 0 0; font-size: 0.82rem; }
+.inline-error { margin-bottom: 16px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--negative) 28%, var(--border)); border-radius: 9px; color: var(--negative); background: var(--danger-soft); font-size: 0.8rem; }
+.checkbox-row { display: inline-flex; width: fit-content; align-items: center; gap: 9px; }
+.checkbox-row input { width: 17px; min-height: 17px; margin: 0; accent-color: var(--brand); }
+.record-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding-top: 12px; border-top: 1px solid var(--border); }
+.record-actions .button, .transaction-actions .button { min-height: 34px; padding: 6px 10px; font-size: 0.7rem; }
+.transaction-row { grid-template-columns: 80px minmax(0, 1fr) minmax(105px, auto) auto; }
+.transaction-actions { display: flex; justify-content: flex-end; gap: 3px; }
+.info-banner { display: flex; align-items: center; gap: 7px; margin-bottom: 17px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); background: var(--surface-teal); font-size: 0.82rem; }
+
+@media (max-width: 760px) {
+  .transaction-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .record-editor { padding: 17px; }
+}
