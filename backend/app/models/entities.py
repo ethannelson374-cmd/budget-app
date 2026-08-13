@@ -168,6 +168,8 @@ class PlaidItem(TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     transactions_last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    sync_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    webhook_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     institution: Mapped[FinancialInstitution | None] = relationship(viewonly=True)
 
@@ -253,6 +255,11 @@ class Transaction(TimestampMixin, Base):
             ["categories.id", "categories.user_id"],
             name="fk_transaction_category_owner",
         ),
+        ForeignKeyConstraint(
+            ["user_category_override_id", "user_id"],
+            ["categories.id", "categories.user_id"],
+            name="fk_transaction_override_category_owner",
+        ),
         CheckConstraint("kind IN ('income','expense','transfer','refund')", name="kind_allowed"),
         CheckConstraint(
             "source_type IN ('manual','plaid')",
@@ -268,6 +275,7 @@ class Transaction(TimestampMixin, Base):
         Index("ix_transactions_user_category_posted", "user_id", "category_id", "posted_date"),
         Index("ix_transactions_user_source_posted", "user_id", "source_type", "posted_date"),
         Index("ix_transactions_user_external", "user_id", "external_id"),
+        Index("ix_transactions_user_override_category", "user_id", "user_category_override_id"),
         Index(
             "ix_transactions_user_pending_external",
             "user_id",
@@ -279,11 +287,13 @@ class Transaction(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    user_category_override_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     pending_transaction_external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     posted_date: Mapped[date] = mapped_column(Date, nullable=False)
     authorized_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     merchant: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    display_merchant: Mapped[str | None] = mapped_column(String(160), nullable=True)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     original_description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     payment_channel: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -292,10 +302,91 @@ class Transaction(TimestampMixin, Base):
     pfc_confidence: Mapped[str | None] = mapped_column(String(24), nullable=True)
     amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_kind_override: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    excluded_from_spending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    applied_rule_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_type: Mapped[str] = mapped_column(String(12), default="manual", nullable=False)
     pending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     account: Mapped[Account] = relationship(viewonly=True)
+    category: Mapped[Category | None] = relationship(viewonly=True, foreign_keys=[category_id])
+    user_category_override: Mapped[Category | None] = relationship(
+        viewonly=True, foreign_keys=[user_category_override_id]
+    )
+
+
+class TransactionRule(TimestampMixin, Base):
+    __tablename__ = "transaction_rules"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["category_id", "user_id"],
+            ["categories.id", "categories.user_id"],
+            name="fk_transaction_rule_category_owner",
+        ),
+        CheckConstraint(
+            "match_field IN ('merchant','description','either')",
+            name="transaction_rule_match_field_allowed",
+        ),
+        CheckConstraint(
+            "kind_override IS NULL OR kind_override IN ('income','expense','transfer','refund')",
+            name="transaction_rule_kind_allowed",
+        ),
+        Index("ix_transaction_rules_user_priority", "user_id", "enabled", "priority"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    match_field: Mapped[str] = mapped_column(String(16), default="either", nullable=False)
+    pattern: Mapped[str] = mapped_column(String(160), nullable=False)
+    category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    display_merchant: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    kind_override: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    excluded_from_spending: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+
     category: Mapped[Category | None] = relationship(viewonly=True)
+
+
+class RecurringStream(TimestampMixin, Base):
+    __tablename__ = "recurring_streams"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["account_id", "user_id"],
+            ["accounts.id", "accounts.user_id"],
+            name="fk_recurring_stream_account_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "kind IN ('income','expense')", name="recurring_stream_kind_allowed"
+        ),
+        CheckConstraint(
+            "cadence IN ('weekly','biweekly','monthly','quarterly','annual')",
+            name="recurring_stream_cadence_allowed",
+        ),
+        UniqueConstraint(
+            "user_id", "account_id", "merchant_key", "kind", "cadence",
+            name="uq_recurring_stream_identity",
+        ),
+        Index("ix_recurring_streams_user_next", "user_id", "active", "next_expected_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    merchant_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    cadence: Mapped[str] = mapped_column(String(16), nullable=False)
+    average_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    last_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    last_date: Mapped[date] = mapped_column(Date, nullable=False)
+    next_expected_date: Mapped[date] = mapped_column(Date, nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_change_pct: Mapped[Decimal | None] = mapped_column(Numeric(9, 4), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    account: Mapped[Account] = relationship(viewonly=True)

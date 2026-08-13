@@ -17,11 +17,13 @@ export function TransactionList({
   compact = false,
   onEdit,
   onDelete,
+  onTune,
 }: {
   transactions: TransactionItem[];
   compact?: boolean;
   onEdit?: (transaction: TransactionItem) => void;
   onDelete?: (transaction: TransactionItem) => void;
+  onTune?: (transaction: TransactionItem) => void;
 }) {
   return (
     <div className={`transaction-list${compact ? " compact" : ""}`}>
@@ -30,16 +32,17 @@ export function TransactionList({
           <time dateTime={transaction.posted_date} className="transaction-date">{formatDate(transaction.posted_date)}</time>
           <div className="transaction-main">
             <strong>{transaction.merchant || transaction.description}</strong>
-            <span>{transaction.category?.name ?? "Uncategorized"} · {transaction.account.name} {maskAccount(transaction.account.mask)}</span>
+            <span>{transaction.category?.name ?? "Uncategorized"} · {transaction.account.name} {maskAccount(transaction.account.mask)}{transaction.excluded_from_spending ? " · Excluded" : transaction.applied_rule_id ? " · Rule" : transaction.has_user_override ? " · Tuned" : ""}</span>
           </div>
           <div className="transaction-meta">
             <strong className={`amount ${transactionTone(transaction)}`}>{formatMoney(displayAmount(transaction), transaction.account.currency, { showSign: true })}</strong>
             <span>{transaction.pending ? "Pending" : transaction.kind.charAt(0).toUpperCase() + transaction.kind.slice(1)}</span>
           </div>
-          {!compact && transaction.source_type === "manual" && (onEdit || onDelete) && (
+          {!compact && (onTune || (transaction.source_type === "manual" && (onEdit || onDelete))) && (
             <div className="transaction-actions" aria-label={`Actions for ${transaction.merchant || transaction.description}`}>
-              {onEdit && <button className="button ghost" type="button" onClick={() => onEdit(transaction)}>Edit</button>}
-              {onDelete && <button className="button danger" type="button" onClick={() => onDelete(transaction)}>Delete</button>}
+              {onTune && <button className="button ghost" type="button" onClick={() => onTune(transaction)}>Tune</button>}
+              {transaction.source_type === "manual" && onEdit && <button className="button ghost" type="button" onClick={() => onEdit(transaction)}>Edit</button>}
+              {transaction.source_type === "manual" && onDelete && <button className="button danger" type="button" onClick={() => onDelete(transaction)}>Delete</button>}
             </div>
           )}
         </article>

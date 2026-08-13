@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings
@@ -14,6 +14,7 @@ from app.core.security import as_utc, utc_now
 from app.core.token_crypto import decrypt_plaid_access_token
 from app.integrations.plaid import PlaidAPIError, PlaidClient
 from app.models import Account, Category, PlaidItem, Transaction, User
+from app.services.transaction_intelligence import apply_rules_to_transaction, rebuild_recurring_streams
 
 MUTATION_DURING_PAGINATION = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
 ITEM_ERRORS = {"ITEM_LOGIN_REQUIRED", "INVALID_ACCESS_TOKEN", "ITEM_LOCKED"}
@@ -384,6 +385,7 @@ def _apply_transaction(
     transaction.pending = bool(payload.get("pending"))
     transaction.account = account
     transaction.category = category
+    apply_rules_to_transaction(db, user, transaction)
     return created
 
 
@@ -409,6 +411,9 @@ def sync_plaid_item(db: Session, settings: Settings, user: User, item_id: int) -
     )
     client = PlaidClient(settings)
     try:
+        if settings.plaid_webhook_uri and item.webhook_uri != settings.plaid_webhook_uri:
+            client.item_webhook_update(access_token, settings.plaid_webhook_uri)
+            item.webhook_uri = settings.plaid_webhook_uri
         updates = _collect_updates(client, access_token, item.transactions_cursor)
     except PlaidAPIError as exc:
         item.transactions_last_error_code = exc.error_code[:80]
@@ -444,6 +449,8 @@ def sync_plaid_item(db: Session, settings: Settings, user: User, item_id: int) -
         item.status = "active"
         item.last_error_code = None
         item.last_synced_at = now
+        item.sync_requested_at = None
+        rebuild_recurring_streams(db, user)
         db.flush()
     return SyncOutcome(
         item_id=item.id,
@@ -474,6 +481,15 @@ def sync_all_plaid_items(
     statement = select(PlaidItem.id, PlaidItem.user_id).where(PlaidItem.status == "active")
     if item_id is not None:
         statement = statement.where(PlaidItem.id == item_id)
+    else:
+        stale_before = utc_now() - timedelta(minutes=15)
+        statement = statement.where(
+            or_(
+                PlaidItem.sync_requested_at.is_not(None),
+                PlaidItem.transactions_last_synced_at.is_(None),
+                PlaidItem.transactions_last_synced_at < stale_before,
+            )
+        )
     targets = list(db.execute(statement.order_by(PlaidItem.id)).all())
     succeeded = 0
     failed = 0

@@ -7,8 +7,10 @@ from app.models.entities import (
     InstallationState,
     LoginThrottle,
     PlaidItem,
+    RecurringStream,
     SessionRecord,
     Transaction,
+    TransactionRule,
     User,
     UserSettings,
 )
@@ -22,8 +24,10 @@ __all__ = [
     "InstallationState",
     "LoginThrottle",
     "PlaidItem",
+    "RecurringStream",
     "SessionRecord",
     "Transaction",
+    "TransactionRule",
     "User",
     "UserSettings",
 ]

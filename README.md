@@ -136,6 +136,7 @@ repository `.env` file.
 | `PLAID_SECRET` | Plaid Sandbox or Production secret; server-side only |
 | `PLAID_ENV` | `sandbox` (default) or `production` |
 | `PLAID_REDIRECT_URI` | HTTPS OAuth return route, e.g. `https://budget.example.com/plaid/oauth` |
+| `PLAID_WEBHOOK_URI` | Optional signed Plaid webhook endpoint, e.g. `https://budget.example.com/api/v1/plaid/webhook` |
 | `PLAID_PRODUCTS` | Comma-separated Link products; Phase 2B defaults to `transactions` |
 | `PLAID_COUNTRY_CODES` | Comma-separated country codes; default `US` |
 
@@ -347,3 +348,8 @@ files, database dumps, credentials, or generated secrets.
 
 See [Architecture](docs/ARCHITECTURE.md) for residual risks and the current
 security boundary.
+
+
+## Phase 2D transaction intelligence
+
+Phase 2D adds signed Plaid `SYNC_UPDATES_AVAILABLE` webhook intake, user transaction overrides, reusable matching rules, merchant normalization, local recurring-pattern detection, and a Recurring screen. Provider merchant/category/kind values remain stored separately from Budget's interpretation so user changes are reversible. The Plaid webhook JWT is verified with the Plaid JWK, a five-minute replay window, and the raw request-body SHA-256 before any webhook is accepted. The periodic sync timer now runs every minute but only synchronizes Items explicitly marked by a webhook or whose last transaction sync is at least 15 minutes old.

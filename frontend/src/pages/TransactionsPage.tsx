@@ -3,10 +3,11 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { AccountsResponse, CategorySelection, PaginatedTransactions, TransactionItem, TransactionWritePayload } from "../api/types";
+import type { AccountsResponse, CategorySelection, PaginatedTransactions, TransactionIntelligencePayload, TransactionItem, TransactionWritePayload } from "../api/types";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { PageHeader } from "../components/PageHeader";
 import { TransactionEditor } from "../components/TransactionEditor";
+import { TransactionIntelligenceEditor } from "../components/TransactionIntelligenceEditor";
 import { TransactionList } from "../components/TransactionList";
 import { Icon } from "../components/Icon";
 
@@ -20,6 +21,7 @@ export function TransactionsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [editor, setEditor] = useState<TransactionItem | null | undefined>(undefined);
+  const [tuneEditor, setTuneEditor] = useState<TransactionItem | null>(null);
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("page_size") ?? "25", 10) || 25));
   const canonical = new URLSearchParams(searchParams);
@@ -43,6 +45,22 @@ export function TransactionsPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["transactions"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+  });
+
+
+  const tuneTransaction = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: TransactionIntelligencePayload }) => apiRequest<TransactionItem>(`/transactions/${id}/intelligence`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+    onSuccess: async () => {
+      setTuneEditor(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.recurring }),
       ]);
     },
   });
@@ -86,7 +104,7 @@ export function TransactionsPage() {
     <div className="page-container">
       <PageHeader
         title="Transactions"
-        description="Search, add, and maintain your manual financial activity."
+        description="Search, tune, and maintain your financial activity."
         actions={<button className="button primary" type="button" disabled={!canAddTransaction} onClick={() => { saveTransaction.reset(); setEditor(null); }}>Add transaction</button>}
       />
 
@@ -100,6 +118,19 @@ export function TransactionsPage() {
           error={saveTransaction.isError ? mutationError(saveTransaction.error) : null}
           onCancel={() => { saveTransaction.reset(); setEditor(undefined); }}
           onSubmit={(payload) => saveTransaction.mutate({ id: editor?.id, payload })}
+        />
+      )}
+
+
+      {tuneEditor && categories.data && (
+        <TransactionIntelligenceEditor
+          key={`tune-${tuneEditor.id}`}
+          transaction={tuneEditor}
+          categories={categories.data.categories}
+          busy={tuneTransaction.isPending}
+          error={tuneTransaction.isError ? mutationError(tuneTransaction.error) : null}
+          onCancel={() => { tuneTransaction.reset(); setTuneEditor(null); }}
+          onSubmit={(payload) => tuneTransaction.mutate({ id: tuneEditor.id, payload })}
         />
       )}
 
@@ -134,6 +165,7 @@ export function TransactionsPage() {
               transactions={transactions.data.items}
               onEdit={(item) => { saveTransaction.reset(); setEditor(item); }}
               onDelete={requestDelete}
+              onTune={(item) => { tuneTransaction.reset(); setTuneEditor(item); }}
             />
           ) : (
             <EmptyState title="No matching transactions" message={canAddTransaction ? "Try clearing filters or add a manual transaction." : "Add an account first, then record your financial activity."} action={canAddTransaction ? <button className="button secondary" type="button" onClick={() => setEditor(null)}>Add transaction</button> : undefined} />

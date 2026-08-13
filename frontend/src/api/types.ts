@@ -100,6 +100,8 @@ export interface TransactionItem {
   posted_date: string;
   authorized_date: string | null;
   merchant: string | null;
+  provider_merchant?: string | null;
+  display_merchant?: string | null;
   description: string;
   original_description: string | null;
   payment_channel: string | null;
@@ -108,9 +110,13 @@ export interface TransactionItem {
   pfc_confidence: string | null;
   amount: string;
   kind: TransactionKind;
+  provider_kind?: TransactionKind;
   source_type: SourceType;
   pending: boolean;
   notes: string | null;
+  excluded_from_spending?: boolean;
+  has_user_override?: boolean;
+  applied_rule_id?: number | null;
   account: {
     id: number;
     name: string;
@@ -119,6 +125,7 @@ export interface TransactionItem {
     currency: string;
   };
   category: Pick<Category, "id" | "key" | "name"> | null;
+  provider_category?: Pick<Category, "id" | "key" | "name"> | null;
 }
 
 export interface PaginatedTransactions {
@@ -185,6 +192,8 @@ export interface TransactionWritePayload {
   posted_date: string;
   authorized_date: string | null;
   merchant: string | null;
+  provider_merchant?: string | null;
+  display_merchant?: string | null;
   description: string;
   amount: string;
   kind: TransactionKind;
@@ -256,4 +265,59 @@ export interface PlaidSyncResult {
   removed: number;
   update_status: string | null;
   last_synced_at: string;
+}
+
+export interface TransactionIntelligencePayload {
+  category_id?: number | null;
+  display_merchant?: string | null;
+  kind_override?: TransactionKind | null;
+  excluded_from_spending?: boolean;
+}
+
+export interface TransactionRule {
+  id: number;
+  name: string;
+  match_field: "merchant" | "description" | "either";
+  pattern: string;
+  category: Pick<Category, "id" | "key" | "name"> | null;
+  display_merchant: string | null;
+  kind_override: TransactionKind | null;
+  excluded_from_spending: boolean | null;
+  priority: number;
+  enabled: boolean;
+}
+
+export interface TransactionRulesResponse { rules: TransactionRule[]; }
+
+export interface TransactionRuleCreate {
+  name: string;
+  match_field: "merchant" | "description" | "either";
+  pattern: string;
+  category_id: number | null;
+  display_merchant: string | null;
+  kind_override: TransactionKind | null;
+  excluded_from_spending: boolean | null;
+  priority: number;
+  enabled: boolean;
+}
+
+export interface RecurringStream {
+  id: number;
+  display_name: string;
+  kind: "income" | "expense";
+  cadence: "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
+  average_amount: string;
+  last_amount: string;
+  last_date: string;
+  next_expected_date: string;
+  occurrence_count: number;
+  price_change_pct: string | null;
+  account: { id: number; name: string; display_name: string; mask: string | null; currency: string };
+}
+
+export interface RecurringStreamsResponse {
+  currency: string;
+  streams: RecurringStream[];
+  monthly_outflow_estimate: string;
+  monthly_inflow_estimate: string;
 }

@@ -4,6 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from app.core.security import as_utc
 from app.models import Account, Transaction, User, UserSettings
+from app.services.transaction_intelligence import effective_category, effective_kind, effective_merchant
 
 CENT_4 = Decimal("0.0001")
 
@@ -61,11 +62,14 @@ def transaction_view(transaction: Transaction) -> dict[str, object]:
         if transaction.account.mask_last4
         else None
     )
+    category = effective_category(transaction)
     return {
         "id": transaction.id,
         "posted_date": transaction.posted_date,
         "authorized_date": transaction.authorized_date,
-        "merchant": transaction.merchant,
+        "merchant": effective_merchant(transaction),
+        "provider_merchant": transaction.merchant,
+        "display_merchant": transaction.display_merchant,
         "description": transaction.description,
         "original_description": transaction.original_description,
         "payment_channel": transaction.payment_channel,
@@ -73,10 +77,19 @@ def transaction_view(transaction: Transaction) -> dict[str, object]:
         "pfc_detailed": transaction.pfc_detailed,
         "pfc_confidence": transaction.pfc_confidence,
         "amount": money(transaction.amount),
-        "kind": transaction.kind,
+        "kind": effective_kind(transaction),
+        "provider_kind": transaction.kind,
         "source_type": transaction.source_type,
         "pending": transaction.pending,
         "notes": transaction.notes,
+        "excluded_from_spending": transaction.excluded_from_spending,
+        "has_user_override": bool(
+            transaction.user_category_override_id is not None
+            or transaction.user_kind_override is not None
+            or transaction.display_merchant is not None
+            or transaction.excluded_from_spending
+        ),
+        "applied_rule_id": transaction.applied_rule_id,
         "account": {
             "id": transaction.account.id,
             "name": transaction.account.name,
@@ -89,6 +102,11 @@ def transaction_view(transaction: Transaction) -> dict[str, object]:
             "currency": transaction.account.currency,
         },
         "category": (
+            {"id": category.id, "key": category.stable_key, "name": category.name}
+            if category
+            else None
+        ),
+        "provider_category": (
             {
                 "id": transaction.category.id,
                 "key": transaction.category.stable_key,

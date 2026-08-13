@@ -23,7 +23,11 @@ from app.schemas.api import (
     OkView,
     SettingsPatch,
     TransactionCreate,
+    TransactionIntelligencePatch,
     TransactionPatch,
+    TransactionRuleCreate,
+    TransactionRulesView,
+    RecurringStreamsView,
     TransactionPageView,
     TransactionView,
     UserSettingsView,
@@ -40,6 +44,14 @@ from app.services.manual_finance import (
     update_manual_transaction,
 )
 from app.services.setup import validate_category_keys
+from app.services.transaction_intelligence import (
+    create_rule,
+    delete_rule,
+    list_recurring_streams,
+    list_rules,
+    override_transaction,
+    rebuild_recurring_streams,
+)
 from app.services.views import account_view, settings_view, transaction_view
 
 router = APIRouter(tags=["finance"])
@@ -356,3 +368,160 @@ def delete_transaction(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.patch("/transactions/{transaction_id}/intelligence", response_model=TransactionView)
+def update_transaction_intelligence(
+    transaction_id: int,
+    payload: TransactionIntelligencePatch,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    transaction = override_transaction(
+        db,
+        principal.user,
+        transaction_id,
+        category_id=payload.category_id,
+        category_supplied="category_id" in payload.model_fields_set,
+        display_merchant=payload.display_merchant,
+        merchant_supplied="display_merchant" in payload.model_fields_set,
+        kind_override=payload.kind_override,
+        kind_supplied="kind_override" in payload.model_fields_set,
+        excluded_from_spending=payload.excluded_from_spending,
+        excluded_supplied="excluded_from_spending" in payload.model_fields_set,
+    )
+    rebuild_recurring_streams(db, principal.user)
+    add_audit_event(
+        db, settings, action="transaction.intelligence_update", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
+        detail=f"transaction:{transaction_id}",
+    )
+    db.commit()
+    return transaction_view(transaction)
+
+
+def _rule_view(rule: object) -> dict[str, object]:
+    from app.models import TransactionRule
+
+    assert isinstance(rule, TransactionRule)
+    return {
+        "id": rule.id,
+        "name": rule.name,
+        "match_field": rule.match_field,
+        "pattern": rule.pattern,
+        "category": (
+            {"id": rule.category.id, "key": rule.category.stable_key, "name": rule.category.name}
+            if rule.category else None
+        ),
+        "display_merchant": rule.display_merchant,
+        "kind_override": rule.kind_override,
+        "excluded_from_spending": rule.excluded_from_spending,
+        "priority": rule.priority,
+        "enabled": rule.enabled,
+    }
+
+
+@router.get("/transaction-rules", response_model=TransactionRulesView)
+def get_transaction_rules(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+
+
+@router.post("/transaction-rules", response_model=TransactionRulesView, status_code=201)
+def add_transaction_rule(
+    payload: TransactionRuleCreate,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    create_rule(
+        db, principal.user, name=payload.name, match_field=payload.match_field,
+        pattern=payload.pattern, category_id=payload.category_id,
+        display_merchant=payload.display_merchant, kind_override=payload.kind_override,
+        excluded_from_spending=payload.excluded_from_spending, priority=payload.priority,
+        enabled=payload.enabled,
+    )
+    rebuild_recurring_streams(db, principal.user)
+    add_audit_event(
+        db, settings, action="transaction_rule.create", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
+        detail="rule_created",
+    )
+    db.commit()
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+
+
+@router.delete("/transaction-rules/{rule_id}", response_model=TransactionRulesView)
+def remove_transaction_rule(
+    rule_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    delete_rule(db, principal.user, rule_id)
+    rebuild_recurring_streams(db, principal.user)
+    add_audit_event(
+        db, settings, action="transaction_rule.delete", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
+        detail=f"rule:{rule_id}",
+    )
+    db.commit()
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+
+
+def _monthly_equivalent(amount: Decimal, cadence: str) -> Decimal:
+    factors = {
+        "weekly": Decimal("4.345"), "biweekly": Decimal("2.1725"),
+        "monthly": Decimal("1"), "quarterly": Decimal("0.333333"),
+        "annual": Decimal("0.083333"),
+    }
+    return amount * factors[cadence]
+
+
+@router.get("/recurring", response_model=RecurringStreamsView)
+def recurring(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    streams = list_recurring_streams(db, principal.user)
+    outflow = Decimal("0")
+    inflow = Decimal("0")
+    items: list[dict[str, object]] = []
+    for stream in streams:
+        amount = _monthly_equivalent(stream.average_amount, stream.cadence)
+        if stream.kind == "expense":
+            outflow += amount
+        else:
+            inflow += amount
+        mask = f"•••• {stream.account.mask_last4}" if stream.account.mask_last4 else None
+        items.append({
+            "id": stream.id, "display_name": stream.display_name, "kind": stream.kind,
+            "cadence": stream.cadence, "average_amount": str(stream.average_amount),
+            "last_amount": str(stream.last_amount), "last_date": stream.last_date,
+            "next_expected_date": stream.next_expected_date,
+            "occurrence_count": stream.occurrence_count,
+            "price_change_pct": str(stream.price_change_pct) if stream.price_change_pct is not None else None,
+            "account": {
+                "id": stream.account.id, "name": stream.account.name,
+                "display_name": f"{stream.account.name} {mask}" if mask else stream.account.name,
+                "mask": mask, "currency": stream.account.currency,
+            },
+        })
+    from app.services.views import money
+    return {"currency": principal.user.settings.currency, "streams": items, "monthly_outflow_estimate": money(outflow), "monthly_inflow_estimate": money(inflow)}
+
+
+@router.post("/recurring/rebuild", response_model=RecurringStreamsView)
+def rebuild_recurring(
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    rebuild_recurring_streams(db, principal.user)
+    db.commit()
+    return recurring(principal, db)

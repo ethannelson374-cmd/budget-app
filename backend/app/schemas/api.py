@@ -310,6 +310,8 @@ class TransactionView(ViewModel):
     posted_date: date
     authorized_date: date | None
     merchant: str | None
+    provider_merchant: str | None
+    display_merchant: str | None
     description: str
     original_description: str | None
     payment_channel: str | None
@@ -318,11 +320,16 @@ class TransactionView(ViewModel):
     pfc_confidence: str | None
     amount: str
     kind: str
+    provider_kind: str
     source_type: SourceType
     pending: bool
     notes: str | None
+    excluded_from_spending: bool
+    has_user_override: bool
+    applied_rule_id: int | None
     account: TransactionAccountView
     category: TransactionCategoryView | None
+    provider_category: TransactionCategoryView | None
 
 
 class StatusView(ViewModel):
@@ -422,3 +429,90 @@ class DashboardView(ViewModel):
     accounts: list[AccountView]
     recent_transactions: list[TransactionView]
     excluded_currencies: list[str]
+
+
+class TransactionIntelligencePatch(StrictModel):
+    category_id: Annotated[int, Field(gt=0)] | None = None
+    display_merchant: Annotated[str, Field(max_length=160)] | None = None
+    kind_override: TransactionKind | None = None
+    excluded_from_spending: bool | None = None
+
+    @field_validator("display_merchant")
+    @classmethod
+    def clean_display_merchant(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @model_validator(mode="after")
+    def require_intelligence_change(self) -> TransactionIntelligencePatch:
+        if not self.model_fields_set:
+            raise ValueError("at least one override field must be supplied")
+        return self
+
+
+class TransactionRuleCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    match_field: Literal["merchant", "description", "either"] = "either"
+    pattern: Annotated[str, Field(min_length=1, max_length=160)]
+    category_id: Annotated[int, Field(gt=0)] | None = None
+    display_merchant: Annotated[str, Field(max_length=160)] | None = None
+    kind_override: TransactionKind | None = None
+    excluded_from_spending: bool | None = None
+    priority: Annotated[int, Field(ge=0, le=10000)] = 100
+    enabled: bool = True
+
+    @field_validator("name", "pattern")
+    @classmethod
+    def clean_required_rule_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("display_merchant")
+    @classmethod
+    def clean_optional_rule_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class TransactionRuleView(ViewModel):
+    id: int
+    name: str
+    match_field: str
+    pattern: str
+    category: TransactionCategoryView | None
+    display_merchant: str | None
+    kind_override: str | None
+    excluded_from_spending: bool | None
+    priority: int
+    enabled: bool
+
+
+class TransactionRulesView(ViewModel):
+    rules: list[TransactionRuleView]
+
+
+class RecurringStreamView(ViewModel):
+    id: int
+    display_name: str
+    kind: Literal["income", "expense"]
+    cadence: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"]
+    average_amount: str
+    last_amount: str
+    last_date: date
+    next_expected_date: date
+    occurrence_count: int
+    price_change_pct: str | None
+    account: TransactionAccountView
+
+
+class RecurringStreamsView(ViewModel):
+    currency: str
+    streams: list[RecurringStreamView]
+    monthly_outflow_estimate: str
+    monthly_inflow_estimate: str

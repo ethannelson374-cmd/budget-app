@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     plaid_secret: SecretStr | None = None
     plaid_env: PlaidEnvironment = "sandbox"
     plaid_redirect_uri: str | None = None
+    plaid_webhook_uri: str | None = None
     plaid_products: str = "transactions"
     plaid_country_codes: str = "US"
 
@@ -165,6 +166,7 @@ class Settings(BaseSettings):
         "db_user",
         "db_ssl_ca",
         "plaid_redirect_uri",
+        "plaid_webhook_uri",
         mode="before",
     )
     @classmethod
@@ -213,6 +215,12 @@ class Settings(BaseSettings):
             and not self.plaid_redirect_uri.startswith("https://")
         ):
             raise ValueError("PLAID_REDIRECT_URI must use HTTPS in production")
+        if (
+            self.plaid_webhook_uri is not None
+            and self.app_env == "production"
+            and not self.plaid_webhook_uri.startswith("https://")
+        ):
+            raise ValueError("PLAID_WEBHOOK_URI must use HTTPS in production")
 
         if self.app_env == "production":
             if self.demo_mode:

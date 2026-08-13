@@ -41,6 +41,7 @@ def create_link_token(settings: Settings, user: User) -> dict[str, object]:
             redirect_uri=settings.plaid_redirect_uri,
             products=settings.plaid_product_list,
             country_codes=settings.plaid_country_code_list,
+            webhook_uri=settings.plaid_webhook_uri,
         )
     except PlaidAPIError as exc:
         raise _plaid_failure(exc) from exc
@@ -295,6 +296,7 @@ def exchange_and_import(
             status="active",
             last_error_code=None,
             last_synced_at=utc_now(),
+            webhook_uri=settings.plaid_webhook_uri,
         )
         db.add(plaid_item)
         db.flush()

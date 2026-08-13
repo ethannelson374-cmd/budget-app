@@ -37,6 +37,7 @@ describe("SettingsPage", () => {
       }
       if (path === "/categories/selection") return categories;
       if (path === "/setup/options") return options;
+      if (path === "/transaction-rules") return { rules: [] };
       throw new Error(`Unexpected request: ${path}`);
     });
   });
@@ -63,6 +64,7 @@ describe("SettingsPage", () => {
       if (path === "/settings") return settings;
       if (path === "/categories/selection") return categories;
       if (path === "/setup/options") return options;
+      if (path === "/transaction-rules") return { rules: [] };
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = new QueryClient();

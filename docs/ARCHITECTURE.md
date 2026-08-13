@@ -197,3 +197,8 @@ Automatic polling uses a short-lived systemd oneshot invoked by a persistent
 timer rather than adding a queue or long-running scheduler to the E2 Micro VM.
 The authenticated **Sync now** API uses the same service. Webhook verification can
 later trigger this same engine without duplicating transaction reconciliation.
+
+
+## Phase 2D intelligence boundary
+
+Plaid-originated values remain provider truth on each transaction. Budget stores display-merchant, category, kind, and spending-exclusion overrides separately and applies ordered user rules only to Plaid transactions that have not been explicitly tuned. Recurring streams are derived locally from posted, non-transfer, non-excluded transactions with at least three observations and a recognized cadence; they are projections, not provider guarantees. Plaid `SYNC_UPDATES_AVAILABLE` webhooks are signature/body-hash verified and only mark an Item as sync-needed. A lightweight systemd timer consumes those hints while retaining a 15-minute stale-item safety net.

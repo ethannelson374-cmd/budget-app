@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiRequest } from "../api/client";
 import { queryKeys, useSetupOptions } from "../api/queries";
-import type { CategorySelection, PayFrequency, ThemePreference, UserSettings } from "../api/types";
+import type { CategorySelection, PayFrequency, ThemePreference, TransactionRuleCreate, TransactionRulesResponse, UserSettings } from "../api/types";
 import { useTheme } from "../theme/ThemeContext";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState } from "../components/States";
@@ -17,18 +17,19 @@ export function SettingsPage() {
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => apiRequest<UserSettings>("/settings") });
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: () => apiRequest<CategorySelection>("/categories/selection") });
   const options = useSetupOptions();
+  const rules = useQuery({ queryKey: queryKeys.transactionRules, queryFn: () => apiRequest<TransactionRulesResponse>("/transaction-rules") });
 
   return (
     <div className="page-container settings-page">
       <PageHeader title="Settings" description="Manage your preferences and spending categories." />
-      {(settings.isPending || categories.isPending || options.isPending) && <LoadingState label="Loading settings" />}
-      {(settings.isError || categories.isError || options.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); }} />}
-      {settings.data && categories.data && options.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
+      {(settings.isPending || categories.isPending || options.isPending || rules.isPending) && <LoadingState label="Loading settings" />}
+      {(settings.isError || categories.isError || options.isError || rules.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); void rules.refetch(); }} />}
+      {settings.data && categories.data && options.data && rules.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
     </div>
   );
 }
 
-function SettingsForms({ initialSettings, initialCategories, currencies, payFrequencies }: { initialSettings: UserSettings; initialCategories: CategorySelection; currencies: Array<{ code: string; name: string }>; payFrequencies: Array<{ value: PayFrequency; label: string }> }) {
+function SettingsForms({ initialSettings, initialCategories, initialRules, currencies, payFrequencies }: { initialSettings: UserSettings; initialCategories: CategorySelection; initialRules: TransactionRulesResponse; currencies: Array<{ code: string; name: string }>; payFrequencies: Array<{ value: PayFrequency; label: string }> }) {
   const queryClient = useQueryClient();
   const { setPreference } = useTheme();
   const { sessionGeneration, isSessionCurrent } = useAuth();
@@ -62,6 +63,49 @@ function SettingsForms({ initialSettings, initialCategories, currencies, payFreq
       setCategoriesMessage("Categories saved.");
     },
   });
+
+
+  const createRule = useMutation({
+    mutationFn: (payload: TransactionRuleCreate) => apiRequest<TransactionRulesResponse>("/transaction-rules", { method: "POST", body: JSON.stringify(payload) }),
+    onSuccess: (saved) => {
+      if (!isSessionCurrent(sessionGeneration)) return;
+      queryClient.setQueryData(queryKeys.transactionRules, saved);
+      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+    },
+  });
+  const deleteRule = useMutation({
+    mutationFn: (id: number) => apiRequest<TransactionRulesResponse>(`/transaction-rules/${id}`, { method: "DELETE" }),
+    onSuccess: (saved) => {
+      if (!isSessionCurrent(sessionGeneration)) return;
+      queryClient.setQueryData(queryKeys.transactionRules, saved);
+      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.recurring });
+    },
+  });
+
+  const submitRule = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const text = (key: string) => String(data.get(key) ?? "").trim();
+    const category = text("category_id");
+    const kind = text("kind_override");
+    const excludeAction = text("exclude_action");
+    createRule.mutate({
+      name: text("name"),
+      match_field: text("match_field") as "merchant" | "description" | "either",
+      pattern: text("pattern"),
+      category_id: category ? Number(category) : null,
+      display_merchant: text("display_merchant") || null,
+      kind_override: (kind || null) as TransactionRuleCreate["kind_override"],
+      excluded_from_spending: excludeAction === "exclude" ? true : excludeAction === "include" ? false : null,
+      priority: Number(text("priority") || "100"),
+      enabled: true,
+    }, { onSuccess: () => form.reset() });
+  };
 
   const submitSettings = (event: FormEvent) => {
     event.preventDefault();
@@ -106,6 +150,27 @@ function SettingsForms({ initialSettings, initialCategories, currencies, payFreq
         <fieldset className="settings-categories"><legend className="sr-only">Enabled spending categories</legend>{initialCategories.categories.map((category) => { const checked = enabledCategories.includes(category.key); const required = category.key === "other"; return <label key={category.id}><input type="checkbox" checked={checked} disabled={required} onChange={() => setEnabledCategories((current) => checked ? current.filter((key) => key !== category.key) : [...current, category.key])} /><span><strong>{category.name}</strong><small>{required ? "Always enabled fallback" : category.group}</small></span></label>; })}</fieldset>
         <div className="form-actions end"><button className="button primary" type="submit" disabled={saveCategories.isPending}>{saveCategories.isPending ? "Saving…" : "Save categories"}</button></div>
       </form>
+
+      <section className="panel form-stack settings-form rules-panel">
+        <div className="panel-heading"><div><span className="eyebrow">Automation</span><h2>Transaction rules</h2><p>Apply merchant names, categories, types, or spending exclusions to matching Plaid transactions.</p></div></div>
+        {(createRule.isError || deleteRule.isError) && <div className="inline-alert" role="alert">{(createRule.error instanceof ApiError ? createRule.error.message : deleteRule.error instanceof ApiError ? deleteRule.error.message : "The rule could not be saved.")}</div>}
+        <form className="form-stack rule-form" onSubmit={submitRule}>
+          <div className="form-grid two-columns">
+            <label>Rule name<input name="name" required maxLength={120} placeholder="Walmart groceries" /></label>
+            <label>Match text<input name="pattern" required maxLength={160} placeholder="WM SUPERCENTER" /></label>
+            <label>Match in<select name="match_field" defaultValue="either"><option value="either">Merchant or description</option><option value="merchant">Merchant</option><option value="description">Description</option></select></label>
+            <label>Category<select name="category_id" defaultValue=""><option value="">No category change</option>{initialCategories.categories.filter((category) => category.enabled).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label>Display merchant <span className="optional">Optional</span><input name="display_merchant" maxLength={160} placeholder="Walmart" /></label>
+            <label>Type<select name="kind_override" defaultValue=""><option value="">No type change</option><option value="expense">Expense</option><option value="income">Income</option><option value="refund">Refund</option><option value="transfer">Transfer</option></select></label>
+            <label>Spending treatment<select name="exclude_action" defaultValue=""><option value="">No change</option><option value="exclude">Exclude from spending</option><option value="include">Include in spending</option></select></label>
+            <label>Priority<input name="priority" type="number" min="0" max="10000" defaultValue="100" /><small>Lower numbers run first.</small></label>
+          </div>
+          <div className="form-actions end"><button className="button primary" type="submit" disabled={createRule.isPending}>{createRule.isPending ? "Creating…" : "Create rule"}</button></div>
+        </form>
+        <div className="rule-list">
+          {initialRules.rules.length ? initialRules.rules.map((rule) => <article className="rule-row" key={rule.id}><div><strong>{rule.name}</strong><span>{rule.match_field}: “{rule.pattern}”</span><small>{[rule.display_merchant && `Merchant → ${rule.display_merchant}`, rule.category && `Category → ${rule.category.name}`, rule.kind_override && `Type → ${rule.kind_override}`, rule.excluded_from_spending === true && "Excluded from spending", rule.excluded_from_spending === false && "Included in spending"].filter(Boolean).join(" · ")}</small></div><button className="button danger" type="button" disabled={deleteRule.isPending} onClick={() => { if (window.confirm(`Delete ${rule.name}?`)) deleteRule.mutate(rule.id); }}>Delete</button></article>) : <p className="muted-copy">No rules yet. Create one to normalize future and existing Plaid transactions.</p>}
+        </div>
+      </section>
     </div>
   );
 }

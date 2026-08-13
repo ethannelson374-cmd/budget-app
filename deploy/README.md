@@ -318,6 +318,7 @@ PLAID_CLIENT_ID=<sandbox-client-id>
 PLAID_SECRET=<sandbox-secret>
 PLAID_ENV=sandbox
 PLAID_REDIRECT_URI=https://budget.od3ssa.com/plaid/oauth
+PLAID_WEBHOOK_URI=https://budget.od3ssa.com/api/v1/plaid/webhook
 PLAID_PRODUCTS=transactions
 PLAID_COUNTRY_CODES=US
 ```
@@ -362,3 +363,8 @@ leave the Item active and allow a later timer/manual run to retry it. Plaid Item
 credentials remain encrypted at rest and neither the CLI nor journal output logs
 access tokens. Do not add `/transactions/refresh` to the periodic timer; it is a
 separate optional Plaid refresh operation rather than normal incremental sync.
+
+
+### Phase 2D webhook deployment
+
+Set `PLAID_WEBHOOK_URI=https://budget.od3ssa.com/api/v1/plaid/webhook` and restart `budget-api`. The next `budget-sync.service` run updates pre-existing Plaid Items with `/item/webhook/update`; newly linked Items receive the webhook URL during Link-token creation. Keep `budget-sync.timer` enabled: it checks every minute, services webhook-marked Items quickly, and falls back to a sync when an Item has been stale for 15 minutes. Webhook requests are unauthenticated at the application-session layer but are rejected unless the `Plaid-Verification` ES256 JWT validates against Plaid's JWK and its body hash matches the exact raw request bytes.

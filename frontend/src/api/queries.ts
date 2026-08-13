@@ -11,6 +11,8 @@ export const queryKeys = {
   transactions: (search: string) => ["transactions", search] as const,
   settings: ["settings"] as const,
   categories: ["categories"] as const,
+  transactionRules: ["transaction-rules"] as const,
+  recurring: ["recurring"] as const,
 };
 
 export function useSetupStatus() {

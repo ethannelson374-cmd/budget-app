@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.errors import ApiError
 from app.core.security import utc_now
 from app.models import Account, Transaction, User
+from app.services.transaction_intelligence import effective_category, effective_kind, effective_merchant
 from app.services.views import account_view, money, transaction_view
 
 
@@ -50,7 +51,11 @@ def dashboard_data(db: Session, user: User, month: str | None) -> dict[str, obje
         transactions = list(
             db.scalars(
                 select(Transaction)
-                .options(joinedload(Transaction.account), joinedload(Transaction.category))
+                .options(
+                    joinedload(Transaction.account),
+                    joinedload(Transaction.category),
+                    joinedload(Transaction.user_category_override),
+                )
                 .where(
                     Transaction.user_id == user.id,
                     Transaction.account_id.in_(included_ids),
@@ -69,24 +74,26 @@ def dashboard_data(db: Session, user: User, month: str | None) -> dict[str, obje
     categories: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
     for transaction in transactions:
         amount = transaction.amount
-        if transaction.kind == "transfer":
+        kind = effective_kind(transaction)
+        category = effective_category(transaction)
+        if kind == "transfer" or transaction.excluded_from_spending:
             continue
         daily[transaction.posted_date] += amount
-        if transaction.kind == "income":
+        if kind == "income":
             income += amount
-        elif transaction.kind == "expense":
+        elif kind == "expense":
             expense = -amount
             spending += expense
             key = (
-                transaction.category.stable_key if transaction.category else "other",
-                transaction.category.name if transaction.category else "Other",
+                category.stable_key if category else "other",
+                category.name if category else "Other",
             )
             categories[key] += expense
-        elif transaction.kind == "refund":
+        elif kind == "refund":
             spending -= amount
             key = (
-                transaction.category.stable_key if transaction.category else "other",
-                transaction.category.name if transaction.category else "Other",
+                category.stable_key if category else "other",
+                category.name if category else "Other",
             )
             categories[key] -= amount
 
@@ -112,7 +119,11 @@ def dashboard_data(db: Session, user: User, month: str | None) -> dict[str, obje
 
     recent = db.scalars(
         select(Transaction)
-        .options(joinedload(Transaction.account), joinedload(Transaction.category))
+        .options(
+            joinedload(Transaction.account),
+            joinedload(Transaction.category),
+            joinedload(Transaction.user_category_override),
+        )
         .where(Transaction.user_id == user.id)
         .order_by(Transaction.posted_date.desc(), Transaction.id.desc())
         .limit(8)
@@ -180,19 +191,33 @@ def transaction_page(
     if account_id is not None:
         conditions.append(Transaction.account_id == account_id)
     if category_id is not None:
-        conditions.append(Transaction.category_id == category_id)
+        conditions.append(
+            or_(
+                Transaction.user_category_override_id == category_id,
+                (
+                    Transaction.user_category_override_id.is_(None)
+                    & (Transaction.category_id == category_id)
+                ),
+            )
+        )
     if min_amount is not None:
         conditions.append(Transaction.amount >= min_amount)
     if max_amount is not None:
         conditions.append(Transaction.amount <= max_amount)
     if kind:
-        conditions.append(Transaction.kind == kind)
+        conditions.append(
+            or_(
+                Transaction.user_kind_override == kind,
+                (Transaction.user_kind_override.is_(None) & (Transaction.kind == kind)),
+            )
+        )
     if pending is not None:
         conditions.append(Transaction.pending.is_(pending))
     if search:
         term = f"%{escape_like(search.casefold())}%"
         conditions.append(
             or_(
+                func.lower(Transaction.display_merchant).like(term, escape="\\"),
                 func.lower(Transaction.merchant).like(term, escape="\\"),
                 func.lower(Transaction.description).like(term, escape="\\"),
             )
@@ -202,14 +227,18 @@ def transaction_page(
     sort_columns = {
         "date": Transaction.posted_date,
         "amount": Transaction.amount,
-        "merchant": Transaction.merchant,
+        "merchant": func.coalesce(Transaction.display_merchant, Transaction.merchant),
         "description": Transaction.description,
     }
     sort_column = sort_columns[sort]
     order = sort_column.asc() if direction == "asc" else sort_column.desc()
     statement: Select[tuple[Transaction]] = (
         select(Transaction)
-        .options(joinedload(Transaction.account), joinedload(Transaction.category))
+        .options(
+            joinedload(Transaction.account),
+            joinedload(Transaction.category),
+            joinedload(Transaction.user_category_override),
+        )
         .where(*conditions)
         .order_by(order, Transaction.id.asc() if direction == "asc" else Transaction.id.desc())
         .offset((page - 1) * page_size)

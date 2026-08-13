@@ -10,6 +10,7 @@ import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
 import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { RecurringPage } from "../pages/RecurringPage";
 import { SetupPage } from "../pages/SetupPage";
 import { TransactionsPage } from "../pages/TransactionsPage";
 
@@ -97,6 +98,7 @@ export function App() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/plaid/oauth" element={<PlaidOAuthPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/recurring" element={<RecurringPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

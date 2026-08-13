@@ -439,3 +439,31 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .connection-card-footer .button, .connection-actions { width: 100%; }
   .connection-actions { align-items: stretch; flex-direction: column; }
 }
+
+/* Phase 2D transaction intelligence */
+.intelligence-editor { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.intelligence-checkbox { align-self: end; min-height: 70px; }
+.intelligence-checkbox span { display: grid; gap: 3px; }
+.intelligence-checkbox small { font-weight: 400; color: var(--text-muted); }
+
+.rules-panel { grid-column: 1 / -1; }
+.rules-panel .panel-heading p { margin: 4px 0 0; max-width: 760px; font-size: .82rem; color: var(--text-muted); }
+.rule-list { display: grid; gap: 8px; }
+.rule-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); }
+.rule-row > div { min-width: 0; display: grid; gap: 3px; }
+.rule-row span, .rule-row small { color: var(--text-muted); overflow-wrap: anywhere; }
+.muted-copy { color: var(--text-muted); margin: 0; }
+
+.recurring-summary { margin-bottom: 18px; }
+.recurring-panel { overflow: hidden; }
+.recurring-list { display: grid; }
+.recurring-row { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(110px, 1fr)); gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+.recurring-row:first-child { border-top: 0; }
+.recurring-row > div { min-width: 0; display: grid; gap: 3px; }
+.recurring-row span { color: var(--text-muted); font-size: .76rem; }
+.recurring-change.warning strong { color: var(--warning); }
+
+@media (max-width: 850px) {
+  .recurring-row { grid-template-columns: 1fr 1fr; }
+  .rule-row { align-items: flex-start; flex-direction: column; }
+}

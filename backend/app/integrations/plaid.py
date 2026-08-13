@@ -74,18 +74,19 @@ class PlaidClient:
         redirect_uri: str,
         products: list[str],
         country_codes: list[str],
+        webhook_uri: str | None = None,
     ) -> dict[str, Any]:
-        return self._post(
-            "/link/token/create",
-            {
-                "user": {"client_user_id": client_user_id},
-                "client_name": "Budget",
-                "products": products,
-                "country_codes": country_codes,
-                "language": "en",
-                "redirect_uri": redirect_uri,
-            },
-        )
+        payload: dict[str, Any] = {
+            "user": {"client_user_id": client_user_id},
+            "client_name": "Budget",
+            "products": products,
+            "country_codes": country_codes,
+            "language": "en",
+            "redirect_uri": redirect_uri,
+        }
+        if webhook_uri:
+            payload["webhook"] = webhook_uri
+        return self._post("/link/token/create", payload)
 
     def exchange_public_token(self, public_token: str) -> dict[str, Any]:
         return self._post("/item/public_token/exchange", {"public_token": public_token})
@@ -117,6 +118,12 @@ class PlaidClient:
         if cursor:
             payload["cursor"] = cursor
         return self._post("/transactions/sync", payload)
+
+    def webhook_verification_key_get(self, key_id: str) -> dict[str, Any]:
+        return self._post("/webhook_verification_key/get", {"key_id": key_id})
+
+    def item_webhook_update(self, access_token: str, webhook_uri: str) -> dict[str, Any]:
+        return self._post("/item/webhook/update", {"access_token": access_token, "webhook": webhook_uri})
 
     def item_remove(self, access_token: str) -> dict[str, Any]:
         return self._post("/item/remove", {"access_token": access_token})

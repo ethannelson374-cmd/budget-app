@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_settings_from_request, require_csrf, require_principal
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.core.plaid_webhook import PlaidWebhookVerificationError, verify_plaid_webhook
+from app.core.security import utc_now
+from app.models import PlaidItem
 from app.schemas.api import (
     OkView,
     PlaidConnectionsView,
@@ -18,6 +24,33 @@ from app.services.plaid import create_link_token, disconnect, exchange_and_impor
 from app.services.plaid_transactions import sync_outcome_view, sync_plaid_item
 
 router = APIRouter(prefix="/plaid", tags=["plaid"])
+
+
+@router.post("/webhook", response_model=OkView)
+async def webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, bool]:
+    raw_body = await request.body()
+    try:
+        verify_plaid_webhook(settings, request.headers.get("Plaid-Verification"), raw_body)
+    except PlaidWebhookVerificationError as exc:
+        raise ApiError(401, "plaid_webhook_invalid", "The webhook signature is invalid") from exc
+    try:
+        payload = json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ApiError(400, "plaid_webhook_invalid_body", "The webhook body is invalid") from exc
+    if not isinstance(payload, dict):
+        raise ApiError(400, "plaid_webhook_invalid_body", "The webhook body is invalid")
+    if payload.get("webhook_type") == "TRANSACTIONS" and payload.get("webhook_code") == "SYNC_UPDATES_AVAILABLE":
+        external_id = payload.get("item_id")
+        if isinstance(external_id, str) and external_id:
+            item = db.scalar(select(PlaidItem).where(PlaidItem.external_id == external_id))
+            if item is not None:
+                item.sync_requested_at = utc_now()
+                db.commit()
+    return {"ok": True}
 
 
 @router.post("/link-token", response_model=PlaidLinkTokenView)
