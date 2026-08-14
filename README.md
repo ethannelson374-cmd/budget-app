@@ -6,9 +6,10 @@ demo environment, category and income settings, and a calculated monthly
 dashboard. Phase 2A adds writeable manual accounts and transactions, Phase 2B
 adds secure Plaid bank connections, Phase 2C adds cursor-based transaction sync,
 Phase 2D adds transaction intelligence and signed webhook refresh, Phase 3A adds
-annual/monthly budgets, and Phase 3B adds goals, debt planning, and cash-flow
-forecasting. It is designed to run on an Oracle Cloud E2 Micro VM without
-containers.
+annual/monthly budgets, Phase 3B adds goals, debt planning, and cash-flow
+forecasting, and Phase 3C adds deterministic insights plus Ask Budget with
+user-approved action plans. It is designed to run on an Oracle Cloud E2 Micro VM
+without containers.
 
 ## Phase 1 features
 
@@ -473,7 +474,7 @@ purchase-affordability checks. Financial facts displayed as evidence cards are
 calculated by Budget rather than by the language model.
 
 Provider adapters are isolated behind the same interface. Gemini uses the native Gemini REST API with function calling, SSE streaming, and structured JSON output; the OpenAI adapter remains available as a fallback.
-Provider requests set `store=false`. Context is deliberately sanitized: Plaid
+OpenAI requests set `store=false`; Gemini uses its native generate-content API without a server-side conversation store. Context is deliberately sanitized: Plaid
 access tokens, routing/account numbers, session/CSRF/bootstrap secrets, raw
 webhook payloads, and other credentials are never part of the Advisor context.
 Merchant names and transaction descriptions are withheld unless the user opts
@@ -484,8 +485,9 @@ Advisor conversations are owner-scoped. Users may disable Ask Budget, disable
 history entirely for a private session, delete saved Advisor history, or opt in
 to merchant/description sharing. Private mode uses a transient owner-scoped
 conversation shell for the streaming request and removes it after either a
-successful response or a pre-stream planning failure. Phase 3C-2 remains
-read-only; user-confirmed financial mutations are deferred to Phase 3C-3.
+successful response or a pre-stream planning failure. Phase 3C-2 model tools
+remain read-only; Phase 3C-3 adds a separate validated approval path for proposed
+financial-plan changes.
 
 Advisor APIs:
 
@@ -498,3 +500,37 @@ Migration `20260813_0009` adds Advisor privacy preferences plus owner-scoped
 conversation/message history. No provider SDK or new daemon is required; the
 backend uses the existing HTTPS runtime and the frontend consumes same-origin
 server-sent events.
+
+## Phase 3C-3 Advisor actions and financial playbooks
+
+Phase 3C-3 closes the loop between an Advisor recommendation and Budget's existing
+planning services. Ask Budget may include a small structured action proposal in a
+response, but the model never receives a mutation tool and cannot write financial
+data. Budget validates the proposed target IDs and values, simulates the changes
+inside its deterministic budget/goal/debt/forecast engines, rolls the simulation
+back, and stores only a reviewable proposal.
+
+The first action allowlist supports current-month category budget targets, goal
+monthly contributions, per-debt extra payments, debt strategy/extra-budget settings,
+and forecast reserve assumptions. No action can move money, initiate a payment,
+change a bank connection, delete a transaction, or contact a financial institution.
+
+Each proposal has a deterministic before/after preview and a 24-hour expiry. The
+apply endpoint re-checks the proposal's preconditions so a recommendation cannot
+overwrite changes made after it was generated. Applying requires an authenticated
+CSRF-protected user request. Undo is also guarded: Budget compares the current
+resource state with the state written by the proposal and refuses to overwrite newer
+manual edits. Applied and undone operations are recorded separately from the AI
+conversation and are audit logged. Private/no-history Advisor sessions do not create
+action proposals.
+
+Advisor action APIs:
+
+- `GET /api/v1/advisor/proposals/{proposal_id}`
+- `POST /api/v1/advisor/proposals/{proposal_id}/apply`
+- `POST /api/v1/advisor/proposals/{proposal_id}/reject`
+- `POST /api/v1/advisor/proposals/{proposal_id}/undo`
+
+Migration `20260814_0010` adds owner-scoped proposals, proposal actions, deterministic
+preview/rollback state, and apply/undo execution history. It adds no new external
+runtime dependency.

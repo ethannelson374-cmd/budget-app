@@ -204,10 +204,24 @@ def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
         "currency": user.settings.currency,
         "annual_gross_income": str(user.settings.annual_gross_income) if user.settings.annual_gross_income is not None else None,
         "budget": {
-            key: month[key] for key in (
-                "planned_income", "actual_income", "budgeted", "spent", "remaining", "unallocated",
-                "cash_available", "upcoming_recurring", "planning_commitments", "goal_reserves", "safe_to_spend",
-            )
+            **{
+                key: month[key] for key in (
+                    "planned_income", "actual_income", "budgeted", "spent", "remaining", "unallocated",
+                    "cash_available", "upcoming_recurring", "planning_commitments", "goal_reserves", "safe_to_spend",
+                )
+            },
+            "month": cast(dict[str, object], month["period"])["month"],
+            "categories": [
+                {
+                    "id": cast(dict[str, object], item["category"])["id"],
+                    "name": cast(dict[str, object], item["category"])["name"],
+                    "base_amount": item["base_amount"],
+                    "spent_amount": item["spent_amount"],
+                    "remaining_amount": item["remaining_amount"],
+                    "rollover_mode": item["rollover_mode"],
+                }
+                for item in cast(list[dict[str, object]], month["categories"])[:40]
+            ],
         },
         "goals": {
             "total_target": goals["total_target"], "total_current": goals["total_current"],

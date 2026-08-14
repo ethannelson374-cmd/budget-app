@@ -49,7 +49,8 @@ export function InsightCard({
         </div>
       )}
       <div className="insight-actions">
-        <Link className="text-link" to="/advisor" state={{ insight }}>Ask Budget about this <span aria-hidden="true">→</span></Link>
+        <Link className="text-link" to="/advisor" state={{ insight, intent: "explain" }}>Ask Budget about this <span aria-hidden="true">→</span></Link>
+        {insight.status === "active" && <Link className="text-link" to="/advisor" state={{ insight, intent: "plan" }}>Build a plan <span aria-hidden="true">→</span></Link>}
         {insight.action_route && <Link className="text-link" to={insight.action_route}>Review details <span aria-hidden="true">→</span></Link>}
         {insight.status === "active" && onDismiss && <button className="button ghost" type="button" disabled={busy} onClick={() => onDismiss(insight)}>Dismiss</button>}
         {insight.status === "dismissed" && onRestore && <button className="button ghost" type="button" disabled={busy} onClick={() => onRestore(insight)}>Restore</button>}

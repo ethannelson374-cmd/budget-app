@@ -51,6 +51,7 @@ describe("InsightsPage", () => {
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><InsightsPage /></MemoryRouter></QueryClientProvider>);
     expect(await screen.findByRole("heading", { name: "Your 30-day forecast falls below your reserve" })).toBeInTheDocument();
     expect(screen.getByText("USD 200.00")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Build a plan/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(vi.mocked(apiRequest)).toHaveBeenCalledWith(
       "/insights/7",

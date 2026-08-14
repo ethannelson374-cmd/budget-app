@@ -18,6 +18,7 @@ from app.schemas.api import (
     AdvisorConversationListView,
     AdvisorConversationView,
     AdvisorPrompt,
+    AdvisorProposalView,
     AdvisorStatusView,
     OkView,
 )
@@ -39,6 +40,14 @@ from app.services.advisor import (
     sanitized_snapshot,
     save_message,
     trusted_facts,
+)
+from app.services.advisor_actions import (
+    apply_proposal,
+    create_proposal,
+    get_proposal,
+    proposal_view,
+    reject_proposal,
+    undo_proposal,
 )
 from app.services.auth import Principal, add_audit_event
 
@@ -124,6 +133,66 @@ def remove_all_advisor_conversations(
     return {"ok": True}
 
 
+
+@router.get("/proposals/{proposal_id}", response_model=AdvisorProposalView)
+def get_advisor_proposal(
+    proposal_id: int,
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return proposal_view(db, principal.user, get_proposal(db, principal.user, proposal_id))
+
+
+@router.post("/proposals/{proposal_id}/apply", response_model=AdvisorProposalView)
+def post_advisor_proposal_apply(
+    proposal_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    proposal = apply_proposal(db, principal.user, proposal_id)
+    add_audit_event(
+        db, settings, action="advisor.proposal.apply", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail=str(proposal_id),
+    )
+    db.commit()
+    return proposal_view(db, principal.user, proposal)
+
+
+@router.post("/proposals/{proposal_id}/reject", response_model=AdvisorProposalView)
+def post_advisor_proposal_reject(
+    proposal_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    proposal = reject_proposal(db, principal.user, proposal_id)
+    add_audit_event(
+        db, settings, action="advisor.proposal.reject", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail=str(proposal_id),
+    )
+    db.commit()
+    return proposal_view(db, principal.user, proposal)
+
+
+@router.post("/proposals/{proposal_id}/undo", response_model=AdvisorProposalView)
+def post_advisor_proposal_undo(
+    proposal_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    proposal = undo_proposal(db, principal.user, proposal_id)
+    add_audit_event(
+        db, settings, action="advisor.proposal.undo", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail=str(proposal_id),
+    )
+    db.commit()
+    return proposal_view(db, principal.user, proposal)
+
 def _sse(event: str, payload: object) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'), default=str)}\n\n"
 
@@ -195,6 +264,38 @@ def stream_advisor_message(
     user_id = principal.user.id
     session_factory = request.app.state.database.session_factory
 
+    def persist_proposal(reply: dict[str, object]) -> None:
+        suggestions = reply.pop("proposed_actions", [])
+        title = str(reply.pop("action_plan_title", "") or "")
+        summary = str(reply.pop("action_plan_summary", "") or "")
+        reply["proposal_id"] = None
+        if not store_history or not isinstance(suggestions, list) or not suggestions:
+            return
+        safe_suggestions = [item for item in suggestions if isinstance(item, dict)]
+        if not safe_suggestions:
+            return
+        try:
+            with session_factory() as proposal_db:
+                proposal_user = proposal_db.get(User, user_id)
+                if proposal_user is None:
+                    return
+                proposal = create_proposal(
+                    proposal_db, proposal_user, conversation_id=conversation_id,
+                    title=title, summary=summary, suggestions=safe_suggestions,
+                )
+                if proposal is None:
+                    return
+                add_audit_event(
+                    proposal_db, settings, action="advisor.proposal.create", outcome="success",
+                    request_id=request_id, user_id=user_id, detail=f"{proposal.id}:actions={len(safe_suggestions)}",
+                )
+                proposal_db.commit()
+                reply["proposal_id"] = proposal.id
+        except ApiError:
+            warnings = reply.get("warnings")
+            if isinstance(warnings, list) and len(warnings) < 5:
+                warnings.append("Budget could not validate the suggested action plan, so no changes were made.")
+
     def save_outcome(*, success: bool, reply: dict[str, object] | None = None, error_code: str | None = None) -> None:
         with session_factory() as save_db:
             user = save_db.get(User, user_id)
@@ -218,6 +319,7 @@ def stream_advisor_message(
                 elif event == "done" and isinstance(value, dict):
                     reply = dict(value)
                     reply["facts"] = facts
+                    persist_proposal(reply)
                     yield _sse("done", reply)
             if reply is None:
                 raise ApiError(503, "advisor_invalid_response", "Ask Budget did not return a complete response")

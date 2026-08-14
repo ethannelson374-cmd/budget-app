@@ -718,3 +718,91 @@ class AdvisorMessage(Base):
     response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AdvisorProposal(TimestampMixin, Base):
+    __tablename__ = "advisor_proposals"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_advisor_proposal_id_user"),
+        ForeignKeyConstraint(
+            ["conversation_id", "user_id"],
+            ["advisor_conversations.id", "advisor_conversations.user_id"],
+            name="fk_advisor_proposal_conversation_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "status IN ('draft','applied','rejected','undone','expired')",
+            name="advisor_proposal_status_allowed",
+        ),
+        Index("ix_advisor_proposals_user_status_created", "user_id", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    conversation_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="draft", nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    preview_json: Mapped[str] = mapped_column(Text, nullable=False)
+    precondition_json: Mapped[str] = mapped_column(Text, nullable=False)
+    rollback_json: Mapped[str] = mapped_column(Text, nullable=False)
+    applied_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AdvisorProposalAction(Base):
+    __tablename__ = "advisor_proposal_actions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["proposal_id", "user_id"],
+            ["advisor_proposals.id", "advisor_proposals.user_id"],
+            name="fk_advisor_proposal_action_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "action_type IN ('budget_category_monthly_set','goal_monthly_contribution_set',"
+            "'debt_extra_payment_set','debt_strategy_set','forecast_reserve_set')",
+            name="advisor_proposal_action_type_allowed",
+        ),
+        UniqueConstraint("proposal_id", "sort_order", name="uq_advisor_proposal_action_order"),
+        Index("ix_advisor_proposal_actions_proposal", "proposal_id", "sort_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    proposal_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    label: Mapped[str] = mapped_column(String(180), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    before_json: Mapped[str] = mapped_column(Text, nullable=False)
+    after_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class AdvisorProposalExecution(Base):
+    __tablename__ = "advisor_proposal_executions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["proposal_id", "user_id"],
+            ["advisor_proposals.id", "advisor_proposals.user_id"],
+            name="fk_advisor_proposal_execution_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("operation IN ('apply','undo')", name="advisor_proposal_execution_operation_allowed"),
+        CheckConstraint("outcome IN ('success','failure')", name="advisor_proposal_execution_outcome_allowed"),
+        Index("ix_advisor_proposal_executions_proposal_created", "proposal_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    proposal_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

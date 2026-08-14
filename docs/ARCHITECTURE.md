@@ -246,14 +246,39 @@ transaction descriptions are opt-in context. Strings originating from financial
 records are explicitly treated as untrusted data rather than instructions.
 
 The Gemini and OpenAI adapters are isolated behind an `AdvisorProvider` protocol. Requests are
-made server-side, use `store=false`, and the final response is constrained to a
+made server-side; OpenAI uses `store=false` while Gemini uses stateless generate-content calls, and the final response is constrained to a
 structured reply containing mode, headline, answer, confidence, warnings, and
 follow-up prompts. Native fact cards are assembled from deterministic tool
-results and attached to the streamed response by Budget itself. No model tool
-can mutate accounts, transactions, budgets, goals, debts, settings, or money.
+results and attached to the streamed response by Budget itself. No model tool can mutate accounts, transactions, budgets, goals, debts, settings,
+or money. Phase 3C-3 preserves that boundary: structured model proposals are data,
+not executable calls. A separate Budget-owned validator and CSRF-protected approval
+API is the only path from a recommendation to a planning mutation.
 
 Conversation rows and messages use composite owner constraints. History can be
 disabled per user; in that mode a transient conversation row exists only for
 owner-scoped streaming and is deleted at completion/failure. A process-local
 per-user request limiter is appropriate to the current single-worker E2 runtime;
 a future multi-worker deployment must move this limiter to shared state.
+
+## Phase 3C-3 action boundary
+
+Advisor actions use a proposal -> deterministic preview -> explicit approval ->
+apply -> optional undo state machine. `AdvisorProposal`, `AdvisorProposalAction`,
+and `AdvisorProposalExecution` are owner-scoped records tied to a saved Advisor
+conversation. The model emits only a bounded proposal schema; Budget resolves every
+target against the authenticated owner, normalizes amounts, rejects unsupported
+action types, and simulates the normalized actions with the same domain service
+functions used by the ordinary Budget/Plan UI. The simulation is rolled back before
+the proposal is stored.
+
+The initial mutation allowlist is intentionally narrow: current-month category
+budget amount, goal monthly contribution, debt extra payment, debt strategy/monthly
+extra budget, and forecast reserve assumptions. Real-world money movement and bank
+operations remain out of scope.
+
+Proposal application is optimistic and stale-safe. Before applying, Budget compares
+the current resource state with the proposal's stored precondition state. After
+applying, it stores the exact resource state written by the proposal. Undo succeeds
+only when that state still matches, preventing an old Advisor plan from overwriting
+newer manual changes. Audit events cover proposal creation, apply, reject, and undo.
+Private/no-history sessions never persist proposals.

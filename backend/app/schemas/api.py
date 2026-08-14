@@ -951,3 +951,48 @@ class AdvisorPrompt(StrictModel):
         if not value:
             raise ValueError("message must not be blank")
         return value
+
+
+AdvisorProposalStatus = Literal["draft", "applied", "rejected", "undone", "expired"]
+AdvisorProposalActionType = Literal[
+    "budget_category_monthly_set",
+    "goal_monthly_contribution_set",
+    "debt_extra_payment_set",
+    "debt_strategy_set",
+    "forecast_reserve_set",
+]
+
+
+class AdvisorProposalImpactView(ViewModel):
+    label: str
+    before: str
+    after: str
+
+
+class AdvisorProposalPreviewView(ViewModel):
+    impacts: list[AdvisorProposalImpactView]
+
+
+class AdvisorProposalActionView(ViewModel):
+    id: int
+    action_type: AdvisorProposalActionType
+    label: str
+    rationale: str
+    before: dict[str, object]
+    after: dict[str, object]
+
+
+class AdvisorProposalView(ViewModel):
+    id: int
+    conversation_id: int
+    status: AdvisorProposalStatus
+    title: str
+    summary: str
+    currency: str
+    preview: AdvisorProposalPreviewView
+    actions: list[AdvisorProposalActionView]
+    created_at: datetime
+    expires_at: datetime
+    applied_at: datetime | None
+    rejected_at: datetime | None
+    undone_at: datetime | None

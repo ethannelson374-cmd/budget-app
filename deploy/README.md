@@ -411,3 +411,19 @@ swap, test one quick question, one scenario, the Insights **Ask Budget about
 this** handoff, saved history, and private/no-history mode. Provider failures
 should surface as generic Advisor errors; logs and audit events must not contain
 provider response bodies or secret values.
+
+## Phase 3C-3 Advisor actions deployment
+
+Phase 3C-3 adds migration `20260814_0010`. Pull the release, run `alembic upgrade
+head` through the existing `budgetapp` systemd-run migration pattern, and verify
+`alembic current` reports `20260814_0010 (head)` before restarting `budget-api`.
+No new environment variables, daemon, inbound port, or provider credential is
+required beyond the Phase 3C-2 Advisor configuration.
+
+Build and upload the Vite bundle off-host using the normal release procedure. Before
+the swap, verify the bundle contains `Apply changes`, `Undo plan`, and `/advisor`.
+After deployment, use a non-destructive test plan to verify: a proposal renders a
+deterministic before/after preview; nothing changes before approval; Apply updates
+only the displayed Budget/Plan settings; Undo restores them; changing a target after
+proposal creation causes a stale-plan `409` rather than overwriting the newer value;
+and private Advisor mode does not create a proposal.

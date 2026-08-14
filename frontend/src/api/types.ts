@@ -630,6 +630,46 @@ export interface AdvisorReply {
   warnings: string[];
   suggested_questions: string[];
   facts: AdvisorFact[];
+  proposal_id?: number | null;
+}
+
+export type AdvisorProposalStatus = "draft" | "applied" | "rejected" | "undone" | "expired";
+export type AdvisorProposalActionType =
+  | "budget_category_monthly_set"
+  | "goal_monthly_contribution_set"
+  | "debt_extra_payment_set"
+  | "debt_strategy_set"
+  | "forecast_reserve_set";
+
+export interface AdvisorProposalImpact {
+  label: string;
+  before: string;
+  after: string;
+}
+
+export interface AdvisorProposalAction {
+  id: number;
+  action_type: AdvisorProposalActionType;
+  label: string;
+  rationale: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
+export interface AdvisorProposal {
+  id: number;
+  conversation_id: number;
+  status: AdvisorProposalStatus;
+  title: string;
+  summary: string;
+  currency: string;
+  preview: { impacts: AdvisorProposalImpact[] };
+  actions: AdvisorProposalAction[];
+  created_at: string;
+  expires_at: string;
+  applied_at: string | null;
+  rejected_at: string | null;
+  undone_at: string | null;
 }
 
 export interface AdvisorConversation {

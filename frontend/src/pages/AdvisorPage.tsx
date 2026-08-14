@@ -3,7 +3,17 @@ import { Link, useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiEventStream, apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { AdvisorConversation, AdvisorConversationDetail, AdvisorConversationList, AdvisorFact, AdvisorReply, AdvisorStatus, InsightItem } from "../api/types";
+import type {
+  AdvisorConversation,
+  AdvisorConversationDetail,
+  AdvisorConversationList,
+  AdvisorFact,
+  AdvisorProposal,
+  AdvisorProposalAction,
+  AdvisorReply,
+  AdvisorStatus,
+  InsightItem,
+} from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState } from "../components/States";
 
@@ -19,8 +29,8 @@ const starters = [
   "What should I focus on financially this month?",
   "Can I afford a $500 purchase right now?",
   "Where has my spending increased the most?",
+  "Build me a plan to free up $300 per month.",
   "How can I pay my debt off faster?",
-  "Am I on track for my financial goals?",
   "What happens if I save another $200 per month?",
 ];
 
@@ -45,6 +55,82 @@ function toRows(detail: AdvisorConversationDetail): ChatRow[] {
   return detail.messages.map((message) => ({ key: `saved-${message.id}`, role: message.role, content: message.content, reply: message.response, facts: message.response?.facts }));
 }
 
+function actionState(action: AdvisorProposalAction, state: Record<string, unknown>, currency: string): string {
+  if ("amount" in state) return `${currency} ${String(state.amount)}`;
+  if ("reserve_balance" in state) {
+    const reserveMode = state.include_budget_reserve === false ? "cash reserve only" : "plus budget reserve";
+    return `${currency} ${String(state.reserve_balance)} · ${reserveMode}`;
+  }
+  if ("strategy" in state) return `${String(state.strategy)} · ${currency} ${String(state.monthly_extra_budget ?? "0")}/mo extra`;
+  return action.action_type.replaceAll("_", " ");
+}
+
+function AdvisorProposalCard({ proposalId }: { proposalId: number }) {
+  const queryClient = useQueryClient();
+  const proposal = useQuery({
+    queryKey: queryKeys.advisorProposal(proposalId),
+    queryFn: () => apiRequest<AdvisorProposal>(`/advisor/proposals/${proposalId}`),
+  });
+  const update = useMutation({
+    mutationFn: (operation: "apply" | "reject" | "undo") => apiRequest<AdvisorProposal>(`/advisor/proposals/${proposalId}/${operation}`, { method: "POST" }),
+    onSuccess: async (data) => {
+      queryClient.setQueryData(queryKeys.advisorProposal(proposalId), data);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["budget-month"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.goals }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.debts }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.forecast }),
+        queryClient.invalidateQueries({ queryKey: ["insights"] }),
+      ]);
+    },
+  });
+
+  if (proposal.isPending) return <div className="advisor-proposal compact"><span>Preparing deterministic change preview…</span></div>;
+  if (proposal.isError || !proposal.data) return <div className="advisor-proposal compact"><span>Action plan preview could not be loaded.</span></div>;
+  const plan = proposal.data;
+  const mutateError = update.error instanceof Error ? update.error.message : null;
+
+  const apply = () => {
+    if (window.confirm(`Apply “${plan.title}”? Budget will update only the financial settings shown in this preview.`)) update.mutate("apply");
+  };
+  const undo = () => {
+    if (window.confirm(`Undo “${plan.title}”? Budget will restore the values that existed before this plan was applied.`)) update.mutate("undo");
+  };
+
+  return (
+    <section className={`advisor-proposal status-${plan.status}`} aria-label="Advisor action plan">
+      <div className="advisor-proposal-heading">
+        <div><span className="eyebrow">Recommended plan</span><h4>{plan.title}</h4></div>
+        <span className={`advisor-proposal-status ${plan.status}`}>{plan.status}</span>
+      </div>
+      <p>{plan.summary}</p>
+      <div className="advisor-proposal-actions">
+        {plan.actions.map((action, index) => (
+          <div className="advisor-proposal-action" key={action.id}>
+            <span className="advisor-proposal-number">{index + 1}</span>
+            <div><strong>{action.label}</strong><p>{action.rationale}</p><small>{actionState(action, action.before, plan.currency)} <span aria-hidden="true">→</span> {actionState(action, action.after, plan.currency)}</small></div>
+          </div>
+        ))}
+      </div>
+      {plan.preview.impacts.length > 0 && (
+        <div className="advisor-proposal-preview">
+          <strong>Deterministic preview</strong>
+          <dl>{plan.preview.impacts.map((impact) => <div key={impact.label}><dt>{impact.label}</dt><dd><span>{impact.before}</span><span aria-hidden="true">→</span><strong>{impact.after}</strong></dd></div>)}</dl>
+        </div>
+      )}
+      {mutateError && <div className="inline-alert" role="alert">{mutateError}</div>}
+      <div className="advisor-proposal-footer">
+        <small>{plan.status === "draft" ? "Nothing changes until you approve this plan." : plan.status === "applied" ? "Applied by Budget after your approval." : plan.status === "undone" ? "The applied changes were restored." : plan.status === "rejected" ? "This plan was dismissed without changes." : "This plan expired without changes."}</small>
+        <div>
+          {plan.status === "draft" && <><button className="button secondary" type="button" disabled={update.isPending} onClick={() => update.mutate("reject")}>Dismiss</button><button className="button primary" type="button" disabled={update.isPending} onClick={apply}>{update.isPending ? "Applying…" : "Apply changes"}</button></>}
+          {plan.status === "applied" && <button className="button secondary" type="button" disabled={update.isPending} onClick={undo}>{update.isPending ? "Restoring…" : "Undo plan"}</button>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ReplyCard({ row }: { row: ChatRow }) {
   const reply = row.reply;
   if (!reply) return <AdvisorText text={row.content || "Thinking…"} />;
@@ -55,6 +141,7 @@ function ReplyCard({ row }: { row: ChatRow }) {
       <AdvisorText text={reply.answer} />
       {reply.facts?.length > 0 && <dl className="advisor-facts">{reply.facts.map((fact) => <div key={`${fact.label}-${fact.value}`}><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.detail}</small></dd></div>)}</dl>}
       {reply.warnings.length > 0 && <div className="advisor-warnings"><strong>Keep in mind</strong>{reply.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div>}
+      {reply.proposal_id ? <AdvisorProposalCard proposalId={reply.proposal_id} /> : null}
     </div>
   );
 }
@@ -62,11 +149,17 @@ function ReplyCard({ row }: { row: ChatRow }) {
 export function AdvisorPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const routedInsight = (location.state as { insight?: InsightItem } | null)?.insight ?? null;
+  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan" } | null);
+  const routedInsight = routeState?.insight ?? null;
+  const initialPrompt = routedInsight
+    ? routeState?.intent === "plan"
+      ? `Build a practical action plan to address this insight: ${routedInsight.title}`
+      : `Explain this insight and what I should do next: ${routedInsight.title}`
+    : "";
   const [attachedInsight, setAttachedInsight] = useState<InsightItem | null>(routedInsight);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatRow[]>([]);
-  const [input, setInput] = useState(routedInsight ? `Explain this insight and what I should do next: ${routedInsight.title}` : "");
+  const [input, setInput] = useState(initialPrompt);
   const [busy, setBusy] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
 
@@ -80,7 +173,7 @@ export function AdvisorPage() {
   const detail = useQuery({
     queryKey: queryKeys.advisorConversation(selectedId ?? 0),
     queryFn: () => apiRequest<AdvisorConversationDetail>(`/advisor/conversations/${selectedId}`),
-      enabled: Boolean(selectedId && storeHistory && !busy && messages.length === 0),
+    enabled: Boolean(selectedId && storeHistory && !busy && messages.length === 0),
   });
 
   useEffect(() => {
@@ -180,27 +273,21 @@ export function AdvisorPage() {
   if (!status.data.available) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" description="Financial answers grounded in Budget's own calculations." /><section className="panel advisor-unavailable"><h2>AI Advisor is not configured yet</h2><p>The server needs an enabled AI provider before Ask Budget can answer questions.</p><Link className="button secondary" to="/settings">Open Settings</Link></section></div>;
   if (!status.data.enabled) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" /><section className="panel advisor-unavailable"><h2>Ask Budget is turned off</h2><p>You can enable the Advisor and choose its privacy options in Settings.</p><Link className="button primary" to="/settings">Enable in Settings</Link></section></div>;
 
-  const detailLoading = Boolean(
-  selectedId &&
-  storeHistory &&
-  !busy &&
-  messages.length === 0 &&
-  detail.isPending
-);
+  const detailLoading = Boolean(selectedId && storeHistory && !busy && messages.length === 0 && detail.isPending);
   return (
     <div className="page-container advisor-page">
-      <PageHeader title="Ask Budget" description="Ask about spending, affordability, goals, debt, or a what-if scenario." actions={<button className="button secondary" type="button" onClick={newConversation}>New conversation</button>} />
-      {!storeHistory && <div className="notice-banner"><strong>Private session.</strong> Budget will show this conversation now but will not keep Advisor messages after the response.</div>}
+      <PageHeader title="Ask Budget" description="Ask questions, model options, or review a plan before Budget changes anything." actions={<button className="button secondary" type="button" onClick={newConversation}>New conversation</button>} />
+      {!storeHistory && <div className="notice-banner"><strong>Private session.</strong> Budget will not keep Advisor messages, and action plans are not created in private sessions.</div>}
       {attachedInsight && <div className="advisor-insight-context"><div><span className="eyebrow">Attached insight</span><strong>{attachedInsight.title}</strong><p>{attachedInsight.summary}</p></div><button type="button" className="button ghost" onClick={() => setAttachedInsight(null)}>Remove</button></div>}
       <div className={`advisor-layout${storeHistory ? "" : " private"}`}>
         {storeHistory && <aside className="panel advisor-history"><div className="advisor-history-heading"><strong>Conversations</strong><button type="button" className="text-button" onClick={newConversation}>New</button></div>{conversations.isPending && <p className="muted-copy">Loading history…</p>}{conversations.data?.conversations.length ? <div className="advisor-history-list">{conversations.data.conversations.map((item) => <div className={`advisor-history-row${selectedId === item.id ? " active" : ""}`} key={item.id}><button type="button" className="advisor-history-open" onClick={() => openConversation(item.id)}><strong>{item.title}</strong><small>{new Date(item.updated_at).toLocaleDateString()}</small></button><button type="button" className="advisor-history-delete" aria-label={`Delete ${item.title}`} disabled={deleteConversation.isPending || busy} onClick={() => { if (window.confirm(`Delete ${item.title}?`)) deleteConversation.mutate(item.id); }}>×</button></div>)}</div> : <p className="muted-copy">No saved conversations yet.</p>}</aside>}
         <section className="panel advisor-chat">
           <div className="advisor-chat-heading"><div><span className="eyebrow">{storeHistory ? "Conversation" : "Not saved"}</span><h2>{currentTitle}</h2></div><span className="advisor-provider">{status.data.provider} · {status.data.model}</span></div>
           <div className="advisor-thread" aria-live="polite">
-            {detailLoading ? <LoadingState label="Opening conversation" /> : messages.length === 0 ? <div className="advisor-empty"><h3>What do you want to know?</h3><p>Budget will use its deterministic financial engines for the numbers and the AI layer to explain them.</p><div className="advisor-starters">{starters.map((starter) => <button type="button" key={starter} onClick={() => void send(starter)} disabled={busy}>{starter}</button>)}</div></div> : messages.map((row) => <article key={row.key} className={`advisor-message ${row.role}`}><div className="advisor-message-label">{row.role === "user" ? "You" : "Ask Budget"}</div>{row.role === "assistant" ? <ReplyCard row={row} /> : <p>{row.content}</p>}{row.reply?.suggested_questions?.length ? <div className="advisor-followups">{row.reply.suggested_questions.map((question) => <button type="button" key={question} disabled={busy} onClick={() => void send(question)}>{question}</button>)}</div> : null}</article>)}
+            {detailLoading ? <LoadingState label="Opening conversation" /> : messages.length === 0 ? <div className="advisor-empty"><h3>What do you want to know?</h3><p>Budget owns the math. Ask Budget can explain it or propose changes for you to review and approve.</p><div className="advisor-starters">{starters.map((starter) => <button type="button" key={starter} onClick={() => void send(starter)} disabled={busy}>{starter}</button>)}</div></div> : messages.map((row) => <article key={row.key} className={`advisor-message ${row.role}`}><div className="advisor-message-label">{row.role === "user" ? "You" : "Ask Budget"}</div>{row.role === "assistant" ? <ReplyCard row={row} /> : <p>{row.content}</p>}{row.reply?.suggested_questions?.length ? <div className="advisor-followups">{row.reply.suggested_questions.map((question) => <button type="button" key={question} disabled={busy} onClick={() => void send(question)}>{question}</button>)}</div> : null}</article>)}
           </div>
           {streamError && <div className="inline-alert" role="alert">{streamError}</div>}
-          <form className="advisor-composer" onSubmit={submit}><label className="sr-only" htmlFor="advisor-message">Ask Budget</label><textarea id="advisor-message" rows={3} maxLength={4000} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask Budget anything about your financial plan…" disabled={busy} /><div><span>Read-only in Phase 3C-2 · AI cannot change your financial data.</span><button className="button primary" type="submit" disabled={busy || !input.trim()}>{busy ? "Thinking…" : "Ask Budget"}</button></div></form>
+          <form className="advisor-composer" onSubmit={submit}><label className="sr-only" htmlFor="advisor-message">Ask Budget</label><textarea id="advisor-message" rows={3} maxLength={4000} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask Budget anything about your financial plan…" disabled={busy} /><div><span>Phase 3C-3 · AI may propose changes; Budget applies nothing without your approval.</span><button className="button primary" type="submit" disabled={busy || !input.trim()}>{busy ? "Thinking…" : "Ask Budget"}</button></div></form>
         </section>
       </div>
     </div>

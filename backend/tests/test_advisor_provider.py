@@ -4,7 +4,7 @@ import json
 from collections.abc import Iterator
 
 from app.core.config import Settings
-from app.integrations.advisor import OpenAIResponsesProvider, _partial_answer
+from app.integrations.advisor import OpenAIResponsesProvider, _partial_answer, _structured_json_text
 
 
 class FakeResponse:
@@ -89,7 +89,7 @@ def test_openai_plan_uses_store_false_and_strict_function_tools(monkeypatch) -> 
 def test_openai_stream_uses_structured_output_and_streams_answer_field(monkeypatch) -> None:
     reply_json = (
         '{"mode":"quick","headline":"Fits the plan","answer": '
-        '"Yes, based on Budget data.","confidence":"high","warnings":[],"suggested_questions":[]}'
+        '"Yes, based on Budget data.","confidence":"high","warnings":[],"suggested_questions":[],"action_plan_title":"","action_plan_summary":"","proposed_actions":[]}'
     )
     chunks = [reply_json[:70], reply_json[70:105], reply_json[105:]]
     lines = [
@@ -209,7 +209,7 @@ def test_gemini_stream_uses_structured_json_and_streams_answer_field(monkeypatch
 
     reply_json = (
         '{"mode":"quick","headline":"Fits the plan","answer": '
-        '"Yes, based on Budget data.","confidence":"high","warnings":[],"suggested_questions":[]}'
+        '"Yes, based on Budget data.","confidence":"high","warnings":[],"suggested_questions":[],"action_plan_title":"","action_plan_summary":"","proposed_actions":[]}'
     )
     chunks = [reply_json[:70], reply_json[70:105], reply_json[105:]]
     lines = [
@@ -255,6 +255,56 @@ def test_gemini_stream_uses_structured_json_and_streams_answer_field(monkeypatch
     generation = captured["generationConfig"]
     assert generation["responseMimeType"] == "application/json"
     assert generation["responseJsonSchema"] == __import__("app.integrations.advisor", fromlist=["RESPONSE_SCHEMA"]).RESPONSE_SCHEMA
+    assert generation["thinkingConfig"] == {"thinkingLevel": "low"}
+    assert generation["maxOutputTokens"] == 6000
+
+
+def test_gemini_stream_ignores_thought_parts_and_accepts_fenced_structured_json(monkeypatch) -> None:
+    from app.integrations.advisor import GeminiGenerateContentProvider
+
+    reply_json = (
+        '{"mode":"analysis","headline":"Review this plan","answer":"Budget can preview it.",'
+        '"confidence":"high","warnings":[],"suggested_questions":[],'
+        '"action_plan_title":"Free up cash","action_plan_summary":"Trim flexible spending.",'
+        '"proposed_actions":[{"action_type":"budget_category_monthly_set","target_id":4,'
+        '"value":"500.00","secondary_value":"2026-08","rationale":"Reduce flexible spending."}]}'
+    )
+    wrapped = "```json\n" + reply_json + "\n```"
+    chunks = [wrapped[:100], wrapped[100:220], wrapped[220:]]
+    lines = []
+    for index, chunk in enumerate(chunks):
+        parts = [{"text": "internal thought that is not JSON", "thought": True}, {"text": chunk}]
+        candidate = {"content": {"parts": parts}}
+        if index == len(chunks) - 1:
+            candidate["finishReason"] = "STOP"
+        lines.append(("data: " + json.dumps({"candidates": [candidate]}) + "\n").encode("utf-8"))
+
+    def fake_request(self, payload, *, stream=False):
+        assert stream is True
+        return FakeResponse(lines=lines)
+
+    monkeypatch.setattr(GeminiGenerateContentProvider, "_request", fake_request)
+    provider = GeminiGenerateContentProvider(_gemini_settings())
+    events = list(
+        provider.stream_answer(
+            message="Build a plan",
+            mode="analysis",
+            snapshot={},
+            history=[],
+            attached_insight=None,
+            tool_results=[],
+            facts=[],
+        )
+    )
+    done = next(value for event, value in events if event == "done")
+    assert done["headline"] == "Review this plan"
+    assert done["proposed_actions"][0]["target_id"] == 4
+
+
+def test_structured_json_text_recovers_markdown_fence_only() -> None:
+    assert _structured_json_text('```json\n{"answer":"ok"}\n```') == '{"answer":"ok"}'
+    assert _structured_json_text('prefix {"answer":"ok"} suffix') == '{"answer":"ok"}'
+    assert _structured_json_text('{"answer":"cut off"') == '{"answer":"cut off"'
 
 
 def test_provider_for_settings_supports_gemini() -> None:
