@@ -543,3 +543,7 @@ Phase 3D begins with owner-scoped daily `financial_snapshots`. `python -m app.cl
 ### Phase 3D Stage 2 spending and budget analytics
 
 The Reports workspace now adds deterministic transaction-derived spending/cash-flow and budget-performance views on top of the daily snapshot foundation. `GET /api/v1/reports/spending` supports 30-day, 3-month, 6-month, YTD, and 1-year ranges with income/spending/net cash flow series, prior-period category deltas, top merchants, recurring-vs-discretionary classification, and current-month spending pace. `GET /api/v1/reports/budget` exposes monthly budget-vs-actual rows plus current-year/YTD category utilization and projected year-end spend. Report tables link back to filtered Transactions rather than duplicating transaction detail storage. No new database migration is required for this checkpoint.
+
+### Phase 3D Stage 3 — goals, debt, and forecast analytics
+
+The Reports `Goals & Debt` section combines current goal progress, manual contribution activity, debt payoff modeling, daily reporting snapshots, and the existing deterministic 30/60/90-day forecast engine. Snapshot history drives aggregate goal/debt trajectories and lets Budget score matured forecasts against the actual spendable cash captured on the target date. Forecast accuracy remains empty until enough daily snapshot history exists; no historical values are reconstructed or invented.

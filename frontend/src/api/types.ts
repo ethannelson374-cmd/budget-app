@@ -790,3 +790,81 @@ export interface ReportsBudget {
   months: ReportsBudgetMonth[];
   categories: ReportsBudgetCategory[];
 }
+
+export interface ReportsGoalsDebtSummary {
+  goal_target: string;
+  goal_current: string;
+  goal_remaining: string;
+  goal_progress_pct: string | null;
+  monthly_goal_contributions: string;
+  goal_contributions_in_range: string;
+  total_debt: string;
+  planned_monthly_debt_payment: string;
+  interest_saved: string;
+  planned_debt_free_date: string | null;
+  reserve_balance: string;
+  projected_90_day: string;
+  forecast_accuracy_pct: string | null;
+}
+
+export interface ReportsGoal {
+  id: number;
+  name: string;
+  goal_type: string;
+  target_amount: string;
+  current_amount: string;
+  remaining_amount: string;
+  monthly_contribution: string;
+  progress_pct: string;
+  contributed_in_range: string;
+  target_date: string | null;
+  projected_date: string | null;
+}
+
+export interface ReportsDebt {
+  id: number;
+  name: string;
+  debt_type: string;
+  balance: string;
+  apr: string;
+  minimum_payment: string;
+  extra_payment: string;
+  planned_payment: string;
+  planned_payoff_date: string | null;
+  minimum_payoff_date: string | null;
+  interest_saved: string;
+}
+
+export interface ReportsTrajectoryPoint {
+  date: string;
+  goal_current: string;
+  goal_target: string;
+  total_debt: string;
+  cash_available: string;
+  spendable_cash: string;
+  safe_to_spend: string;
+  reserve_balance: string;
+  projected_90_day: string;
+}
+
+export interface ReportsForecastAccuracy {
+  origin_date: string;
+  horizon_days: 30 | 60 | 90;
+  target_date: string;
+  predicted_balance: string;
+  actual_balance: string;
+  error: string;
+  accuracy_pct: string;
+}
+
+export interface ReportsGoalsDebt {
+  generated_at: string;
+  currency: string;
+  range: ReportRange;
+  summary: ReportsGoalsDebtSummary;
+  goals: ReportsGoal[];
+  debts: ReportsDebt[];
+  trajectory: ReportsTrajectoryPoint[];
+  forecast: ForecastHorizon[];
+  accuracy: ReportsForecastAccuracy[];
+}

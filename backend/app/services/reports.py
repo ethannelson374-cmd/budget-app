@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.security import utc_now
-from app.models import Account, FinancialSnapshot, RecurringStream, Transaction, User
+from app.models import Account, FinancialSnapshot, GoalContribution, RecurringStream, Transaction, User
 from app.services.budget_planning import month_budget_view, year_budget_view
 from app.services.finance import dashboard_data
 from app.services.financial_planning import forecast_view, list_debts, list_goals
@@ -28,6 +28,10 @@ ReportRange = Literal["30d", "3m", "6m", "ytd", "1y"]
 
 def _decimal(value: object) -> Decimal:
     return Decimal(str(value))
+
+
+def _q(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.0001"))
 
 
 def _local_today(user: User) -> date:
@@ -593,4 +597,184 @@ def reports_budget(db: Session, user: User, range_key: ReportRange) -> dict[str,
         },
         "months": months,
         "categories": categories,
+    }
+
+
+
+def _forecast_accuracy_rows(rows: list[FinancialSnapshot]) -> list[dict[str, object]]:
+    by_date = {row.snapshot_date: row for row in rows}
+    output: list[dict[str, object]] = []
+    for origin in rows:
+        for horizon, field in ((30, "projected_30_day"), (60, "projected_60_day"), (90, "projected_90_day")):
+            target = origin.snapshot_date + timedelta(days=horizon)
+            actual = None
+            actual_date = None
+            for offset in range(0, 4):
+                candidate_date = target + timedelta(days=offset)
+                candidate = by_date.get(candidate_date)
+                if candidate is not None:
+                    actual = candidate
+                    actual_date = candidate_date
+                    break
+            if actual is None or actual_date is None:
+                continue
+            predicted = cast(Decimal, getattr(origin, field))
+            actual_spendable = _q(actual.cash_available - actual.goal_reserves)
+            error = _q(actual_spendable - predicted)
+            denominator = max(abs(actual_spendable), abs(predicted), Decimal("1"))
+            accuracy = max(
+                Decimal("0"),
+                Decimal("100") - (abs(error) / denominator * Decimal("100")),
+            )
+            output.append(
+                {
+                    "origin_date": origin.snapshot_date,
+                    "horizon_days": horizon,
+                    "target_date": actual_date,
+                    "predicted_balance": money(predicted),
+                    "actual_balance": money(actual_spendable),
+                    "error": money(error),
+                    "accuracy_pct": money(accuracy),
+                }
+            )
+    output.sort(key=lambda row: (cast(date, row["target_date"]), int(row["horizon_days"])), reverse=True)
+    return output[:18]
+
+
+def reports_goals_debt(db: Session, user: User, range_key: ReportRange) -> dict[str, object]:
+    bounds = _range_bounds(user, range_key)
+    start = cast(date, bounds["start"])
+    today = cast(date, bounds["end"])
+
+    goals_view = list_goals(db, user)
+    debts_view = list_debts(db, user)
+    forecast = forecast_view(db, user)
+
+    contribution_rows = list(
+        db.execute(
+            select(GoalContribution.goal_id, GoalContribution.amount).where(
+                GoalContribution.user_id == user.id,
+                GoalContribution.contribution_date >= start,
+                GoalContribution.contribution_date <= today,
+            )
+        ).all()
+    )
+    contribution_by_goal: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    contributions_total = Decimal("0")
+    for goal_id, amount in contribution_rows:
+        contribution_by_goal[int(goal_id)] += cast(Decimal, amount)
+        contributions_total += cast(Decimal, amount)
+
+    goal_rows: list[dict[str, object]] = []
+    for row in cast(list[dict[str, object]], goals_view["goals"]):
+        if not bool(row["active"]):
+            continue
+        goal_id = int(row["id"])
+        goal_rows.append(
+            {
+                "id": goal_id,
+                "name": row["name"],
+                "goal_type": row["goal_type"],
+                "target_amount": row["target_amount"],
+                "current_amount": row["current_amount"],
+                "remaining_amount": row["remaining_amount"],
+                "monthly_contribution": row["monthly_contribution"],
+                "progress_pct": row["progress_pct"],
+                "contributed_in_range": money(_q(contribution_by_goal[goal_id])),
+                "target_date": row["target_date"],
+                "projected_date": row["projected_date"],
+            }
+        )
+
+    debt_rows: list[dict[str, object]] = []
+    for row in cast(list[dict[str, object]], debts_view["debts"]):
+        if not bool(row["active"]) or _decimal(row["balance"]) <= 0:
+            continue
+        debt_rows.append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "debt_type": row["debt_type"],
+                "balance": row["balance"],
+                "apr": row["apr"],
+                "minimum_payment": row["minimum_payment"],
+                "extra_payment": row["extra_payment"],
+                "planned_payment": money(_decimal(row["minimum_payment"]) + _decimal(row["extra_payment"])),
+                "planned_payoff_date": row["planned_payoff_date"],
+                "minimum_payoff_date": row["minimum_payoff_date"],
+                "interest_saved": row["interest_saved"],
+            }
+        )
+
+    history_rows = list(
+        db.scalars(
+            select(FinancialSnapshot)
+            .where(
+                FinancialSnapshot.user_id == user.id,
+                FinancialSnapshot.snapshot_date >= start,
+                FinancialSnapshot.snapshot_date <= today,
+            )
+            .order_by(FinancialSnapshot.snapshot_date)
+        ).all()
+    )
+    trajectory = [
+        {
+            "date": row.snapshot_date,
+            "goal_current": money(row.total_goal_current),
+            "goal_target": money(row.total_goal_target),
+            "total_debt": money(row.total_debt),
+            "cash_available": money(row.cash_available),
+            "spendable_cash": money(_q(row.cash_available - row.goal_reserves)),
+            "safe_to_spend": money(row.safe_to_spend),
+            "reserve_balance": money(row.reserve_balance),
+            "projected_90_day": money(row.projected_90_day),
+        }
+        for row in history_rows
+    ]
+
+    accuracy_rows = _forecast_accuracy_rows(history_rows)
+    average_accuracy = None
+    if accuracy_rows:
+        average_accuracy = money(
+            sum((_decimal(row["accuracy_pct"]) for row in accuracy_rows), Decimal("0"))
+            / Decimal(len(accuracy_rows))
+        )
+
+    total_target = _decimal(goals_view["total_target"])
+    total_current = _decimal(goals_view["total_current"])
+    goal_progress = (
+        min(total_current / total_target * Decimal("100"), Decimal("100"))
+        if total_target > 0
+        else None
+    )
+    horizon_rows = cast(list[dict[str, object]], forecast["horizons"])
+    projected_90 = next(
+        (_decimal(row["projected_balance"]) for row in horizon_rows if int(row["days"]) == 90),
+        Decimal("0"),
+    )
+
+    return {
+        "generated_at": utc_now(),
+        "currency": user.settings.currency,
+        "range": bounds,
+        "summary": {
+            "goal_target": goals_view["total_target"],
+            "goal_current": goals_view["total_current"],
+            "goal_remaining": money(max(total_target - total_current, Decimal("0"))),
+            "goal_progress_pct": money(goal_progress),
+            "monthly_goal_contributions": goals_view["monthly_contributions"],
+            "goal_contributions_in_range": money(_q(contributions_total)),
+            "total_debt": debts_view["total_balance"],
+            "planned_monthly_debt_payment": debts_view["planned_monthly_payment"],
+            "interest_saved": debts_view["interest_saved"],
+            "planned_debt_free_date": debts_view["planned_debt_free_date"],
+            "reserve_balance": forecast["reserve_balance"],
+            "projected_90_day": money(projected_90),
+            "forecast_accuracy_pct": average_accuracy,
+        },
+        "goals": goal_rows,
+        "debts": debt_rows,
+        "trajectory": trajectory,
+        "forecast": horizon_rows,
+        "accuracy": accuracy_rows,
     }

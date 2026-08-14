@@ -1146,3 +1146,82 @@ class ReportsBudgetView(ViewModel):
     summary: ReportsBudgetSummaryView
     months: list[ReportsBudgetMonthView]
     categories: list[ReportsBudgetCategoryView]
+
+
+# Phase 3D — goals, debt, and forecast analytics
+class ReportsGoalsDebtSummaryView(ViewModel):
+    goal_target: str
+    goal_current: str
+    goal_remaining: str
+    goal_progress_pct: str | None
+    monthly_goal_contributions: str
+    goal_contributions_in_range: str
+    total_debt: str
+    planned_monthly_debt_payment: str
+    interest_saved: str
+    planned_debt_free_date: date | None
+    reserve_balance: str
+    projected_90_day: str
+    forecast_accuracy_pct: str | None
+
+
+class ReportsGoalView(ViewModel):
+    id: int
+    name: str
+    goal_type: GoalType
+    target_amount: str
+    current_amount: str
+    remaining_amount: str
+    monthly_contribution: str
+    progress_pct: str
+    contributed_in_range: str
+    target_date: date | None
+    projected_date: date | None
+
+
+class ReportsDebtView(ViewModel):
+    id: int
+    name: str
+    debt_type: DebtType
+    balance: str
+    apr: str
+    minimum_payment: str
+    extra_payment: str
+    planned_payment: str
+    planned_payoff_date: date | None
+    minimum_payoff_date: date | None
+    interest_saved: str
+
+
+class ReportsTrajectoryPointView(ViewModel):
+    date: date
+    goal_current: str
+    goal_target: str
+    total_debt: str
+    cash_available: str
+    spendable_cash: str
+    safe_to_spend: str
+    reserve_balance: str
+    projected_90_day: str
+
+
+class ReportsForecastAccuracyView(ViewModel):
+    origin_date: date
+    horizon_days: Literal[30, 60, 90]
+    target_date: date
+    predicted_balance: str
+    actual_balance: str
+    error: str
+    accuracy_pct: str
+
+
+class ReportsGoalsDebtView(ViewModel):
+    generated_at: datetime
+    currency: str
+    range: ReportRangeView
+    summary: ReportsGoalsDebtSummaryView
+    goals: list[ReportsGoalView]
+    debts: list[ReportsDebtView]
+    trajectory: list[ReportsTrajectoryPointView]
+    forecast: list[ForecastHorizonView]
+    accuracy: list[ReportsForecastAccuracyView]

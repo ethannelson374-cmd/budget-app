@@ -7,6 +7,7 @@ import type {
   ReportRangeKey,
   ReportsBudget,
   ReportsCashFlowPoint,
+  ReportsGoalsDebt,
   ReportsOverview,
   ReportsSpending,
 } from "../api/types";
@@ -166,6 +167,91 @@ function BudgetReport({ data }: { data: ReportsBudget }) {
   );
 }
 
+
+function MetricLineChart({
+  rows,
+  value,
+  currency,
+  label,
+}: {
+  rows: ReportsGoalsDebt["trajectory"];
+  value: (row: ReportsGoalsDebt["trajectory"][number]) => string;
+  currency: string;
+  label: string;
+}) {
+  if (!rows.length) return <EmptyState title="History is still being collected" message="Daily reporting snapshots will build this trend automatically." />;
+  const values = rows.map((row) => numberFromMoney(value(row)));
+  const low = Math.min(...values, 0);
+  const high = Math.max(...values, 1);
+  const span = Math.max(high - low, 1);
+  const points = rows.map((row, index) => {
+    const x = rows.length === 1 ? 360 : 28 + index / (rows.length - 1) * 664;
+    const y = 190 - ((numberFromMoney(value(row)) - low) / span) * 150;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <div className="reports-line-chart-wrap">
+      <svg className="reports-line-chart" viewBox="0 0 720 220" role="img" aria-label={label}>
+        <line x1="28" y1="190" x2="692" y2="190" className="reports-axis" />
+        <polyline points={points} className="reports-line-primary" />
+        {points.split(" ").map((point, index) => {
+          const [cx, cy] = point.split(",");
+          return <circle key={`${rows[index].date}-${index}`} cx={cx} cy={cy} r="4" className="reports-line-dot"><title>{formatDate(rows[index].date, true)} · {formatMoney(value(rows[index]), currency)}</title></circle>;
+        })}
+      </svg>
+      <div className="reports-line-chart-labels"><span>{formatDate(rows[0].date, true)}</span><strong>{formatMoney(value(rows[rows.length - 1]), currency)}</strong><span>{formatDate(rows[rows.length - 1].date, true)}</span></div>
+    </div>
+  );
+}
+
+function GoalsDebtReport({ data }: { data: ReportsGoalsDebt }) {
+  const goalProgress = data.summary.goal_progress_pct === null ? "—" : formatPercent(data.summary.goal_progress_pct);
+  return (
+    <div className="reports-stack">
+      <section className="reports-kpis">
+        <article className="panel report-kpi"><span>Goal progress</span><strong className="amount positive">{goalProgress}</strong><small><Amount value={data.summary.goal_current} currency={data.currency} /> of <Amount value={data.summary.goal_target} currency={data.currency} /></small></article>
+        <article className="panel report-kpi"><span>Total debt</span><Amount value={data.summary.total_debt} currency={data.currency} /><small>Planned payment <Amount value={data.summary.planned_monthly_debt_payment} currency={data.currency} />/month</small></article>
+        <article className="panel report-kpi"><span>Interest saved</span><Amount value={data.summary.interest_saved} currency={data.currency} /><small>Compared with minimum-only payoff</small></article>
+        <article className="panel report-kpi"><span>90-day projected cash</span><Amount value={data.summary.projected_90_day} currency={data.currency} /><small>Reserve target <Amount value={data.summary.reserve_balance} currency={data.currency} /></small></article>
+      </section>
+
+      <div className="reports-two-column">
+        <section className="panel reports-analytics-panel">
+          <div className="reports-section-heading"><div><span className="eyebrow">Goals</span><h2>Goal balance trajectory</h2></div><span className="reports-range">{data.range.label}</span></div>
+          <MetricLineChart rows={data.trajectory} value={(row) => row.goal_current} currency={data.currency} label="Goal balance history" />
+        </section>
+        <section className="panel reports-analytics-panel">
+          <div className="reports-section-heading"><div><span className="eyebrow">Debt</span><h2>Debt balance trajectory</h2></div><span className="reports-range">{data.range.label}</span></div>
+          <MetricLineChart rows={data.trajectory} value={(row) => row.total_debt} currency={data.currency} label="Debt balance history" />
+        </section>
+      </div>
+
+      <section className="panel reports-analytics-panel">
+        <div className="reports-section-heading"><div><span className="eyebrow">Goals</span><h2>Active goal progress</h2></div><span className="reports-range">Contributed {formatMoney(data.summary.goal_contributions_in_range, data.currency)} in range</span></div>
+        {data.goals.length ? <div className="reports-goal-list">{data.goals.map((goal) => {
+          const progress = Math.max(0, Math.min(100, numberFromMoney(goal.progress_pct)));
+          return <article className="reports-goal-row" key={goal.id}><div className="reports-goal-heading"><div><strong>{goal.name}</strong><small>{goal.goal_type.replaceAll("_", " ")} · projected {goal.projected_date ? formatDate(goal.projected_date, true) : "—"}</small></div><span>{formatPercent(goal.progress_pct)}</span></div><div className="reports-goal-progress"><span style={{ width: `${progress}%` }} /></div><div className="reports-goal-meta"><span><Amount value={goal.current_amount} currency={data.currency} /> of <Amount value={goal.target_amount} currency={data.currency} /></span><span><Amount value={goal.monthly_contribution} currency={data.currency} />/mo</span><span>{formatMoney(goal.contributed_in_range, data.currency)} added in range</span></div></article>;
+        })}</div> : <EmptyState title="No active goals" message="Create a goal on the Plan page to track progress here." />}
+      </section>
+
+      <section className="panel reports-analytics-panel">
+        <div className="reports-section-heading"><div><span className="eyebrow">Debt payoff</span><h2>Current payoff plan</h2></div><span className="reports-range">Debt-free {data.summary.planned_debt_free_date ? formatDate(data.summary.planned_debt_free_date, true) : "—"}</span></div>
+        {data.debts.length ? <div className="reports-table-wrap"><table className="reports-data-table"><thead><tr><th>Debt</th><th>Balance</th><th>APR</th><th>Payment</th><th>Planned payoff</th><th>Interest saved</th></tr></thead><tbody>{data.debts.map((debt) => <tr key={debt.id}><td>{debt.name}</td><td><Amount value={debt.balance} currency={data.currency} /></td><td>{formatPercent(debt.apr)}</td><td><Amount value={debt.planned_payment} currency={data.currency} /></td><td>{debt.planned_payoff_date ? formatDate(debt.planned_payoff_date, true) : "—"}</td><td><Amount value={debt.interest_saved} currency={data.currency} /></td></tr>)}</tbody></table></div> : <EmptyState title="No active debt" message="Tracked debts will appear here with payoff timing and interest savings." />}
+      </section>
+
+      <section className="panel reports-analytics-panel">
+        <div className="reports-section-heading"><div><span className="eyebrow">Forecast</span><h2>30 / 60 / 90-day outlook</h2></div><span className="reports-range">Deterministic forecast</span></div>
+        <div className="reports-forecast-grid">{data.forecast.map((row) => <article className="reports-forecast-card" key={row.days}><span>{row.days} days</span><Amount value={row.projected_balance} currency={data.currency} /><small>{formatDate(row.date, true)} · <span className={changeClass(row.above_reserve)}>reserve delta {formatMoney(row.above_reserve, data.currency, { showSign: true })}</span></small></article>)}</div>
+      </section>
+
+      <section className="panel reports-analytics-panel">
+        <div className="reports-section-heading"><div><span className="eyebrow">Calibration</span><h2>Forecast accuracy</h2></div><span className="reports-range">{data.summary.forecast_accuracy_pct === null ? "Collecting history" : `Average ${formatPercent(data.summary.forecast_accuracy_pct)}`}</span></div>
+        {data.accuracy.length ? <div className="reports-table-wrap"><table className="reports-data-table"><thead><tr><th>Forecast made</th><th>Horizon</th><th>Predicted</th><th>Actual spendable cash</th><th>Error</th><th>Accuracy</th></tr></thead><tbody>{data.accuracy.map((row) => <tr key={`${row.origin_date}-${row.horizon_days}`}><td>{formatDate(row.origin_date, true)}</td><td>{row.horizon_days} days</td><td><Amount value={row.predicted_balance} currency={data.currency} /></td><td><Amount value={row.actual_balance} currency={data.currency} /></td><td><Amount value={row.error} currency={data.currency} signed /></td><td>{formatPercent(row.accuracy_pct)}</td></tr>)}</tbody></table></div> : <EmptyState title="Forecast accuracy needs time" message="Once a 30, 60, or 90-day forecast matures, Budget will compare it with the actual spendable cash captured on that date." />}
+      </section>
+    </div>
+  );
+}
+
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>("overview");
   const [range, setRange] = useState<ReportRangeKey>("6m");
@@ -173,7 +259,8 @@ export function ReportsPage() {
   const overview = useQuery({ queryKey: queryKeys.reportsOverview(days), queryFn: () => apiRequest<ReportsOverview>(`/reports/overview?days=${days}`), staleTime: 60_000, enabled: tab === "overview" });
   const spending = useQuery({ queryKey: queryKeys.reportsSpending(range), queryFn: () => apiRequest<ReportsSpending>(`/reports/spending?range=${range}`), staleTime: 60_000, enabled: tab === "spending" });
   const budget = useQuery({ queryKey: queryKeys.reportsBudget(range), queryFn: () => apiRequest<ReportsBudget>(`/reports/budget?range=${range}`), staleTime: 60_000, enabled: tab === "budget" });
-  const activeQuery = tab === "overview" ? overview : tab === "spending" ? spending : budget;
+  const goalsDebt = useQuery({ queryKey: queryKeys.reportsGoalsDebt(range), queryFn: () => apiRequest<ReportsGoalsDebt>(`/reports/goals-debt?range=${range}`), staleTime: 60_000, enabled: tab === "goals" });
+  const activeQuery = tab === "overview" ? overview : tab === "spending" ? spending : tab === "budget" ? budget : goalsDebt;
 
   return (
     <div className="page-container reports-page">
@@ -183,7 +270,7 @@ export function ReportsPage() {
           <button type="button" className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</button>
           <button type="button" className={tab === "spending" ? "active" : ""} onClick={() => setTab("spending")}>Spending</button>
           <button type="button" className={tab === "budget" ? "active" : ""} onClick={() => setTab("budget")}>Budget</button>
-          <button type="button" disabled title="Goals & Debt analytics arrive in the next 3D checkpoint">Goals &amp; Debt</button>
+          <button type="button" className={tab === "goals" ? "active" : ""} onClick={() => setTab("goals")}>Goals &amp; Debt</button>
         </div>
         <div className="segmented-control reports-range-control" aria-label="Report range">{ranges.map((item) => <button type="button" key={item.key} className={range === item.key ? "active" : ""} onClick={() => setRange(item.key)}>{item.label}</button>)}</div>
       </div>
@@ -193,6 +280,7 @@ export function ReportsPage() {
       {tab === "overview" && overview.data && <OverviewReport data={overview.data} days={days} />}
       {tab === "spending" && spending.data && <SpendingReport data={spending.data} />}
       {tab === "budget" && budget.data && <BudgetReport data={budget.data} />}
+      {tab === "goals" && goalsDebt.data && <GoalsDebtReport data={goalsDebt.data} />}
     </div>
   );
 }

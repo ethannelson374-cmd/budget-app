@@ -844,3 +844,35 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .reports-category-bar { grid-column: 1 / -1; order: 3; }
   .reports-split-values { grid-template-columns: 1fr; }
 }
+
+/* Phase 3D Stage 3 — goals, debt, and forecast analytics */
+.reports-line-chart-wrap { display: grid; gap: 8px; margin-top: 10px; }
+.reports-line-chart { width: 100%; min-height: 210px; overflow: visible; }
+.reports-axis { stroke: var(--border); stroke-width: 1; }
+.reports-line-primary { fill: none; stroke: var(--brand); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.reports-line-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
+.reports-line-chart-labels { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; color: var(--text-muted); font-size: .74rem; }
+.reports-line-chart-labels strong { color: var(--text); font-size: .92rem; }
+.reports-line-chart-labels span:last-child { text-align: right; }
+.reports-goal-list { display: grid; margin-top: 8px; }
+.reports-goal-row { display: grid; gap: 10px; padding: 14px 4px; border-bottom: 1px solid var(--border); }
+.reports-goal-row:last-child { border-bottom: 0; }
+.reports-goal-heading { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
+.reports-goal-heading > div { display: grid; gap: 4px; }
+.reports-goal-heading small, .reports-goal-meta { color: var(--text-muted); font-size: .76rem; }
+.reports-goal-heading > span { color: var(--brand); font-weight: 800; white-space: nowrap; }
+.reports-goal-progress { height: 9px; overflow: hidden; border-radius: 999px; background: var(--surface-muted); border: 1px solid var(--border); }
+.reports-goal-progress span { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
+.reports-goal-meta { display: flex; gap: 18px; flex-wrap: wrap; }
+.reports-forecast-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.reports-forecast-card { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-muted); }
+.reports-forecast-card > span:first-child { color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; font-weight: 800; }
+.reports-forecast-card .amount { font-size: 1.25rem; }
+.reports-forecast-card small { color: var(--text-muted); line-height: 1.45; }
+.reports-forecast-card .positive { color: var(--positive); }
+.reports-forecast-card .negative { color: var(--negative); }
+@media (max-width: 760px) {
+  .reports-forecast-grid { grid-template-columns: 1fr; }
+  .reports-goal-heading { align-items: center; }
+  .reports-goal-meta { display: grid; gap: 5px; }
+}

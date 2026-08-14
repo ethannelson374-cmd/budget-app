@@ -32,6 +32,26 @@ const budget = {
   categories: [{ category_id: 3, key: "groceries", name: "Groceries", planned_amount: "7200.0000", ytd_planned_amount: "4800.0000", spent_amount: "3600.0000", remaining_amount: "3600.0000", percent_used: "50.0000", ytd_variance: "1200.0000", annual_variance: "3600.0000" }],
 };
 
+
+const goalsDebt = {
+  generated_at: "2026-08-14T12:00:00Z", currency: "USD", range,
+  summary: {
+    goal_target: "42000.0000", goal_current: "6000.0000", goal_remaining: "36000.0000", goal_progress_pct: "14.2857",
+    monthly_goal_contributions: "750.0000", goal_contributions_in_range: "900.0000", total_debt: "8200.0000",
+    planned_monthly_debt_payment: "650.0000", interest_saved: "420.0000", planned_debt_free_date: "2027-12-01",
+    reserve_balance: "1500.0000", projected_90_day: "4200.0000", forecast_accuracy_pct: null,
+  },
+  goals: [{ id: 1, name: "Emergency Fund", goal_type: "emergency_fund", target_amount: "42000.0000", current_amount: "6000.0000", remaining_amount: "36000.0000", monthly_contribution: "750.0000", progress_pct: "14.2857", contributed_in_range: "900.0000", target_date: null, projected_date: "2030-08-14" }],
+  debts: [{ id: 2, name: "Rewards Card", debt_type: "credit_card", balance: "8200.0000", apr: "22.9900", minimum_payment: "250.0000", extra_payment: "400.0000", planned_payment: "650.0000", planned_payoff_date: "2027-12-01", minimum_payoff_date: "2029-02-01", interest_saved: "420.0000" }],
+  trajectory: [{ date: "2026-07-14", goal_current: "5200.0000", goal_target: "42000.0000", total_debt: "9000.0000", cash_available: "9500.0000", spendable_cash: "8200.0000", safe_to_spend: "3000.0000", reserve_balance: "1500.0000", projected_90_day: "3800.0000" }, { date: "2026-08-14", goal_current: "6000.0000", goal_target: "42000.0000", total_debt: "8200.0000", cash_available: "10000.0000", spendable_cash: "8500.0000", safe_to_spend: "3400.0000", reserve_balance: "1500.0000", projected_90_day: "4200.0000" }],
+  forecast: [
+    { days: 30, date: "2026-09-13", starting_cash: "8500.0000", income: "5000.0000", recurring_expenses: "2500.0000", budget_reserve: "1000.0000", debt_payments: "650.0000", goal_contributions: "750.0000", new_expenses: "0.0000", projected_balance: "8600.0000", above_reserve: "7100.0000" },
+    { days: 60, date: "2026-10-13", starting_cash: "8500.0000", income: "10000.0000", recurring_expenses: "5000.0000", budget_reserve: "2000.0000", debt_payments: "1300.0000", goal_contributions: "1500.0000", new_expenses: "0.0000", projected_balance: "8700.0000", above_reserve: "7200.0000" },
+    { days: 90, date: "2026-11-12", starting_cash: "8500.0000", income: "15000.0000", recurring_expenses: "7500.0000", budget_reserve: "3000.0000", debt_payments: "1950.0000", goal_contributions: "2250.0000", new_expenses: "0.0000", projected_balance: "8800.0000", above_reserve: "7300.0000" },
+  ],
+  accuracy: [],
+};
+
 function renderReports() {
   return render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ReportsPage /></QueryClientProvider></MemoryRouter>);
 }
@@ -41,6 +61,7 @@ describe("ReportsPage", () => {
     vi.mocked(apiRequest).mockImplementation(async (path) => {
       if (path.startsWith("/reports/spending")) return spending as never;
       if (path.startsWith("/reports/budget")) return budget as never;
+      if (path.startsWith("/reports/goals-debt")) return goalsDebt as never;
       return overview as never;
     });
   });
@@ -72,6 +93,19 @@ describe("ReportsPage", () => {
     expect(await screen.findByRole("heading", { name: "Budget vs actual" })).toBeInTheDocument();
     expect(screen.getByText("Annual budget utilization")).toBeInTheDocument();
     expect(screen.getByText("$32,400.00")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Goals & Debt" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Goals & Debt" })).toBeEnabled();
   });
+
+  it("switches to goals, debt, and forecast analytics", async () => {
+    const user = userEvent.setup();
+    renderReports();
+    await user.click(screen.getByRole("button", { name: "Goals & Debt" }));
+    expect(await screen.findByRole("heading", { name: "Active goal progress" })).toBeInTheDocument();
+    expect(screen.getByText("Emergency Fund")).toBeInTheDocument();
+    expect(screen.getByText("Rewards Card")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "30 / 60 / 90-day outlook" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Forecast accuracy" })).toBeInTheDocument();
+    expect(screen.getByText("Forecast accuracy needs time")).toBeInTheDocument();
+  });
+
 });
