@@ -996,3 +996,36 @@ class AdvisorProposalView(ViewModel):
     applied_at: datetime | None
     rejected_at: datetime | None
     undone_at: datetime | None
+
+
+# Phase 3D — reporting snapshots and overview
+class FinancialSnapshotView(ViewModel):
+    snapshot_date: date
+    currency: str
+    net_worth: str
+    cash_available: str
+    planned_income: str
+    actual_income: str
+    budgeted: str
+    spent: str
+    safe_to_spend: str
+    planning_commitments: str
+    goal_reserves: str
+    total_goal_target: str
+    total_goal_current: str
+    monthly_goal_contributions: str
+    total_debt: str
+    planned_monthly_debt_payment: str
+    reserve_balance: str
+    projected_30_day: str
+    projected_60_day: str
+    projected_90_day: str
+    planned_debt_free_date: date | None
+    captured_at: datetime
+
+
+class ReportsOverviewView(ViewModel):
+    generated_at: datetime
+    currency: str
+    current: FinancialSnapshotView
+    history: list[FinancialSnapshotView]

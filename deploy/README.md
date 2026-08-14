@@ -427,3 +427,18 @@ deterministic before/after preview; nothing changes before approval; Apply updat
 only the displayed Budget/Plan settings; Undo restores them; changing a target after
 proposal creation causes a stale-plan `409` rather than overwriting the newer value;
 and private Advisor mode does not create a proposal.
+
+
+## Reporting snapshots (Phase 3D)
+
+Install the hourly snapshot worker alongside the existing Plaid sync timer:
+
+```bash
+sudo cp /opt/budget-app/current/deploy/systemd/budget-snapshot.service /etc/systemd/system/budget-snapshot.service
+sudo cp /opt/budget-app/current/deploy/systemd/budget-snapshot.timer /etc/systemd/system/budget-snapshot.timer
+sudo systemctl daemon-reload
+sudo systemd-analyze verify /etc/systemd/system/budget-snapshot.service /etc/systemd/system/budget-snapshot.timer
+sudo systemctl enable --now budget-snapshot.timer
+```
+
+The timer wakes hourly. The command upserts the current local calendar day's snapshot for each user, so repeated runs are safe and do not create duplicate daily history.

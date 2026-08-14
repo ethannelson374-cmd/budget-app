@@ -1,0 +1,13 @@
+[Unit]
+Description=Capture Budget reporting snapshots hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+AccuracySec=5min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=budget-snapshot.service
+
+[Install]
+WantedBy=timers.target

@@ -534,3 +534,8 @@ Advisor action APIs:
 Migration `20260814_0010` adds owner-scoped proposals, proposal actions, deterministic
 preview/rollback state, and apply/undo execution history. It adds no new external
 runtime dependency.
+
+
+### Phase 3D reporting snapshots
+
+Phase 3D begins with owner-scoped daily `financial_snapshots`. `python -m app.cli snapshot-reports` upserts one row per user per local calendar day, preserving deterministic Budget, goal, debt, and forecast metrics for historical reporting. The supplied `budget-snapshot.timer` runs hourly so every timezone receives at least one daily capture without tying snapshot timing to the host timezone. The Reports page reads live current values plus stored snapshot history; later 3D checkpoints add transaction-derived spending/budget analytics, goal/debt history, exports, and Advisor report context.

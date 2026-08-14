@@ -15,6 +15,7 @@ import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
 import { PlanPage } from "../pages/PlanPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { RecurringPage } from "../pages/RecurringPage";
+import { ReportsPage } from "../pages/ReportsPage";
 import { SetupPage } from "../pages/SetupPage";
 import { TransactionsPage } from "../pages/TransactionsPage";
 
@@ -107,6 +108,7 @@ export function App() {
         <Route path="/recurring" element={<RecurringPage />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/advisor" element={<AdvisorPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

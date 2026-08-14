@@ -28,6 +28,7 @@ from app.models import (
     DebtStrategySettings,
     FinancialGoal,
     FinancialInstitution,
+    FinancialSnapshot,
     ForecastAssumptions,
     GoalContribution,
     InstallationState,
@@ -43,6 +44,7 @@ from app.models import (
 from app.services.auth import add_audit_event, revoke_user_sessions
 from app.services.catalog import DEFAULT_CATEGORIES
 from app.services.plaid_transactions import sync_all_plaid_items
+from app.services.reports import capture_all_snapshots
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -91,6 +93,7 @@ def reset_demo(settings: Settings) -> None:
         with database.session_factory() as db:
             for model in (
                 GoalContribution,
+                FinancialSnapshot,
                 Debt,
                 DebtStrategySettings,
                 FinancialGoal,
@@ -560,6 +563,15 @@ def sync_plaid(settings: Settings, item_id: int | None = None) -> dict[str, int]
 
 
 
+def snapshot_reports(settings: Settings) -> dict[str, int]:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            return capture_all_snapshots(db)
+    finally:
+        database.engine.dispose()
+
+
 def parser() -> argparse.ArgumentParser:
     command_parser = argparse.ArgumentParser(prog="python -m app.cli")
     subcommands = command_parser.add_subparsers(dest="command", required=True)
@@ -575,6 +587,9 @@ def parser() -> argparse.ArgumentParser:
         "--item-id",
         type=int,
         help="Synchronize only one internal Plaid connection id",
+    )
+    subcommands.add_parser(
+        "snapshot-reports", help="Capture or refresh today's reporting snapshot for every user"
     )
     return command_parser
 
@@ -593,6 +608,14 @@ def main(argv: list[str] | None = None) -> int:
             result = sync_plaid(settings, args.item_id)
             print(
                 f"Plaid transaction sync complete: {result['succeeded']} succeeded, "
+                f"{result['failed']} failed."
+            )
+            if result["failed"]:
+                return 1
+        elif args.command == "snapshot-reports":
+            result = snapshot_reports(settings)
+            print(
+                f"Reporting snapshot capture complete: {result['succeeded']} succeeded, "
                 f"{result['failed']} failed."
             )
             if result["failed"]:

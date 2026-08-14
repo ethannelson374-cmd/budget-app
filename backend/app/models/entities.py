@@ -648,6 +648,40 @@ class ForecastAssumptions(TimestampMixin, Base):
     include_budget_reserve: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class FinancialSnapshot(TimestampMixin, Base):
+    __tablename__ = "financial_snapshots"
+    __table_args__ = (
+        UniqueConstraint("user_id", "snapshot_date", name="uq_financial_snapshot_user_date"),
+        Index("ix_financial_snapshots_user_date", "user_id", "snapshot_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    net_worth: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    cash_available: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    planned_income: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    actual_income: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    budgeted: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    spent: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    safe_to_spend: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    planning_commitments: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    goal_reserves: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    total_goal_target: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    total_goal_current: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    monthly_goal_contributions: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    total_debt: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    planned_monthly_debt_payment: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    reserve_balance: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    projected_30_day: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    projected_60_day: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    projected_90_day: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    planned_debt_free_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
 class InsightRecord(TimestampMixin, Base):
     __tablename__ = "insight_records"
     __table_args__ = (

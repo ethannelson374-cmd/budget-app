@@ -689,3 +689,36 @@ export interface AdvisorMessage {
 
 export interface AdvisorConversationList { conversations: AdvisorConversation[]; }
 export interface AdvisorConversationDetail { conversation: AdvisorConversation; messages: AdvisorMessage[]; }
+
+
+export interface FinancialSnapshot {
+  snapshot_date: string;
+  currency: string;
+  net_worth: string;
+  cash_available: string;
+  planned_income: string;
+  actual_income: string;
+  budgeted: string;
+  spent: string;
+  safe_to_spend: string;
+  planning_commitments: string;
+  goal_reserves: string;
+  total_goal_target: string;
+  total_goal_current: string;
+  monthly_goal_contributions: string;
+  total_debt: string;
+  planned_monthly_debt_payment: string;
+  reserve_balance: string;
+  projected_30_day: string;
+  projected_60_day: string;
+  projected_90_day: string;
+  planned_debt_free_date: string | null;
+  captured_at: string;
+}
+
+export interface ReportsOverview {
+  generated_at: string;
+  currency: string;
+  current: FinancialSnapshot;
+  history: FinancialSnapshot[];
+}

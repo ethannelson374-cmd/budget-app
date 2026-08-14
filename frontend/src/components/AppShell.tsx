@@ -14,6 +14,7 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/recurring", label: "Recurring", icon: "repeat" },
   { to: "/insights", label: "Insights", icon: "sparkles" },
   { to: "/advisor", label: "Advisor", icon: "message" },
+  { to: "/reports", label: "Reports", icon: "reports" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 
