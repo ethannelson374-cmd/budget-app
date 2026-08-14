@@ -539,3 +539,7 @@ runtime dependency.
 ### Phase 3D reporting snapshots
 
 Phase 3D begins with owner-scoped daily `financial_snapshots`. `python -m app.cli snapshot-reports` upserts one row per user per local calendar day, preserving deterministic Budget, goal, debt, and forecast metrics for historical reporting. The supplied `budget-snapshot.timer` runs hourly so every timezone receives at least one daily capture without tying snapshot timing to the host timezone. The Reports page reads live current values plus stored snapshot history; later 3D checkpoints add transaction-derived spending/budget analytics, goal/debt history, exports, and Advisor report context.
+
+### Phase 3D Stage 2 spending and budget analytics
+
+The Reports workspace now adds deterministic transaction-derived spending/cash-flow and budget-performance views on top of the daily snapshot foundation. `GET /api/v1/reports/spending` supports 30-day, 3-month, 6-month, YTD, and 1-year ranges with income/spending/net cash flow series, prior-period category deltas, top merchants, recurring-vs-discretionary classification, and current-month spending pace. `GET /api/v1/reports/budget` exposes monthly budget-vs-actual rows plus current-year/YTD category utilization and projected year-end spend. Report tables link back to filtered Transactions rather than duplicating transaction detail storage. No new database migration is required for this checkpoint.

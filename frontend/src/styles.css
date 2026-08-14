@@ -780,3 +780,67 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
 .reports-snapshot-table th { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 980px) { .reports-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .reports-kpis { grid-template-columns: 1fr; } .reports-section-heading { flex-direction: column; } .reports-tabs { width: 100%; overflow-x: auto; } }
+
+/* Phase 3D Stage 2 — spending, cash-flow, and budget analytics */
+.reports-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+.reports-toolbar .reports-tabs { margin-bottom: 0; }
+.reports-range-control { margin-left: auto; }
+.reports-stack { display: grid; gap: 18px; }
+.reports-analytics-panel { padding: 18px; overflow: hidden; }
+.reports-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.reports-chart-scroll { overflow-x: auto; padding-top: 12px; }
+.reports-bar-chart { min-width: max(620px, calc(var(--report-columns, 6) * 54px)); height: 280px; display: grid; grid-template-columns: repeat(var(--report-columns, 6), minmax(34px, 1fr)); gap: 9px; align-items: stretch; border-bottom: 1px solid var(--border); padding: 12px 4px 0; }
+.reports-chart-column { min-width: 0; display: grid; grid-template-rows: 1fr auto; gap: 8px; }
+.reports-chart-bars { display: flex; gap: 4px; align-items: end; justify-content: center; min-height: 220px; }
+.reports-chart-bars > span { display: block; width: min(18px, 42%); min-height: 0; border-radius: 5px 5px 1px 1px; transition: height .2s ease; }
+.reports-chart-bars .income-bar { background: color-mix(in srgb, var(--brand) 78%, white 5%); }
+.reports-chart-bars .spending-bar { background: color-mix(in srgb, var(--negative) 74%, var(--text) 8%); }
+.reports-chart-bars .budget-bar { background: color-mix(in srgb, var(--text-muted) 62%, var(--surface)); }
+.reports-chart-column small { color: var(--text-muted); text-align: center; white-space: nowrap; font-size: .7rem; }
+.reports-chart-legend { display: flex; justify-content: flex-end; gap: 18px; padding-top: 10px; color: var(--text-muted); font-size: .75rem; }
+.reports-chart-legend span { display: flex; align-items: center; gap: 6px; }
+.reports-chart-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.reports-chart-legend .income-swatch { background: color-mix(in srgb, var(--brand) 78%, white 5%); }
+.reports-chart-legend .spending-swatch { background: color-mix(in srgb, var(--negative) 74%, var(--text) 8%); }
+.reports-chart-legend .budget-swatch { background: color-mix(in srgb, var(--text-muted) 62%, var(--surface)); }
+.reports-split-bar { height: 18px; display: flex; overflow: hidden; border-radius: 999px; background: var(--surface-muted); margin: 20px 0 14px; border: 1px solid var(--border); }
+.reports-split-bar span { background: var(--brand); height: 100%; }
+.reports-split-bar i { flex: 1; background: color-mix(in srgb, var(--text-muted) 50%, transparent); height: 100%; }
+.reports-split-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reports-split-values > div { display: grid; gap: 4px; padding: 12px; border-radius: 10px; background: var(--surface-muted); }
+.reports-split-values span:first-child { color: var(--text-muted); font-size: .78rem; }
+.reports-callout { min-height: 112px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.reports-callout strong { font-size: 1.7rem; letter-spacing: -.04em; }
+.reports-callout span { color: var(--text-muted); }
+.reports-category-list { display: grid; margin-top: 10px; }
+.reports-category-row { display: grid; grid-template-columns: minmax(170px, 1.3fr) minmax(180px, 2fr) auto auto; align-items: center; gap: 14px; padding: 11px 4px; border-bottom: 1px solid var(--border); color: inherit; text-decoration: none; }
+.reports-category-row:last-child { border-bottom: 0; }
+.reports-category-row:hover strong { color: var(--brand); }
+.reports-category-row > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.reports-category-row small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reports-category-bar { height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+.reports-category-bar span { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
+.reports-delta { min-width: 58px; text-align: right; font-size: .78rem; font-weight: 700; }
+.reports-table-wrap { overflow-x: auto; margin-top: 10px; }
+.reports-data-table { width: 100%; min-width: 720px; border-collapse: collapse; }
+.reports-data-table th, .reports-data-table td { padding: 11px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.reports-data-table th:first-child, .reports-data-table td:first-child { text-align: left; }
+.reports-data-table th { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.reports-data-table tbody tr:last-child td { border-bottom: 0; }
+.report-kpi small .amount { font-size: inherit; font-weight: 700; letter-spacing: normal; }
+.report-kpi small.positive { color: var(--positive); }
+.report-kpi small.negative { color: var(--negative); }
+.report-kpi small.neutral { color: var(--text-muted); }
+@media (max-width: 980px) {
+  .reports-two-column { grid-template-columns: 1fr; }
+  .reports-range-control { margin-left: 0; width: 100%; overflow-x: auto; }
+  .reports-category-row { grid-template-columns: minmax(150px, 1fr) minmax(130px, 1fr) auto; }
+  .reports-category-row .reports-delta { display: none; }
+}
+@media (max-width: 650px) {
+  .reports-toolbar { align-items: stretch; }
+  .reports-toolbar .segmented-control { width: 100%; overflow-x: auto; }
+  .reports-category-row { grid-template-columns: 1fr auto; }
+  .reports-category-bar { grid-column: 1 / -1; order: 3; }
+  .reports-split-values { grid-template-columns: 1fr; }
+}

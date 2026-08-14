@@ -722,3 +722,71 @@ export interface ReportsOverview {
   current: FinancialSnapshot;
   history: FinancialSnapshot[];
 }
+
+export type ReportRangeKey = "30d" | "3m" | "6m" | "ytd" | "1y";
+
+export interface ReportRange {
+  key: ReportRangeKey;
+  label: string;
+  start: string;
+  end: string;
+  previous_start: string;
+  previous_end: string;
+  bucket: "day" | "month";
+}
+
+export interface ReportsSpendingSummary {
+  income: string;
+  spending: string;
+  net_cash_flow: string;
+  savings_rate: string | null;
+  spending_change_amount: string;
+  spending_change_pct: string | null;
+  income_change_pct: string | null;
+  net_cash_flow_change_pct: string | null;
+  current_month_spending: string;
+  projected_month_spending: string;
+}
+
+export interface ReportsCashFlowPoint { period: string; income: string; spending: string; net_cash_flow: string; }
+export interface ReportsCategoryTrend { category_id: number | null; key: string; name: string; amount: string; previous_amount: string; change_amount: string; change_pct: string | null; transaction_count: number; }
+export interface ReportsMerchant { name: string; category: string; amount: string; transaction_count: number; }
+export interface ReportsRecurringSplit { recurring: string; discretionary: string; total: string; }
+
+export interface ReportsSpending {
+  generated_at: string;
+  currency: string;
+  range: ReportRange;
+  summary: ReportsSpendingSummary;
+  series: ReportsCashFlowPoint[];
+  categories: ReportsCategoryTrend[];
+  top_merchants: ReportsMerchant[];
+  recurring: ReportsRecurringSplit;
+}
+
+export interface ReportsBudgetSummary {
+  planned_income: string;
+  ytd_planned_income: string;
+  actual_income: string;
+  budgeted: string;
+  spent: string;
+  remaining: string;
+  unallocated: string;
+  income_variance: string;
+  budget_utilization_pct: string | null;
+  projected_year_end_spend: string;
+}
+
+export interface ReportsBudgetMonth { month: string; source: string; planned_income: string; actual_income: string; budgeted: string; spent: string; remaining: string; utilization_pct: string | null; }
+export interface ReportsBudgetCategory { category_id: number; key: string; name: string; planned_amount: string; ytd_planned_amount: string; spent_amount: string; remaining_amount: string; percent_used: string | null; ytd_variance: string; annual_variance: string; }
+
+export interface ReportsBudget {
+  generated_at: string;
+  currency: string;
+  range: ReportRange;
+  year: number;
+  has_annual_plan: boolean;
+  summary: ReportsBudgetSummary;
+  months: ReportsBudgetMonth[];
+  categories: ReportsBudgetCategory[];
+}

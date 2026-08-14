@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_principal
-from app.schemas.api import ReportsOverviewView
+from app.schemas.api import ReportsBudgetView, ReportsOverviewView, ReportsSpendingView
 from app.services.auth import Principal
-from app.services.reports import reports_overview
+from app.services.reports import reports_budget, reports_overview, reports_spending
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+ReportRange = Literal["30d", "3m", "6m", "ytd", "1y"]
 
 
 @router.get("/overview", response_model=ReportsOverviewView)
@@ -20,3 +21,21 @@ def get_reports_overview(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     return reports_overview(db, principal.user, days)
+
+
+@router.get("/spending", response_model=ReportsSpendingView)
+def get_reports_spending(
+    range_key: Annotated[ReportRange, Query(alias="range")] = "6m",
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return reports_spending(db, principal.user, range_key)
+
+
+@router.get("/budget", response_model=ReportsBudgetView)
+def get_reports_budget(
+    range_key: Annotated[ReportRange, Query(alias="range")] = "6m",
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return reports_budget(db, principal.user, range_key)

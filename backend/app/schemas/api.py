@@ -1029,3 +1029,120 @@ class ReportsOverviewView(ViewModel):
     currency: str
     current: FinancialSnapshotView
     history: list[FinancialSnapshotView]
+
+
+# Phase 3D — spending, cash-flow, and budget analytics
+ReportRangeKey = Literal["30d", "3m", "6m", "ytd", "1y"]
+
+
+class ReportRangeView(ViewModel):
+    key: ReportRangeKey
+    label: str
+    start: date
+    end: date
+    previous_start: date
+    previous_end: date
+    bucket: Literal["day", "month"]
+
+
+class ReportsSpendingSummaryView(ViewModel):
+    income: str
+    spending: str
+    net_cash_flow: str
+    savings_rate: str | None
+    spending_change_amount: str
+    spending_change_pct: str | None
+    income_change_pct: str | None
+    net_cash_flow_change_pct: str | None
+    current_month_spending: str
+    projected_month_spending: str
+
+
+class ReportsCashFlowPointView(ViewModel):
+    period: str
+    income: str
+    spending: str
+    net_cash_flow: str
+
+
+class ReportsCategoryTrendView(ViewModel):
+    category_id: int | None
+    key: str
+    name: str
+    amount: str
+    previous_amount: str
+    change_amount: str
+    change_pct: str | None
+    transaction_count: int
+
+
+class ReportsMerchantView(ViewModel):
+    name: str
+    category: str
+    amount: str
+    transaction_count: int
+
+
+class ReportsRecurringSplitView(ViewModel):
+    recurring: str
+    discretionary: str
+    total: str
+
+
+class ReportsSpendingView(ViewModel):
+    generated_at: datetime
+    currency: str
+    range: ReportRangeView
+    summary: ReportsSpendingSummaryView
+    series: list[ReportsCashFlowPointView]
+    categories: list[ReportsCategoryTrendView]
+    top_merchants: list[ReportsMerchantView]
+    recurring: ReportsRecurringSplitView
+
+
+class ReportsBudgetSummaryView(ViewModel):
+    planned_income: str
+    ytd_planned_income: str
+    actual_income: str
+    budgeted: str
+    spent: str
+    remaining: str
+    unallocated: str
+    income_variance: str
+    budget_utilization_pct: str | None
+    projected_year_end_spend: str
+
+
+class ReportsBudgetMonthView(ViewModel):
+    month: str
+    source: str
+    planned_income: str
+    actual_income: str
+    budgeted: str
+    spent: str
+    remaining: str
+    utilization_pct: str | None
+
+
+class ReportsBudgetCategoryView(ViewModel):
+    category_id: int
+    key: str
+    name: str
+    planned_amount: str
+    ytd_planned_amount: str
+    spent_amount: str
+    remaining_amount: str
+    percent_used: str | None
+    ytd_variance: str
+    annual_variance: str
+
+
+class ReportsBudgetView(ViewModel):
+    generated_at: datetime
+    currency: str
+    range: ReportRangeView
+    year: int
+    has_annual_plan: bool
+    summary: ReportsBudgetSummaryView
+    months: list[ReportsBudgetMonthView]
+    categories: list[ReportsBudgetCategoryView]

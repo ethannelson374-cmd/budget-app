@@ -282,3 +282,9 @@ applying, it stores the exact resource state written by the proposal. Undo succe
 only when that state still matches, preventing an old Advisor plan from overwriting
 newer manual changes. Audit events cover proposal creation, apply, reject, and undo.
 Private/no-history sessions never persist proposals.
+
+## Phase 3D Stage 2 analytics boundary
+
+Spending and budget reports are deterministic read models derived from Budget's existing normalized transactions and budget-planning services. Only accounts in the user's reporting currency participate in transaction analytics; transfers and spending-excluded transactions are ignored, refunds reduce spending, and user category/kind/merchant overrides are honored. Recurring-vs-discretionary classification reuses the locally derived recurring-stream identity rather than asking the AI provider to classify charges.
+
+The Reports API owns aggregation only. Category and merchant rows drill through to the ordinary Transactions route with owner-scoped filters, keeping raw transaction search and mutation in the existing finance boundary. Budget performance reuses annual/monthly budget views instead of maintaining a parallel reporting ledger. No Stage 2 schema migration is required.

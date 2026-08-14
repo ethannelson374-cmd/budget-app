@@ -25,6 +25,8 @@ export const queryKeys = {
   advisorConversation: (id: number) => ["advisor-conversation", id] as const,
   advisorProposal: (id: number) => ["advisor-proposal", id] as const,
   reportsOverview: (days: number) => ["reports-overview", days] as const,
+  reportsSpending: (range: string) => ["reports-spending", range] as const,
+  reportsBudget: (range: string) => ["reports-budget", range] as const,
 };
 
 export function useSetupStatus() {
