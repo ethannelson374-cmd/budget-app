@@ -6,14 +6,16 @@ import axe from "axe-core";
 import { LoginPage } from "./LoginPage";
 
 const login = vi.fn();
+const verifyTwoFactor = vi.fn();
 const demoLogin = vi.fn();
-vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ login, demoLogin }) }));
+vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ login, verifyTwoFactor, demoLogin }) }));
 
-const status = { initialized: true, demo_mode: true, bootstrap_required: false };
+const status = { initialized: true, demo_mode: true, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false };
 
 describe("LoginPage", () => {
   beforeEach(() => {
-    login.mockReset().mockResolvedValue(undefined);
+    login.mockReset().mockResolvedValue({ twoFactorRequired: false, challengeToken: null });
+    verifyTwoFactor.mockReset().mockResolvedValue(undefined);
     demoLogin.mockReset().mockResolvedValue(undefined);
   });
 

@@ -912,3 +912,59 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .reports-saved-list article, .reports-export-list article { align-items: flex-start; }
   .reports-export-list article { flex-direction: column; }
 }
+
+/* Phase 4 Stage 1 — identity, private-family access, recovery, sessions, and 2FA */
+.google-signin { justify-content: center; gap: 10px; }
+.google-g { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-weight: 900; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--text-muted); font-size: .75rem; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+.auth-form-links { display: flex; justify-content: flex-end; margin-top: -4px; }
+.auth-form-links a, .auth-flow-card > a { color: var(--brand); font-size: .8rem; font-weight: 700; }
+.auth-private-note { display: block; margin-top: 14px; color: var(--text-muted); text-align: center; line-height: 1.45; }
+.auth-flow-page { gap: 20px; }
+.auth-flow-card { width: min(520px, calc(100vw - 32px)); display: grid; gap: 16px; }
+.auth-flow-card h1 { margin: 2px 0 0; }
+.auth-flow-card p { margin: 0; color: var(--text-muted); line-height: 1.55; }
+
+.settings-security { margin-top: 24px; }
+.settings-section-heading { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 14px; }
+.settings-section-heading h2 { margin: 2px 0 4px; }
+.settings-section-heading p { margin: 0; color: var(--text-muted); }
+.security-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.security-panel { padding: 18px; }
+.security-card { padding: 18px; display: grid; align-content: start; gap: 14px; min-width: 0; }
+.security-card h3 { margin: 2px 0 0; }
+.security-card > p { margin: 0; color: var(--text-muted); line-height: 1.5; }
+.security-card-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.status-pill { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; color: var(--text-muted); font-size: .7rem; font-weight: 800; }
+.status-pill.success { color: var(--positive); border-color: color-mix(in srgb, var(--positive) 35%, var(--border)); }
+.security-method, .session-row, .family-user { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.security-method:last-of-type, .session-row:last-child, .family-user:last-child { border-bottom: 0; }
+.security-method > div, .session-row > div, .family-user > div { min-width: 0; display: grid; gap: 3px; }
+.security-method small, .session-row small, .family-user small { color: var(--text-muted); font-size: .74rem; overflow-wrap: anywhere; }
+.session-list, .family-users, .pending-invites { display: grid; }
+.family-users > strong, .pending-invites > strong { margin-bottom: 4px; }
+.totp-setup, .totp-disable, .danger-confirm { display: grid; gap: 10px; }
+.totp-setup p, .totp-disable p { margin: 0; color: var(--text-muted); }
+.totp-setup label, .totp-disable label, .danger-confirm label, .invite-form label { display: grid; gap: 6px; }
+.secret-code { display: block; width: 100%; overflow-x: auto; padding: 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-muted); letter-spacing: .12em; }
+.recovery-codes { display: grid; gap: 7px; padding: 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--border)); background: color-mix(in srgb, var(--brand) 5%, var(--surface)); }
+.recovery-codes p { margin: 0; color: var(--text-muted); }
+.recovery-codes > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.recovery-codes code { padding: 6px 8px; border-radius: 8px; background: var(--surface-muted); text-align: center; }
+.family-access-card { grid-column: 1 / -1; }
+.invite-form { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 10px; align-items: end; }
+.manual-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.manual-link input { min-width: 0; }
+.danger-card { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--negative) 24%, var(--border)); }
+.danger-confirm > div { display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 800px) {
+  .security-grid { grid-template-columns: 1fr; }
+  .family-access-card, .danger-card { grid-column: 1; }
+  .invite-form { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .security-card-heading, .security-method, .session-row, .family-user { align-items: stretch; flex-direction: column; }
+  .security-method .button, .session-row .button, .family-user .button { width: 100%; }
+  .recovery-codes > div, .manual-link { grid-template-columns: 1fr; }
+}

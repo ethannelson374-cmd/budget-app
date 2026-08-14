@@ -15,7 +15,7 @@ from app.core.config import Settings
 from app.core.errors import ApiError
 from app.core.security import cookie_name, utc_now
 from app.models import User
-from app.schemas.api import AuthView, LoginRequest, OkView
+from app.schemas.api import AuthView, LoginRequest, LoginView, OkView
 from app.services.auth import (
     Principal,
     add_audit_event,
@@ -30,12 +30,13 @@ from app.services.auth import (
     throttled_for,
     update_password,
 )
+from app.services.identity import create_two_factor_challenge, totp_enabled
 from app.services.views import user_view
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
-@router.post("/login", response_model=AuthView)
+@router.post("/login", response_model=LoginView)
 def login(
     payload: LoginRequest,
     request: Request,
@@ -85,9 +86,27 @@ def login(
 
         if needs_rehash:
             update_password(user, payload.password)
-        user.last_login_at = now
         clear_login_failures(db, keys)
-        token, csrf_token, _ = issue_session(db, settings, user, client_ip=_client_ip(request))
+        if totp_enabled(db, user.id):
+            challenge_token = create_two_factor_challenge(db, settings, user)
+            add_audit_event(
+                db, settings, action="auth.login.two_factor", outcome="success",
+                request_id=getattr(request.state, "request_id", None), user_id=user.id,
+                detail="challenge_issued",
+            )
+            db.commit()
+            return {
+                "authenticated": False,
+                "two_factor_required": True,
+                "challenge_token": challenge_token,
+                "user": None,
+                "csrf_token": None,
+            }
+        user.last_login_at = now
+        token, csrf_token, _ = issue_session(
+            db, settings, user, client_ip=_client_ip(request),
+            user_agent=request.headers.get("User-Agent"),
+        )
         add_audit_event(
             db,
             settings,
@@ -98,7 +117,13 @@ def login(
         )
         db.commit()
     _set_session_cookie(response, settings, token)
-    return {"user": user_view(user), "csrf_token": csrf_token}
+    return {
+        "authenticated": True,
+        "two_factor_required": False,
+        "challenge_token": None,
+        "user": user_view(user),
+        "csrf_token": csrf_token,
+    }
 
 
 @router.post("/demo-login", response_model=AuthView)
@@ -115,7 +140,7 @@ def demo_login(
     )
     if user is None:
         raise ApiError(503, "demo_unavailable", "Demo data has not been initialized")
-    token, csrf_token, _ = issue_session(db, settings, user, client_ip=_client_ip(request))
+    token, csrf_token, _ = issue_session(db, settings, user, client_ip=_client_ip(request), user_agent=request.headers.get("User-Agent"))
     add_audit_event(
         db,
         settings,

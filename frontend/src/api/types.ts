@@ -25,6 +25,9 @@ export interface SetupStatus {
   initialized: boolean;
   demo_mode: boolean;
   bootstrap_required: boolean;
+  google_auth_enabled: boolean;
+  invite_only: boolean;
+  email_delivery_configured: boolean;
 }
 
 export interface SetupOptions {
@@ -49,6 +52,8 @@ export interface AuthUser {
   id: number;
   username: string;
   email: string;
+  is_admin: boolean;
+  email_verified: boolean;
   settings: UserSettings;
 }
 
@@ -56,6 +61,75 @@ export interface AuthSession {
   user: AuthUser;
   csrf_token: string;
 }
+
+export interface LoginResult {
+  authenticated: boolean;
+  two_factor_required: boolean;
+  challenge_token: string | null;
+  user: AuthUser | null;
+  csrf_token: string | null;
+}
+
+export interface SecurityStatus {
+  is_admin: boolean;
+  email_verified: boolean;
+  has_password: boolean;
+  google_enabled: boolean;
+  google_connected: boolean;
+  two_factor_enabled: boolean;
+  email_delivery_configured: boolean;
+  invite_only: boolean;
+}
+
+export interface AuthSessionItem {
+  id: number;
+  current: boolean;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
+  idle_expires_at: string;
+  absolute_expires_at: string;
+}
+
+export interface AuthSessionsResponse { sessions: AuthSessionItem[]; }
+
+export interface UserInvitation {
+  id: number;
+  email: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  delivery?: "email" | "manual" | null;
+  invite_url?: string | null;
+}
+
+export interface UserInvitationsResponse { invitations: UserInvitation[]; }
+
+export interface InvitationDetails {
+  email: string;
+  expires_at: string;
+  google_enabled: boolean;
+}
+
+export interface PasswordResetStatus { valid: boolean; email: string | null; }
+
+export interface TotpSetup { secret: string; otpauth_uri: string; }
+export interface TotpConfirmation { recovery_codes: string[]; }
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  email_verified: boolean;
+  is_admin: boolean;
+  has_password: boolean;
+  google_connected: boolean;
+  last_login_at: string | null;
+}
+export interface AdminUsersResponse { users: AdminUser[]; }
+export interface ResetDelivery { ok: boolean; delivery: "email" | "manual" | "unavailable"; reset_url?: string | null; }
 
 export interface SetupRequest {
   username: string;

@@ -40,6 +40,9 @@ class SecretRedactionFilter(logging.Filter):
             settings.plaid_client_id,
             settings.plaid_secret,
             settings.openai_api_key,
+            settings.gemini_api_key,
+            settings.google_client_secret,
+            settings.smtp_password,
         ]
         values = {
             value.get_secret_value()

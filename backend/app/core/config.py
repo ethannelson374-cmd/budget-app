@@ -14,6 +14,7 @@ Environment = Literal["development", "test", "production"]
 DatabaseSSLMode = Literal["REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"]
 PlaidEnvironment = Literal["sandbox", "production"]
 AiProvider = Literal["openai", "gemini"]
+EmailDeliveryMode = Literal["disabled", "smtp"]
 
 
 def _strict_bool(value: Any) -> bool:
@@ -103,7 +104,20 @@ class Settings(BaseSettings):
     ai_max_tool_calls: Annotated[int, Field(ge=1, le=8)] = 4
     ai_requests_per_minute: Annotated[int, Field(ge=1, le=120)] = 12
 
-    @field_validator("demo_mode", "db_ssl_required", "ai_enabled", mode="before")
+    public_app_url: str | None = None
+    google_client_id: SecretStr | None = None
+    google_client_secret: SecretStr | None = None
+    google_redirect_uri: str | None = None
+
+    email_delivery: EmailDeliveryMode = "disabled"
+    smtp_host: str | None = None
+    smtp_port: Annotated[int, Field(ge=1, le=65535)] = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str | None = None
+    smtp_starttls: bool = True
+
+    @field_validator("demo_mode", "db_ssl_required", "ai_enabled", "smtp_starttls", mode="before")
     @classmethod
     def validate_exact_boolean(cls, value: Any) -> bool | None:
         if value is None:
@@ -114,6 +128,11 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_database_ssl_mode(cls, value: Any) -> Any:
         return value.strip().upper() if isinstance(value, str) else value
+
+    @field_validator("email_delivery", mode="before")
+    @classmethod
+    def normalize_email_delivery(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("plaid_env", mode="before")
     @classmethod
@@ -192,6 +211,11 @@ class Settings(BaseSettings):
         "db_ssl_ca",
         "plaid_redirect_uri",
         "plaid_webhook_uri",
+        "public_app_url",
+        "google_redirect_uri",
+        "smtp_host",
+        "smtp_username",
+        "smtp_from_email",
         mode="before",
     )
     @classmethod
@@ -210,6 +234,9 @@ class Settings(BaseSettings):
         "plaid_secret",
         "openai_api_key",
         "gemini_api_key",
+        "google_client_id",
+        "google_client_secret",
+        "smtp_password",
         mode="before",
     )
     @classmethod
@@ -254,6 +281,29 @@ class Settings(BaseSettings):
                 raise ValueError("OPENAI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=openai")
             if self.ai_provider == "gemini" and self.gemini_api_key is None:
                 raise ValueError("GEMINI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=gemini")
+
+        google_values = (self.google_client_id, self.google_client_secret)
+        if any(value is not None for value in google_values) and not all(
+            value is not None for value in google_values
+        ):
+            raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together")
+        if self.google_configured and self.google_redirect_uri is None:
+            raise ValueError("GOOGLE_REDIRECT_URI is required when Google sign-in is configured")
+        smtp_credentials = (self.smtp_username, self.smtp_password)
+        if any(value is not None for value in smtp_credentials) and not all(
+            value is not None for value in smtp_credentials
+        ):
+            raise ValueError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
+        if self.email_delivery == "smtp":
+            if self.smtp_host is None or self.smtp_from_email is None or self.public_app_url is None:
+                raise ValueError(
+                    "SMTP_HOST, SMTP_FROM_EMAIL, and PUBLIC_APP_URL are required when EMAIL_DELIVERY=smtp"
+                )
+        if self.app_env == "production":
+            if self.google_redirect_uri is not None and not self.google_redirect_uri.startswith("https://"):
+                raise ValueError("GOOGLE_REDIRECT_URI must use HTTPS in production")
+            if self.public_app_url is not None and not self.public_app_url.startswith("https://"):
+                raise ValueError("PUBLIC_APP_URL must use HTTPS in production")
 
         if self.app_env == "production":
             if self.demo_mode:
@@ -319,6 +369,14 @@ class Settings(BaseSettings):
     @property
     def plaid_country_code_list(self) -> list[str]:
         return self.plaid_country_codes.split(",")
+
+    @property
+    def google_configured(self) -> bool:
+        return self.google_client_id is not None and self.google_client_secret is not None
+
+    @property
+    def email_configured(self) -> bool:
+        return self.email_delivery == "smtp" and self.smtp_host is not None and self.smtp_from_email is not None
 
     @property
     def ai_configured(self) -> bool:

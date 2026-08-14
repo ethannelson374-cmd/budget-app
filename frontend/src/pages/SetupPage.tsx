@@ -127,6 +127,9 @@ export function SetupWizard({ options, bootstrapRequired }: { options: SetupOpti
         initialized: true,
         demo_mode: current?.demo_mode ?? false,
         bootstrap_required: false,
+        google_auth_enabled: current?.google_auth_enabled ?? false,
+        invite_only: current?.invite_only ?? true,
+        email_delivery_configured: current?.email_delivery_configured ?? false,
       }));
       navigate("/dashboard", { replace: true });
     } catch (caught) {

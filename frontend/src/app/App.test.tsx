@@ -5,12 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 vi.mock("../api/queries", () => ({
-  useSetupStatus: () => ({ isPending: false, isError: false, data: { initialized: true, demo_mode: false, bootstrap_required: false }, refetch: vi.fn() }),
+  useSetupStatus: () => ({ isPending: false, isError: false, data: { initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false }, refetch: vi.fn() }),
   useSetupOptions: () => ({ isPending: false, isError: false }),
   queryKeys: { setup: ["setup-status"] },
 }));
 vi.mock("../auth/AuthContext", () => ({
-  useAuth: () => ({ status: "anonymous", user: null, login: vi.fn(), demoLogin: vi.fn(), logout: vi.fn(), refresh: vi.fn() }),
+  useAuth: () => ({ status: "anonymous", user: null, login: vi.fn(), verifyTwoFactor: vi.fn(), demoLogin: vi.fn(), logout: vi.fn(), refresh: vi.fn() }),
 }));
 
 describe("protected routing", () => {

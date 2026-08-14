@@ -30,6 +30,10 @@ export const queryKeys = {
   reportsGoalsDebt: (range: string) => ["reports-goals-debt", range] as const,
   savedReports: ["saved-reports"] as const,
   reportExports: ["report-exports"] as const,
+  securityStatus: ["security-status"] as const,
+  authSessions: ["auth-sessions"] as const,
+  userInvitations: ["user-invitations"] as const,
+  adminUsers: ["admin-users"] as const,
 };
 
 export function useSetupStatus() {

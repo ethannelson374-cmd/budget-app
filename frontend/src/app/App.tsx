@@ -9,6 +9,10 @@ import { AccountsPage } from "../pages/AccountsPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { BudgetPage } from "../pages/BudgetPage";
 import { LoginPage } from "../pages/LoginPage";
+import { InvitePage } from "../pages/InvitePage";
+import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "../pages/ResetPasswordPage";
+import { GoogleAuthCompletePage } from "../pages/GoogleAuthCompletePage";
 import { InsightsPage } from "../pages/InsightsPage";
 import { AdvisorPage } from "../pages/AdvisorPage";
 import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
@@ -98,6 +102,10 @@ export function App() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/setup" element={<SetupRoute />} />
       <Route path="/login" element={<LoginRoute />} />
+      <Route path="/invite" element={<InvitePage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/auth/google/complete" element={<GoogleAuthCompletePage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/accounts" element={<AccountsPage />} />

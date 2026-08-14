@@ -476,3 +476,113 @@ sudo systemd-run \
 Expected head is `20260814_0012`. Stage 4 adds no new environment variable, inbound port, daemon, PDF service, or provider credential. Keep the Stage 1 `budget-snapshot.timer` enabled because Goals/Debt trajectory and forecast-accuracy reporting rely on the daily history it maintains.
 
 Build the frontend off-host and use the normal verified `dist` swap. After deployment, smoke-test all four Reports tabs and then: save/reopen a named report; create and download both CSV and PDF exports; download a prior export again from Report Center; and launch **Ask Budget** from Spending, Budget, and Goals & Debt at least once. With Advisor merchant sharing disabled, report-based Advisor questions must not expose top-merchant names. Export responses should be private/no-store and include the stored SHA-256 integrity header.
+
+## Phase 4 Stage 1 identity/security deployment
+
+Phase 4 Stage 1 adds migration `20260814_0013`. It also makes `PyJWT` an explicit runtime requirement for Google ID-token validation, so synchronize the production virtual environment before restarting the API:
+
+```bash
+sudo /opt/budget-app/venv/bin/pip install -r /opt/budget-app/current/backend/requirements.txt
+```
+
+Then migrate through the existing owner-scoped service environment and verify head:
+
+```bash
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-phase4-stage1-migrate \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic upgrade head
+
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-phase4-stage1-verify \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic current
+```
+
+Expected head is `20260814_0013`.
+
+Budget remains invite-only. The existing installation owner becomes the first administrator and can create invitations under Settings -> Security -> Family access. SMTP is optional; with email delivery disabled the UI returns a private invitation/reset URL for the administrator to copy to the intended family member.
+
+### Google OpenID Connect
+
+Google login is optional. Create a Google OAuth web client and register the exact callback used by the environment. For local Vite development the callback is:
+
+```text
+http://localhost:5173/api/v1/auth/google/callback
+```
+
+For the current production site it is:
+
+```text
+https://budget.od3ssa.com/api/v1/auth/google/callback
+```
+
+Production `/etc/budget-app/budget.env` should use server-side values only:
+
+```text
+PUBLIC_APP_URL=https://budget.od3ssa.com
+GOOGLE_CLIENT_ID=<google-web-client-id>
+GOOGLE_CLIENT_SECRET=<google-web-client-secret>
+GOOGLE_REDIRECT_URI=https://budget.od3ssa.com/api/v1/auth/google/callback
+```
+
+Do not put the Google client secret in Vite variables or the frontend bundle. The callback travels through the existing same-origin Nginx `/api/` proxy; no new listener or inbound port is required.
+
+Existing password users should connect Google while already authenticated in Settings. Budget deliberately refuses to silently merge a new Google identity into an existing account based on email alone. New Google-first users require a valid invitation and must use the Google account matching the invited email.
+
+### Optional SMTP delivery
+
+For a private family install, SMTP can remain disabled:
+
+```text
+EMAIL_DELIVERY=disabled
+```
+
+To deliver invitations and reset links by email, configure:
+
+```text
+PUBLIC_APP_URL=https://budget.od3ssa.com
+EMAIL_DELIVERY=smtp
+SMTP_HOST=<smtp-host>
+SMTP_PORT=587
+SMTP_USERNAME=<smtp-username>
+SMTP_PASSWORD=<smtp-password>
+SMTP_FROM_EMAIL=<from-address>
+SMTP_STARTTLS=true
+```
+
+SMTP failures fail back to a manual administrator link rather than blocking account recovery. Password-reset responses exposed to unauthenticated callers remain non-enumerating.
+
+After migration/configuration, restart `budget-api`, verify `/api/health` and `/api/ready`, then build and deploy the Vite bundle through the normal off-host `dist` swap. Smoke-test: local password login, invitation acceptance, session revocation, TOTP plus one recovery code, Google link/login if configured, password reset, and an account-delete confirmation with a disposable invited user.
+
+If the sole administrator is locked out while SMTP is disabled and no Google identity is linked, use the existing interactive server-side recovery command from the protected application host rather than exposing a public recovery bypass:
+
+```bash
+sudo systemd-run \
+  --pty \
+  --wait \
+  --collect \
+  --unit=budget-owner-password-recovery \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/python -m app.cli reset-password --username <owner-username>
+```
+
+The command prompts for the new password without putting it in shell history and revokes the user's active sessions.

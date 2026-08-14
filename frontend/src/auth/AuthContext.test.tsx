@@ -10,6 +10,8 @@ const session = {
     id: 1,
     username: "owner",
     email: "owner@example.test",
+    is_admin: true,
+    email_verified: true,
     settings: { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_include_descriptions: false, advisor_store_history: true },
   },
   csrf_token: "csrf-value",

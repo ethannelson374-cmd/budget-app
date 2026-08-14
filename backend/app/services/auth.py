@@ -141,6 +141,7 @@ def issue_session(
     user: User,
     *,
     client_ip: str,
+    user_agent: str | None = None,
 ) -> tuple[str, str, SessionRecord]:
     token = new_session_token()
     csrf_token = csrf_token_for_session(settings, token)
@@ -155,6 +156,7 @@ def issue_session(
         absolute_expires_at=times.absolute_expires_at,
         revoked_at=None,
         client_key=private_identifier(settings, "session-ip", client_ip),
+        user_agent=(user_agent or "").strip()[:512] or None,
     )
     db.add(record)
     db.flush()

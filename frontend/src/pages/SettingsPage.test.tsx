@@ -10,7 +10,7 @@ const setPreference = vi.fn();
 let sessionIsCurrent = true;
 const isSessionCurrent = vi.fn(() => sessionIsCurrent);
 vi.mock("../theme/ThemeContext", () => ({ useTheme: () => ({ setPreference }) }));
-vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ sessionGeneration: 1, isSessionCurrent }) }));
+vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ sessionGeneration: 1, isSessionCurrent, user: { id: 1, username: "owner", email: "owner@example.test", is_admin: false, email_verified: true }, refresh: vi.fn() }) }));
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<{ apiRequest: typeof apiRequest }>();
   return { ...actual, apiRequest: vi.fn() };
@@ -40,6 +40,8 @@ describe("SettingsPage", () => {
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
       if (path === "/advisor/status") return advisorStatus;
+      if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
+      if (path === "/auth/sessions") return { sessions: [] };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });
@@ -69,6 +71,8 @@ describe("SettingsPage", () => {
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
       if (path === "/advisor/status") return advisorStatus;
+      if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
+      if (path === "/auth/sessions") return { sessions: [] };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });

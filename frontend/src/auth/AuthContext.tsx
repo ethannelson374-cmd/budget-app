@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiError, apiRequest, setCsrfToken, setUnauthorizedHandler } from "../api/client";
-import type { AuthSession, AuthUser } from "../api/types";
+import type { AuthSession, AuthUser, LoginResult } from "../api/types";
 import { useTheme } from "../theme/ThemeContext";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -19,7 +19,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
   error: string | null;
-  login: (identity: string, password: string) => Promise<void>;
+  login: (identity: string, password: string) => Promise<{ twoFactorRequired: boolean; challengeToken: string | null }>;
+  verifyTwoFactor: (challengeToken: string, code: string) => Promise<void>;
   demoLogin: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -99,9 +100,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [advanceSessionGeneration, clearPrivateCaches, refresh]);
 
   const login = useCallback(async (identity: string, password: string) => {
-    const session = await apiRequest<AuthSession>("/auth/login", {
+    const result = await apiRequest<LoginResult>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ identity, password }),
+    });
+    if (result.two_factor_required) {
+      return { twoFactorRequired: true, challengeToken: result.challenge_token };
+    }
+    if (!result.authenticated || !result.user || !result.csrf_token) {
+      throw new ApiError("Budget could not establish your session.", { status: 503, code: "session_unavailable" });
+    }
+    acceptSession({ user: result.user, csrf_token: result.csrf_token });
+    return { twoFactorRequired: false, challengeToken: null };
+  }, [acceptSession]);
+
+  const verifyTwoFactor = useCallback(async (challengeToken: string, code: string) => {
+    const session = await apiRequest<AuthSession>("/auth/two-factor/login", {
+      method: "POST",
+      body: JSON.stringify({ challenge_token: challengeToken, code }),
     });
     acceptSession(session);
   }, [acceptSession]);
@@ -122,8 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [advanceSessionGeneration, clearPrivateCaches]);
 
   const value = useMemo(
-    () => ({ user, status, error, login, demoLogin, logout, refresh, establishSession: acceptSession, sessionGeneration, isSessionCurrent }),
-    [acceptSession, demoLogin, error, isSessionCurrent, login, logout, refresh, sessionGeneration, status, user],
+    () => ({ user, status, error, login, verifyTwoFactor, demoLogin, logout, refresh, establishSession: acceptSession, sessionGeneration, isSessionCurrent }),
+    [acceptSession, demoLogin, error, isSessionCurrent, login, logout, refresh, sessionGeneration, status, user, verifyTwoFactor],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

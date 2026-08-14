@@ -71,13 +71,15 @@ describe("SetupWizard secret handling", () => {
         id: 1,
         username: "owner",
         email: "owner@example.test",
+        is_admin: true,
+        email_verified: true,
         settings: { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_include_descriptions: false, advisor_store_history: true },
       },
       csrf_token: "returned-csrf",
     };
     vi.mocked(apiRequest).mockResolvedValue(session);
     const client = new QueryClient();
-    client.setQueryData(["setup-status"], { initialized: false, demo_mode: false, bootstrap_required: true });
+    client.setQueryData(["setup-status"], { initialized: false, demo_mode: false, bootstrap_required: true, google_auth_enabled: false, invite_only: true, email_delivery_configured: false });
     const user = userEvent.setup();
     render(<QueryClientProvider client={client}><MemoryRouter><SetupWizard options={options} bootstrapRequired /></MemoryRouter></QueryClientProvider>);
 
@@ -85,7 +87,7 @@ describe("SetupWizard secret handling", () => {
 
     await waitFor(() => expect(establishSession).toHaveBeenCalledWith(session));
     expect(apiRequest).toHaveBeenCalledTimes(1);
-    expect(client.getQueryData(["setup-status"])).toEqual({ initialized: true, demo_mode: false, bootstrap_required: false });
+    expect(client.getQueryData(["setup-status"])).toEqual({ initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false });
   });
 
   it("has no serious automated accessibility violations", async () => {

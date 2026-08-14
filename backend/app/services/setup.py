@@ -83,6 +83,8 @@ def create_initial_user(
             email=str(payload.email),
             normalized_email=normalize_identity(str(payload.email)),
             password_hash=hash_password(payload.password),
+            is_admin=True,
+            email_verified_at=claimed_at,
             settings=UserSettings(
                 currency=payload.currency,
                 timezone=payload.timezone,

@@ -72,6 +72,39 @@ class LoginRequest(StrictModel):
     password: Annotated[str, Field(min_length=1, max_length=128)]
 
 
+class TwoFactorLoginRequest(StrictModel):
+    challenge_token: SecretStr = Field(min_length=20, max_length=256)
+    code: Annotated[str, Field(min_length=6, max_length=32)]
+
+
+class InvitationCreateRequest(StrictModel):
+    email: EmailStr
+
+
+class InvitationAcceptRequest(StrictModel):
+    token: SecretStr = Field(min_length=20, max_length=256)
+    username: Annotated[str, Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")]
+    password: Annotated[str, Field(min_length=12, max_length=128)]
+
+
+class PasswordForgotRequest(StrictModel):
+    identity: Annotated[str, Field(min_length=1, max_length=320)]
+
+
+class PasswordResetRequest(StrictModel):
+    token: SecretStr = Field(min_length=20, max_length=256)
+    password: Annotated[str, Field(min_length=12, max_length=128)]
+
+
+class TotpConfirmRequest(StrictModel):
+    code: Annotated[str, Field(min_length=6, max_length=32)]
+
+
+class AccountDeleteRequest(StrictModel):
+    confirmation: Literal["DELETE"]
+    password: Annotated[str, Field(min_length=1, max_length=128)] | None = None
+
+
 class SettingsPatch(StrictModel):
     currency: CurrencyCode | None = None
     timezone: Annotated[str, Field(min_length=1, max_length=64)] | None = None
@@ -222,12 +255,104 @@ class UserView(ViewModel):
     id: int
     username: str
     email: str
+    is_admin: bool
+    email_verified: bool
     settings: UserSettingsView
 
 
 class AuthView(ViewModel):
     user: UserView
     csrf_token: str
+
+
+class LoginView(ViewModel):
+    authenticated: bool
+    two_factor_required: bool
+    challenge_token: str | None
+    user: UserView | None
+    csrf_token: str | None
+
+
+class SessionView(ViewModel):
+    id: int
+    current: bool
+    user_agent: str | None
+    created_at: datetime
+    last_seen_at: datetime
+    idle_expires_at: datetime
+    absolute_expires_at: datetime
+
+
+class SessionListView(ViewModel):
+    sessions: list[SessionView]
+
+
+class SecurityStatusView(ViewModel):
+    is_admin: bool
+    email_verified: bool
+    has_password: bool
+    google_enabled: bool
+    google_connected: bool
+    two_factor_enabled: bool
+    email_delivery_configured: bool
+    invite_only: bool
+
+
+class InvitationView(ViewModel):
+    id: int
+    email: str
+    status: Literal["pending", "accepted", "revoked", "expired"]
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: datetime | None
+    revoked_at: datetime | None
+    delivery: Literal["email", "manual"] | None = None
+    invite_url: str | None = None
+
+
+class InvitationListView(ViewModel):
+    invitations: list[InvitationView]
+
+
+class InvitationPublicView(ViewModel):
+    email: str
+    expires_at: datetime
+    google_enabled: bool
+
+
+class PasswordResetStatusView(ViewModel):
+    valid: bool
+    email: str | None
+
+
+class PasswordResetDeliveryView(ViewModel):
+    ok: bool
+    delivery: Literal["email", "manual", "unavailable"]
+    reset_url: str | None = None
+
+
+class TotpSetupView(ViewModel):
+    secret: str
+    otpauth_uri: str
+
+
+class TotpConfirmView(ViewModel):
+    recovery_codes: list[str]
+
+
+class AdminUserView(ViewModel):
+    id: int
+    username: str
+    email: str
+    email_verified: bool
+    is_admin: bool
+    has_password: bool
+    google_connected: bool
+    last_login_at: datetime | None
+
+
+class AdminUserListView(ViewModel):
+    users: list[AdminUserView]
 
 
 class AccountView(ViewModel):
@@ -348,6 +473,9 @@ class SetupStatusView(ViewModel):
     initialized: bool
     demo_mode: bool
     bootstrap_required: bool
+    google_auth_enabled: bool
+    invite_only: bool
+    email_delivery_configured: bool
 
 
 class CurrencyOptionView(ViewModel):

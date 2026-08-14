@@ -34,6 +34,8 @@ def user_view(user: User) -> dict[str, object]:
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "is_admin": user.is_admin,
+        "email_verified": user.email_verified_at is not None,
         "settings": settings_view(user.settings),
     }
 

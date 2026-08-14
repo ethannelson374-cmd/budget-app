@@ -126,6 +126,8 @@ def reset_demo(settings: Settings) -> None:
                 email="demo@budget.local",
                 normalized_email="demo@budget.local",
                 password_hash=hash_password("DemoPassword!2026"),
+                is_admin=True,
+                email_verified_at=now,
                 settings=UserSettings(
                     currency="USD",
                     timezone="America/Chicago",

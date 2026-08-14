@@ -43,6 +43,9 @@ def setup_status(
         "demo_mode": settings.demo_mode,
         "bootstrap_required": not initialized
         and (settings.is_production or settings.bootstrap_token is not None),
+        "google_auth_enabled": settings.google_configured,
+        "invite_only": True,
+        "email_delivery_configured": settings.email_configured,
     }
 
 
@@ -92,7 +95,7 @@ def initial_setup(
         )
         db.commit()
         raise
-    token, csrf_token, _ = issue_session(db, settings, user, client_ip=_client_ip(request))
+    token, csrf_token, _ = issue_session(db, settings, user, client_ip=_client_ip(request), user_agent=request.headers.get("User-Agent"))
     add_audit_event(
         db,
         settings,

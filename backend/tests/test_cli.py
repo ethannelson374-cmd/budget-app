@@ -80,11 +80,15 @@ def test_demo_reset_never_seeds_future_transactions(tmp_path: Path) -> None:
             count = session.scalar(select(func.count(Transaction.id)))
             account_sources = set(session.scalars(select(Account.source_type)).all())
             transaction_sources = set(session.scalars(select(Transaction.source_type)).all())
+            user = session.scalar(select(User).where(User.normalized_username == "demo"))
         assert latest is not None
         assert latest <= datetime.now(ZoneInfo("America/Chicago")).date()
         assert count is not None and count > 0
         assert account_sources == {"plaid"}
         assert transaction_sources == {"plaid"}
+        assert user is not None
+        assert user.is_admin is True
+        assert user.email_verified_at is not None
     finally:
         database.engine.dispose()
 
