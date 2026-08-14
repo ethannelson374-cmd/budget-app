@@ -20,6 +20,9 @@ export const queryKeys = {
   debts: ["planning-debts"] as const,
   forecast: ["planning-forecast"] as const,
   insights: (status: string) => ["insights", status] as const,
+  advisorStatus: ["advisor-status"] as const,
+  advisorConversations: ["advisor-conversations"] as const,
+  advisorConversation: (id: number) => ["advisor-conversation", id] as const,
 };
 
 export function useSetupStatus() {

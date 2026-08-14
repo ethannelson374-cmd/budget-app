@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiRequest } from "../api/client";
 import { queryKeys, useSetupOptions } from "../api/queries";
-import type { CategorySelection, PayFrequency, ThemePreference, TransactionRuleCreate, TransactionRulesResponse, UserSettings } from "../api/types";
+import type { AdvisorStatus, CategorySelection, PayFrequency, ThemePreference, TransactionRuleCreate, TransactionRulesResponse, UserSettings } from "../api/types";
 import { useTheme } from "../theme/ThemeContext";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState } from "../components/States";
@@ -18,18 +18,19 @@ export function SettingsPage() {
   const categories = useQuery({ queryKey: queryKeys.categories, queryFn: () => apiRequest<CategorySelection>("/categories/selection") });
   const options = useSetupOptions();
   const rules = useQuery({ queryKey: queryKeys.transactionRules, queryFn: () => apiRequest<TransactionRulesResponse>("/transaction-rules") });
+  const advisorStatus = useQuery({ queryKey: queryKeys.advisorStatus, queryFn: () => apiRequest<AdvisorStatus>("/advisor/status") });
 
   return (
     <div className="page-container settings-page">
       <PageHeader title="Settings" description="Manage your preferences and spending categories." />
-      {(settings.isPending || categories.isPending || options.isPending || rules.isPending) && <LoadingState label="Loading settings" />}
-      {(settings.isError || categories.isError || options.isError || rules.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); void rules.refetch(); }} />}
-      {settings.data && categories.data && options.data && rules.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
+      {(settings.isPending || categories.isPending || options.isPending || rules.isPending || advisorStatus.isPending) && <LoadingState label="Loading settings" />}
+      {(settings.isError || categories.isError || options.isError || rules.isError || advisorStatus.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); void rules.refetch(); void advisorStatus.refetch(); }} />}
+      {settings.data && categories.data && options.data && rules.data && advisorStatus.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${settings.data.advisor_enabled}-${settings.data.advisor_store_history}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} advisorStatus={advisorStatus.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
     </div>
   );
 }
 
-function SettingsForms({ initialSettings, initialCategories, initialRules, currencies, payFrequencies }: { initialSettings: UserSettings; initialCategories: CategorySelection; initialRules: TransactionRulesResponse; currencies: Array<{ code: string; name: string }>; payFrequencies: Array<{ value: PayFrequency; label: string }> }) {
+function SettingsForms({ initialSettings, initialCategories, initialRules, advisorStatus, currencies, payFrequencies }: { initialSettings: UserSettings; initialCategories: CategorySelection; initialRules: TransactionRulesResponse; advisorStatus: AdvisorStatus; currencies: Array<{ code: string; name: string }>; payFrequencies: Array<{ value: PayFrequency; label: string }> }) {
   const queryClient = useQueryClient();
   const { setPreference } = useTheme();
   const { sessionGeneration, isSessionCurrent } = useAuth();
@@ -38,6 +39,11 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, curre
   const [theme, setTheme] = useState<ThemePreference>(initialSettings.theme);
   const [annualIncome, setAnnualIncome] = useState(initialSettings.annual_gross_income ?? "");
   const [payFrequency, setPayFrequency] = useState<PayFrequency | "">(initialSettings.pay_frequency ?? "");
+  const [advisorEnabled, setAdvisorEnabled] = useState(initialSettings.advisor_enabled);
+  const [shareMerchants, setShareMerchants] = useState(initialSettings.advisor_share_merchants);
+  const [includeDescriptions, setIncludeDescriptions] = useState(initialSettings.advisor_include_descriptions);
+  const [storeAdvisorHistory, setStoreAdvisorHistory] = useState(initialSettings.advisor_store_history);
+  const [advisorMessage, setAdvisorMessage] = useState<string | null>(null);
   const [enabledCategories, setEnabledCategories] = useState(() => Array.from(new Set([
     ...initialCategories.categories.filter((category) => category.enabled).map((category) => category.key),
     ...(initialCategories.categories.some((category) => category.key === "other") ? ["other"] : []),
@@ -50,6 +56,7 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, curre
     onSuccess: (saved) => {
       if (!isSessionCurrent(sessionGeneration)) return;
       queryClient.setQueryData(queryKeys.settings, saved);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.advisorStatus });
       setPreference(saved.theme);
       setSettingsMessage("Preferences saved.");
     },
@@ -64,6 +71,14 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, curre
     },
   });
 
+
+  const deleteAdvisorHistory = useMutation({
+    mutationFn: () => apiRequest<{ ok: boolean }>("/advisor/conversations", { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.advisorConversations });
+      setAdvisorMessage("Advisor history deleted.");
+    },
+  });
 
   const createRule = useMutation({
     mutationFn: (payload: TransactionRuleCreate) => apiRequest<TransactionRulesResponse>("/transaction-rules", { method: "POST", body: JSON.stringify(payload) }),
@@ -118,7 +133,11 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, curre
       setSettingsMessage("Choose a pay frequency when annual income is provided.");
       return;
     }
-    saveSettings.mutate({ currency, timezone, theme, annual_gross_income: annualIncome || null, pay_frequency: payFrequency || null });
+    saveSettings.mutate({
+      currency, timezone, theme, annual_gross_income: annualIncome || null, pay_frequency: payFrequency || null,
+      advisor_enabled: advisorEnabled, advisor_share_merchants: shareMerchants,
+      advisor_include_descriptions: includeDescriptions, advisor_store_history: storeAdvisorHistory,
+    });
   };
   const submitCategories = (event: FormEvent) => {
     event.preventDefault();
@@ -143,6 +162,18 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, curre
         <fieldset className="theme-picker"><legend>Appearance</legend>{(["system", "light", "dark"] as ThemePreference[]).map((value) => <label key={value} className={theme === value ? "selected" : ""}><input type="radio" name="settings-theme" value={value} checked={theme === value} onChange={() => setTheme(value)} /><span>{value.charAt(0).toUpperCase() + value.slice(1)}</span></label>)}</fieldset>
         <div className="form-actions end"><button className="button primary" type="submit" disabled={saveSettings.isPending}>{saveSettings.isPending ? "Saving…" : "Save preferences"}</button></div>
       </form>
+
+      <section className="panel form-stack settings-form advisor-settings-panel">
+        <div className="panel-heading"><div><span className="eyebrow">AI Advisor</span><h2>Ask Budget privacy</h2><p>The AI explains Budget's calculations. These controls decide what context can leave your server.</p></div><span className={`advisor-status-pill${advisorStatus.available ? " ready" : ""}`}>{advisorStatus.available ? `${advisorStatus.provider} · ${advisorStatus.model}` : "Provider not configured"}</span></div>
+        {advisorMessage && <div className="inline-alert success" role="status">{advisorMessage}</div>}
+        <div className="advisor-setting-list">
+          <label><span><strong>Enable Ask Budget</strong><small>Allow the read-only AI Advisor to answer financial questions.</small></span><input type="checkbox" checked={advisorEnabled} onChange={(event) => setAdvisorEnabled(event.target.checked)} /></label>
+          <label><span><strong>Share merchant names</strong><small>Off by default. When disabled, merchant-specific insight context is redacted.</small></span><input type="checkbox" checked={shareMerchants} onChange={(event) => { setShareMerchants(event.target.checked); if (!event.target.checked) setIncludeDescriptions(false); }} /></label>
+          <label className={!shareMerchants ? "disabled-setting" : ""}><span><strong>Include transaction descriptions</strong><small>Only used for merchant analysis when merchant sharing is enabled.</small></span><input type="checkbox" disabled={!shareMerchants} checked={includeDescriptions} onChange={(event) => setIncludeDescriptions(event.target.checked)} /></label>
+          <label><span><strong>Store Advisor conversations</strong><small>When off, Ask Budget works as a private session and does not keep messages in Budget.</small></span><input type="checkbox" checked={storeAdvisorHistory} onChange={(event) => setStoreAdvisorHistory(event.target.checked)} /></label>
+        </div>
+        <div className="form-actions spread"><button className="button danger" type="button" disabled={deleteAdvisorHistory.isPending} onClick={() => { if (window.confirm("Delete all saved Ask Budget conversations?")) deleteAdvisorHistory.mutate(); }}>{deleteAdvisorHistory.isPending ? "Deleting…" : "Delete Advisor history"}</button><small>Save preferences above to apply privacy changes.</small></div>
+      </section>
 
       <form className="panel form-stack settings-form" onSubmit={submitCategories}>
         <div className="panel-heading"><div><span className="eyebrow">Organization</span><h2>Spending categories</h2></div></div>

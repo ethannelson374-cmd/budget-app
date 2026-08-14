@@ -16,11 +16,12 @@ vi.mock("../api/client", async (importOriginal) => {
   return { ...actual, apiRequest: vi.fn() };
 });
 
-const settings = { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null };
+const settings = { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_include_descriptions: false, advisor_store_history: true };
 const categories = { categories: [
   { id: 1, key: "groceries", name: "Groceries", group: "Everyday", enabled: true },
   { id: 2, key: "other", name: "Other", group: "Other", enabled: true },
 ] };
+const advisorStatus = { available: true, enabled: true, store_history: true, provider: "openai", model: "gpt-5.6" };
 const options = { currencies: [{ code: "USD", name: "US Dollar" }], pay_frequencies: [{ value: "monthly", label: "Monthly" }], default_categories: [] };
 
 describe("SettingsPage", () => {
@@ -38,6 +39,8 @@ describe("SettingsPage", () => {
       if (path === "/categories/selection") return categories;
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
+      if (path === "/advisor/status") return advisorStatus;
+      if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });
   });
@@ -65,6 +68,8 @@ describe("SettingsPage", () => {
       if (path === "/categories/selection") return categories;
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
+      if (path === "/advisor/status") return advisorStatus;
+      if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = new QueryClient();

@@ -13,6 +13,7 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/plan", label: "Plan", icon: "target" },
   { to: "/recurring", label: "Recurring", icon: "repeat" },
   { to: "/insights", label: "Insights", icon: "sparkles" },
+  { to: "/advisor", label: "Advisor", icon: "message" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 

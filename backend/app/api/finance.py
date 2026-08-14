@@ -71,7 +71,7 @@ def update_user_settings(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     current = principal.user.settings
-    non_nullable = {"currency", "timezone", "theme"}
+    non_nullable = {"currency", "timezone", "theme", "advisor_enabled", "advisor_share_merchants", "advisor_include_descriptions", "advisor_store_history"}
     for field in payload.model_fields_set:
         value = getattr(payload, field)
         if field in non_nullable and value is None:

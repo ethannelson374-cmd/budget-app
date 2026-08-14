@@ -36,7 +36,7 @@ export function DashboardPage() {
 
   return (
     <div className="page-container dashboard-page">
-      <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div>} />
+      <PageHeader title="Dashboard" description={monthLabel(month)} actions={<><Link className="button secondary" to="/advisor">Ask Budget</Link><div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div></>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
       {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} />}

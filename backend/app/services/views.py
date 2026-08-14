@@ -22,6 +22,10 @@ def settings_view(settings: UserSettings) -> dict[str, object]:
         "theme": settings.theme,
         "annual_gross_income": money(settings.annual_gross_income),
         "pay_frequency": settings.pay_frequency,
+        "advisor_enabled": settings.advisor_enabled,
+        "advisor_share_merchants": settings.advisor_share_merchants,
+        "advisor_include_descriptions": settings.advisor_include_descriptions,
+        "advisor_store_history": settings.advisor_store_history,
     }
 
 

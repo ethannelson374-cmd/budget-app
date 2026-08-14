@@ -140,6 +140,15 @@ repository `.env` file.
 | `PLAID_WEBHOOK_URI` | Optional signed Plaid webhook endpoint, e.g. `https://budget.example.com/api/v1/plaid/webhook` |
 | `PLAID_PRODUCTS` | Comma-separated Link products; Phase 2B defaults to `transactions` |
 | `PLAID_COUNTRY_CODES` | Comma-separated country codes; default `US` |
+| `AI_ENABLED` | Enables the server-side Ask Budget provider; requires the selected provider key when true |
+| `AI_PROVIDER` | Advisor provider adapter; Phase 3C-2 supports `gemini` and `openai` |
+| `GEMINI_API_KEY` | Server-side Gemini API credential; never exposed to the frontend |
+| `GEMINI_MODEL` | Gemini model used by Ask Budget; defaults to `gemini-3.6-flash` |
+| `OPENAI_API_KEY` | Optional server-side OpenAI API credential when `AI_PROVIDER=openai` |
+| `OPENAI_MODEL` | OpenAI Responses API model; defaults to `gpt-5.6` |
+| `AI_TIMEOUT_SECONDS` | Provider request timeout, default `45` |
+| `AI_MAX_TOOL_CALLS` | Maximum read-only Budget tools requested per answer, default `4` |
+| `AI_REQUESTS_PER_MINUTE` | Per-user Advisor request limit in this one-worker deployment, default `12` |
 
 The database connection is assembled with `sqlalchemy.URL.create()` from the
 individual `DB_*` settings. A combined database URL is not a supported setting
@@ -451,3 +460,41 @@ variance, payoff opportunity, and forecast warning is produced by Budget's deter
 services. The stored evidence payload is intentionally sanitized and becomes the future
 input boundary for Phase 3C-2 Ask Budget. Migration `20260813_0008` creates the
 owner-scoped insight history table.
+
+
+## Phase 3C-2 Ask Budget AI Advisor
+
+Phase 3C-2 adds a read-only conversational Advisor over Budget's deterministic
+financial engines. The `/advisor` workspace automatically treats questions as
+quick answers, deeper analysis, or what-if scenarios. It can call only an
+explicit allowlist of read-only Budget tools for cash forecasts, goals, debt,
+scenarios, category spending, recurring summaries, active insights, and
+purchase-affordability checks. Financial facts displayed as evidence cards are
+calculated by Budget rather than by the language model.
+
+Provider adapters are isolated behind the same interface. Gemini uses the native Gemini REST API with function calling, SSE streaming, and structured JSON output; the OpenAI adapter remains available as a fallback.
+Provider requests set `store=false`. Context is deliberately sanitized: Plaid
+access tokens, routing/account numbers, session/CSRF/bootstrap secrets, raw
+webhook payloads, and other credentials are never part of the Advisor context.
+Merchant names and transaction descriptions are withheld unless the user opts
+in through Settings. Merchant-looking insight text is also generalized while
+merchant sharing is disabled.
+
+Advisor conversations are owner-scoped. Users may disable Ask Budget, disable
+history entirely for a private session, delete saved Advisor history, or opt in
+to merchant/description sharing. Private mode uses a transient owner-scoped
+conversation shell for the streaming request and removes it after either a
+successful response or a pre-stream planning failure. Phase 3C-2 remains
+read-only; user-confirmed financial mutations are deferred to Phase 3C-3.
+
+Advisor APIs:
+
+- `GET /api/v1/advisor/status`
+- `GET/POST/DELETE /api/v1/advisor/conversations`
+- `GET/DELETE /api/v1/advisor/conversations/{conversation_id}`
+- `POST /api/v1/advisor/conversations/{conversation_id}/messages/stream`
+
+Migration `20260813_0009` adds Advisor privacy preferences plus owner-scoped
+conversation/message history. No provider SDK or new daemon is required; the
+backend uses the existing HTTPS runtime and the frontend consumes same-origin
+server-sent events.

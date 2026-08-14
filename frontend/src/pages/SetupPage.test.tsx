@@ -71,7 +71,7 @@ describe("SetupWizard secret handling", () => {
         id: 1,
         username: "owner",
         email: "owner@example.test",
-        settings: { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null },
+        settings: { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_include_descriptions: false, advisor_store_history: true },
       },
       csrf_token: "returned-csrf",
     };

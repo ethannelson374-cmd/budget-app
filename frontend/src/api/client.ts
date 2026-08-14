@@ -103,3 +103,59 @@ export function toSearchParams(values: Record<string, string | number | boolean 
   const result = params.toString();
   return result ? `?${result}` : "";
 }
+
+
+export interface ApiStreamEvent { event: string; data: unknown; }
+
+export async function apiEventStream(
+  path: string,
+  init: RequestInit,
+  onEvent: (event: ApiStreamEvent) => void,
+): Promise<void> {
+  const headers = new Headers(init.headers);
+  const method = (init.method ?? "GET").toUpperCase();
+  headers.set("Accept", "text/event-stream");
+  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken && !headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", csrfToken);
+
+  const response = await fetch(apiUrl(path), { ...init, headers, credentials: "include", cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await parseResponse(response)) as ApiErrorPayload | undefined;
+    const retryHeader = response.headers.get("retry-after");
+    const retryAfter = retryHeader ? Number.parseInt(retryHeader, 10) : undefined;
+    if (response.status === 401) unauthorizedHandler?.();
+    throw new ApiError(payload?.error?.message ?? "The request could not be completed.", {
+      status: response.status, code: payload?.error?.code,
+      requestId: payload?.error?.request_id ?? response.headers.get("x-request-id") ?? undefined,
+      retryAfter: Number.isFinite(retryAfter) ? retryAfter : undefined,
+    });
+  }
+  if (!response.body) throw new ApiError("The response stream was unavailable.", { status: 503, code: "stream_unavailable" });
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    let split = buffer.indexOf("\n\n");
+    while (split >= 0) {
+      const block = buffer.slice(0, split).replaceAll("\r", "");
+      buffer = buffer.slice(split + 2);
+      let event = "message";
+      const data: string[] = [];
+      block.split("\n").forEach((line) => {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+      });
+      if (data.length) {
+        const raw = data.join("\n");
+        let parsed: unknown = raw;
+        try { parsed = JSON.parse(raw); } catch { /* keep raw data */ }
+        onEvent({ event, data: parsed });
+      }
+      split = buffer.indexOf("\n\n");
+    }
+    if (done) break;
+  }
+}

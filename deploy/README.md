@@ -376,3 +376,38 @@ process, external AI service, environment variable, or public listener is requir
 refresh runs synchronously through the authenticated API and stores only deterministic,
 owner-scoped signal history in MySQL. Build the Vite frontend off-host and replace the live
 `frontend/dist` bundle using the normal manual release procedure.
+
+
+## Phase 3C-2 Ask Budget deployment
+
+Apply migration `20260813_0009` before restarting `budget-api`. Configure the
+provider only in `/etc/budget-app/budget.env`; never place the API key in Git,
+frontend environment variables, Nginx configuration, URLs, or shell history
+that is retained/shared:
+
+```text
+AI_ENABLED=true
+AI_PROVIDER=gemini
+GEMINI_API_KEY=<server-side-key>
+GEMINI_MODEL=gemini-3.6-flash
+# OpenAI remains supported as an optional fallback:
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6
+AI_TIMEOUT_SECONDS=45
+AI_MAX_TOOL_CALLS=4
+AI_REQUESTS_PER_MINUTE=12
+```
+
+Restart `budget-api` after changing the environment, then verify `/api/health`,
+`/api/ready`, and the authenticated `/api/v1/advisor/status` route. The VM needs
+outbound HTTPS access to the configured provider; no new inbound port, queue,
+daemon, Node process, or database listener is required. Nginx proxies the
+Advisor's same-origin streaming response through the existing `/api/` route, and
+the API sends `X-Accel-Buffering: no` plus `Cache-Control: no-store`.
+
+Build the frontend off-host as usual. Before the production bundle swap, verify
+that the uploaded Vite bundle contains `/advisor` and `Ask Budget`. After the
+swap, test one quick question, one scenario, the Insights **Ask Budget about
+this** handoff, saved history, and private/no-history mode. Provider failures
+should surface as generic Advisor errors; logs and audit events must not contain
+provider response bodies or secret values.

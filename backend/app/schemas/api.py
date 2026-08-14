@@ -80,6 +80,10 @@ class SettingsPatch(StrictModel):
         None
     )
     pay_frequency: PayFrequency | None = None
+    advisor_enabled: bool | None = None
+    advisor_share_merchants: bool | None = None
+    advisor_include_descriptions: bool | None = None
+    advisor_store_history: bool | None = None
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -208,6 +212,10 @@ class UserSettingsView(ViewModel):
     theme: str
     annual_gross_income: str | None
     pay_frequency: str | None
+    advisor_enabled: bool
+    advisor_share_merchants: bool
+    advisor_include_descriptions: bool
+    advisor_store_history: bool
 
 
 class UserView(ViewModel):
@@ -890,3 +898,56 @@ class InsightsView(ViewModel):
 
 class InsightStatusPatch(StrictModel):
     status: Literal["active", "dismissed"]
+
+
+AdvisorMode = Literal["quick", "analysis", "scenario"]
+AdvisorConfidence = Literal["high", "medium", "low"]
+
+
+class AdvisorStatusView(ViewModel):
+    available: bool
+    enabled: bool
+    store_history: bool
+    provider: str
+    model: str
+
+
+class AdvisorConversationCreate(StrictModel):
+    title: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+
+
+class AdvisorConversationView(ViewModel):
+    id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdvisorMessageView(ViewModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    response: dict[str, object] | None
+    created_at: datetime
+
+
+class AdvisorConversationDetailView(ViewModel):
+    conversation: AdvisorConversationView
+    messages: list[AdvisorMessageView]
+
+
+class AdvisorConversationListView(ViewModel):
+    conversations: list[AdvisorConversationView]
+
+
+class AdvisorPrompt(StrictModel):
+    message: Annotated[str, Field(min_length=1, max_length=4000)]
+    insight_id: Annotated[int, Field(gt=0)] | None = None
+
+    @field_validator("message")
+    @classmethod
+    def strip_advisor_message(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be blank")
+        return value

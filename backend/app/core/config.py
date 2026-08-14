@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 Environment = Literal["development", "test", "production"]
 DatabaseSSLMode = Literal["REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"]
 PlaidEnvironment = Literal["sandbox", "production"]
+AiProvider = Literal["openai", "gemini"]
 
 
 def _strict_bool(value: Any) -> bool:
@@ -92,7 +93,17 @@ class Settings(BaseSettings):
     plaid_products: str = "transactions"
     plaid_country_codes: str = "US"
 
-    @field_validator("demo_mode", "db_ssl_required", mode="before")
+    ai_enabled: bool = False
+    ai_provider: AiProvider = "openai"
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-5.6"
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-3.6-flash"
+    ai_timeout_seconds: Annotated[int, Field(ge=5, le=120)] = 45
+    ai_max_tool_calls: Annotated[int, Field(ge=1, le=8)] = 4
+    ai_requests_per_minute: Annotated[int, Field(ge=1, le=120)] = 12
+
+    @field_validator("demo_mode", "db_ssl_required", "ai_enabled", mode="before")
     @classmethod
     def validate_exact_boolean(cls, value: Any) -> bool | None:
         if value is None:
@@ -108,6 +119,20 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_plaid_environment(cls, value: Any) -> Any:
         return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("ai_provider", mode="before")
+    @classmethod
+    def normalize_ai_provider(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("openai_model", "gemini_model", mode="before")
+    @classmethod
+    def normalize_ai_model(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("must not be blank")
+        return value
 
     @field_validator("app_env", mode="before")
     @classmethod
@@ -183,6 +208,8 @@ class Settings(BaseSettings):
         "db_password",
         "plaid_client_id",
         "plaid_secret",
+        "openai_api_key",
+        "gemini_api_key",
         mode="before",
     )
     @classmethod
@@ -221,6 +248,12 @@ class Settings(BaseSettings):
             and not self.plaid_webhook_uri.startswith("https://")
         ):
             raise ValueError("PLAID_WEBHOOK_URI must use HTTPS in production")
+
+        if self.ai_enabled:
+            if self.ai_provider == "openai" and self.openai_api_key is None:
+                raise ValueError("OPENAI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=openai")
+            if self.ai_provider == "gemini" and self.gemini_api_key is None:
+                raise ValueError("GEMINI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=gemini")
 
         if self.app_env == "production":
             if self.demo_mode:
@@ -286,6 +319,20 @@ class Settings(BaseSettings):
     @property
     def plaid_country_code_list(self) -> list[str]:
         return self.plaid_country_codes.split(",")
+
+    @property
+    def ai_configured(self) -> bool:
+        if not self.ai_enabled:
+            return False
+        if self.ai_provider == "openai":
+            return self.openai_api_key is not None
+        if self.ai_provider == "gemini":
+            return self.gemini_api_key is not None
+        return False
+
+    @property
+    def advisor_model(self) -> str:
+        return self.gemini_model if self.ai_provider == "gemini" else self.openai_model
 
     @property
     def is_production(self) -> bool:

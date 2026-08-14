@@ -233,3 +233,27 @@ longer apply. Dismissed signals stay dismissed while the same fingerprint remain
 a refresh cannot immediately resurrect something the user intentionally hid. The sanitized
 explanation payload is the intended future boundary for Phase 3C-2 rather than raw Plaid
 payloads, credentials, account numbers, or provider tokens.
+
+
+## Phase 3C-2 Advisor boundary
+
+Ask Budget is an explanation/reasoning layer over deterministic Budget services,
+not a new source of financial truth. FastAPI builds a bounded, JSON-safe snapshot
+and may execute only the registered read-only Advisor tool schemas. The provider
+never receives Plaid credentials, account/routing numbers, authentication
+secrets, bootstrap material, or raw webhook payloads. Merchant names and
+transaction descriptions are opt-in context. Strings originating from financial
+records are explicitly treated as untrusted data rather than instructions.
+
+The Gemini and OpenAI adapters are isolated behind an `AdvisorProvider` protocol. Requests are
+made server-side, use `store=false`, and the final response is constrained to a
+structured reply containing mode, headline, answer, confidence, warnings, and
+follow-up prompts. Native fact cards are assembled from deterministic tool
+results and attached to the streamed response by Budget itself. No model tool
+can mutate accounts, transactions, budgets, goals, debts, settings, or money.
+
+Conversation rows and messages use composite owner constraints. History can be
+disabled per user; in that mode a transient conversation row exists only for
+owner-scoped streaming and is deleted at completion/failure. A process-local
+per-user request limiter is appropriate to the current single-worker E2 runtime;
+a future multi-worker deployment must move this limiter to shared state.

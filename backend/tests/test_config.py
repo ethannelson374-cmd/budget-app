@@ -257,3 +257,36 @@ def test_windows_timezone_data_is_available() -> None:
     from zoneinfo import ZoneInfo
 
     assert ZoneInfo("America/Chicago").key == "America/Chicago"
+
+
+def test_ai_provider_requires_only_selected_provider_key() -> None:
+    openai = Settings(
+        _env_file=None,
+        app_env="test",
+        demo_mode=True,
+        ai_enabled=True,
+        ai_provider="openai",
+        openai_api_key="openai-test-key",
+    )
+    assert openai.ai_configured is True
+    assert openai.advisor_model == "gpt-5.6"
+
+    gemini = Settings(
+        _env_file=None,
+        app_env="test",
+        demo_mode=True,
+        ai_enabled=True,
+        ai_provider="gemini",
+        gemini_api_key="gemini-test-key",
+    )
+    assert gemini.ai_configured is True
+    assert gemini.advisor_model == "gemini-3.6-flash"
+
+    with pytest.raises(ValidationError, match="GEMINI_API_KEY"):
+        Settings(
+            _env_file=None,
+            app_env="test",
+            demo_mode=True,
+            ai_enabled=True,
+            ai_provider="gemini",
+        )

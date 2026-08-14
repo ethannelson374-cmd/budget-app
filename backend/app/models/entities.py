@@ -67,6 +67,10 @@ class UserSettings(TimestampMixin, Base):
     annual_gross_income: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
     pay_frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    advisor_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    advisor_share_merchants: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    advisor_include_descriptions: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    advisor_store_history: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="settings")
 
@@ -679,3 +683,38 @@ class InsightRecord(TimestampMixin, Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AdvisorConversation(TimestampMixin, Base):
+    __tablename__ = "advisor_conversations"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_advisor_conversation_id_user"),
+        Index("ix_advisor_conversations_user_updated", "user_id", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+
+
+class AdvisorMessage(Base):
+    __tablename__ = "advisor_messages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversation_id", "user_id"],
+            ["advisor_conversations.id", "advisor_conversations.user_id"],
+            name="fk_advisor_message_conversation_owner",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("role IN ('user','assistant')", name="advisor_message_role_allowed"),
+        Index("ix_advisor_messages_conversation_created", "conversation_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

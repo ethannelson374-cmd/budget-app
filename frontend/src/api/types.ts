@@ -39,6 +39,10 @@ export interface UserSettings {
   theme: ThemePreference;
   annual_gross_income: string | null;
   pay_frequency: PayFrequency | null;
+  advisor_enabled: boolean;
+  advisor_share_merchants: boolean;
+  advisor_include_descriptions: boolean;
+  advisor_store_history: boolean;
 }
 
 export interface AuthUser {
@@ -599,3 +603,49 @@ export interface InsightsResponse {
   resolved_count: number;
   insights: InsightItem[];
 }
+
+
+export type AdvisorMode = "quick" | "analysis" | "scenario";
+export type AdvisorConfidence = "high" | "medium" | "low";
+
+export interface AdvisorStatus {
+  available: boolean;
+  enabled: boolean;
+  store_history: boolean;
+  provider: string;
+  model: string;
+}
+
+export interface AdvisorFact {
+  label: string;
+  value: string;
+  detail: string;
+}
+
+export interface AdvisorReply {
+  mode: AdvisorMode;
+  headline: string;
+  answer: string;
+  confidence: AdvisorConfidence;
+  warnings: string[];
+  suggested_questions: string[];
+  facts: AdvisorFact[];
+}
+
+export interface AdvisorConversation {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdvisorMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  response: AdvisorReply | null;
+  created_at: string;
+}
+
+export interface AdvisorConversationList { conversations: AdvisorConversation[]; }
+export interface AdvisorConversationDetail { conversation: AdvisorConversation; messages: AdvisorMessage[]; }

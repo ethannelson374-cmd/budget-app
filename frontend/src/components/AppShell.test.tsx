@@ -8,7 +8,7 @@ vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ user: { username: "own
 describe("AppShell navigation", () => {
   it("exposes only working Phase 1 destinations in desktop and mobile navigation", () => {
     render(<MemoryRouter initialEntries={["/dashboard"]}><Routes><Route element={<AppShell />}><Route path="/dashboard" element={<h1>Dashboard content</h1>} /></Route></Routes></MemoryRouter>);
-    for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Recurring", "Insights", "Settings"]) {
+    for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Recurring", "Insights", "Advisor", "Settings"]) {
       expect(screen.getAllByRole("link", { name })).toHaveLength(2);
     }
     expect(screen.queryByRole("link", { name: /AI|Reports/ })).not.toBeInTheDocument();

@@ -39,6 +39,7 @@ class SecretRedactionFilter(logging.Filter):
             settings.db_password,
             settings.plaid_client_id,
             settings.plaid_secret,
+            settings.openai_api_key,
         ]
         values = {
             value.get_secret_value()
