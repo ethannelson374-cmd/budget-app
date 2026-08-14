@@ -1,15 +1,20 @@
-import { useState, type CSSProperties } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, type CSSProperties, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
 import type {
+  ReportExport,
+  ReportExportList,
   ReportRangeKey,
+  ReportSectionKey,
   ReportsBudget,
   ReportsCashFlowPoint,
   ReportsGoalsDebt,
   ReportsOverview,
   ReportsSpending,
+  SavedReport,
+  SavedReportList,
 } from "../api/types";
 import { Amount } from "../components/Amount";
 import { PageHeader } from "../components/PageHeader";
@@ -252,19 +257,104 @@ function GoalsDebtReport({ data }: { data: ReportsGoalsDebt }) {
   );
 }
 
+const reportSectionLabels: Record<ReportSectionKey, string> = {
+  overview: "Overview",
+  spending: "Spending & Cash Flow",
+  budget: "Budget Performance",
+  goals: "Goals & Debt",
+};
+
+function reportTabFromSection(section: ReportSectionKey): ReportTab {
+  return section;
+}
+
+function ReportSectionsPicker({ sections, onChange }: { sections: ReportSectionKey[]; onChange: (sections: ReportSectionKey[]) => void }) {
+  const toggle = (section: ReportSectionKey) => {
+    if (sections.includes(section)) {
+      if (sections.length === 1) return;
+      onChange(sections.filter((item) => item !== section));
+    } else {
+      onChange([...sections, section]);
+    }
+  };
+  return <div className="reports-section-picker">{(Object.keys(reportSectionLabels) as ReportSectionKey[]).map((section) => <label key={section}><input type="checkbox" checked={sections.includes(section)} onChange={() => toggle(section)} /> <span>{reportSectionLabels[section]}</span></label>)}</div>;
+}
+
+function startDownload(item: ReportExport) {
+  const link = document.createElement("a");
+  link.href = `/api/v1/reports/exports/${item.id}/download`;
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>("overview");
   const [range, setRange] = useState<ReportRangeKey>("6m");
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [centerOpen, setCenterOpen] = useState(false);
+  const [saveName, setSaveName] = useState("6-month financial review");
+  const [saveSections, setSaveSections] = useState<ReportSectionKey[]>(["overview"]);
+  const [exportName, setExportName] = useState("Budget financial report");
+  const [exportRange, setExportRange] = useState<ReportRangeKey>("6m");
+  const [exportSections, setExportSections] = useState<ReportSectionKey[]>(["overview", "spending", "budget", "goals"]);
+  const queryClient = useQueryClient();
   const days = ranges.find((item) => item.key === range)?.days ?? 184;
   const overview = useQuery({ queryKey: queryKeys.reportsOverview(days), queryFn: () => apiRequest<ReportsOverview>(`/reports/overview?days=${days}`), staleTime: 60_000, enabled: tab === "overview" });
   const spending = useQuery({ queryKey: queryKeys.reportsSpending(range), queryFn: () => apiRequest<ReportsSpending>(`/reports/spending?range=${range}`), staleTime: 60_000, enabled: tab === "spending" });
   const budget = useQuery({ queryKey: queryKeys.reportsBudget(range), queryFn: () => apiRequest<ReportsBudget>(`/reports/budget?range=${range}`), staleTime: 60_000, enabled: tab === "budget" });
   const goalsDebt = useQuery({ queryKey: queryKeys.reportsGoalsDebt(range), queryFn: () => apiRequest<ReportsGoalsDebt>(`/reports/goals-debt?range=${range}`), staleTime: 60_000, enabled: tab === "goals" });
+  const saved = useQuery({ queryKey: queryKeys.savedReports, queryFn: () => apiRequest<SavedReportList>("/reports/saved"), staleTime: 30_000 });
+  const exports = useQuery({ queryKey: queryKeys.reportExports, queryFn: () => apiRequest<ReportExportList>("/reports/exports?limit=12"), staleTime: 30_000 });
   const activeQuery = tab === "overview" ? overview : tab === "spending" ? spending : tab === "budget" ? budget : goalsDebt;
+
+  const saveReport = useMutation({
+    mutationFn: () => apiRequest<SavedReport>("/reports/saved", { method: "POST", body: JSON.stringify({ name: saveName, range, sections: saveSections }) }),
+    onSuccess: async () => { setSaveOpen(false); setCenterOpen(true); await queryClient.invalidateQueries({ queryKey: queryKeys.savedReports }); },
+  });
+  const deleteSaved = useMutation({
+    mutationFn: (id: number) => apiRequest<void>(`/reports/saved/${id}`, { method: "DELETE" }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: queryKeys.savedReports }),
+  });
+  const createExport = useMutation({
+    mutationFn: (format: "csv" | "pdf") => apiRequest<ReportExport>("/reports/exports", { method: "POST", body: JSON.stringify({ name: exportName, format, range: exportRange, sections: exportSections }) }),
+    onSuccess: async (item) => { startDownload(item); setExportOpen(false); setCenterOpen(true); await queryClient.invalidateQueries({ queryKey: queryKeys.reportExports }); },
+  });
+  const deleteExport = useMutation({
+    mutationFn: (id: number) => apiRequest<void>(`/reports/exports/${id}`, { method: "DELETE" }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: queryKeys.reportExports }),
+  });
+
+  const rangeLabel = ranges.find((item) => item.key === range)?.label ?? range;
+  const currentSection = tab as ReportSectionKey;
+  const openSave = () => {
+    setSaveName(`${rangeLabel} ${reportSectionLabels[currentSection]}`);
+    setSaveSections([currentSection]);
+    setSaveOpen(true);
+    setExportOpen(false);
+  };
+  const openExport = () => {
+    setExportName(`Budget ${rangeLabel} report`);
+    setExportRange(range);
+    setExportSections(["overview", "spending", "budget", "goals"]);
+    setExportOpen(true);
+    setSaveOpen(false);
+  };
+  const openSavedReport = (item: SavedReport) => {
+    setRange(item.range);
+    setTab(reportTabFromSection(item.sections[0] ?? "overview"));
+  };
+  const submitSave = (event: FormEvent) => { event.preventDefault(); saveReport.mutate(); };
 
   return (
     <div className="page-container reports-page">
-      <PageHeader title="Reports" description="Historical financial analytics built from Budget's deterministic calculations." />
+      <PageHeader
+        title="Reports"
+        description="Historical financial analytics built from Budget's deterministic calculations."
+        actions={<div className="reports-header-actions"><Link className="button secondary" to="/advisor" state={{ report: { section: currentSection, range, label: `${rangeLabel} ${reportSectionLabels[currentSection]}` } }}>Ask Budget</Link><button className="button secondary" type="button" onClick={() => setCenterOpen((value) => !value)}>Report center</button><button className="button secondary" type="button" onClick={openSave}>Save view</button><button className="button primary" type="button" onClick={openExport}>Export</button></div>}
+      />
       <div className="reports-toolbar">
         <div className="segmented-control reports-tabs" aria-label="Report section">
           <button type="button" className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</button>
@@ -274,6 +364,12 @@ export function ReportsPage() {
         </div>
         <div className="segmented-control reports-range-control" aria-label="Report range">{ranges.map((item) => <button type="button" key={item.key} className={range === item.key ? "active" : ""} onClick={() => setRange(item.key)}>{item.label}</button>)}</div>
       </div>
+
+      {saveOpen && <form className="panel reports-config-panel" onSubmit={submitSave}><div><span className="eyebrow">Saved report</span><h2>Save this reporting view</h2><p>Keep a named range and section set so you can reopen the same analysis later.</p></div><label>Report name<input value={saveName} maxLength={120} onChange={(event) => setSaveName(event.target.value)} required /></label><ReportSectionsPicker sections={saveSections} onChange={setSaveSections} />{saveReport.error instanceof Error && <div className="inline-alert" role="alert">{saveReport.error.message}</div>}<div className="reports-config-actions"><button className="button ghost" type="button" onClick={() => setSaveOpen(false)}>Cancel</button><button className="button primary" type="submit" disabled={saveReport.isPending || !saveName.trim() || saveSections.length === 0}>{saveReport.isPending ? "Saving…" : "Save report"}</button></div></form>}
+
+      {exportOpen && <section className="panel reports-config-panel"><div><span className="eyebrow">Export</span><h2>Build a reproducible report</h2><p>Choose the range and sections. Budget stores the deterministic report snapshot and generated file so this exact export remains available later.</p></div><label>Export name<input value={exportName} maxLength={120} onChange={(event) => setExportName(event.target.value)} /></label><label>Range<select value={exportRange} onChange={(event) => setExportRange(event.target.value as ReportRangeKey)}>{ranges.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label><ReportSectionsPicker sections={exportSections} onChange={setExportSections} />{createExport.error instanceof Error && <div className="inline-alert" role="alert">{createExport.error.message}</div>}<div className="reports-config-actions"><button className="button ghost" type="button" onClick={() => setExportOpen(false)}>Cancel</button><button className="button secondary" type="button" disabled={createExport.isPending || !exportName.trim() || exportSections.length === 0} onClick={() => createExport.mutate("csv")}>CSV</button><button className="button primary" type="button" disabled={createExport.isPending || !exportName.trim() || exportSections.length === 0} onClick={() => createExport.mutate("pdf")}>{createExport.isPending ? "Building…" : "PDF report"}</button></div></section>}
+
+      {centerOpen && <section className="panel reports-center"><div className="reports-section-heading"><div><span className="eyebrow">Report center</span><h2>Saved reports &amp; export history</h2></div><span className="reports-range">Reopen or reproduce</span></div><div className="reports-center-grid"><div><h3>Saved reports</h3>{saved.isPending ? <p className="muted-copy">Loading saved reports…</p> : saved.data?.reports.length ? <div className="reports-saved-list">{saved.data.reports.map((item) => <article key={item.id}><button type="button" className="reports-saved-open" onClick={() => openSavedReport(item)}><strong>{item.name}</strong><span>{ranges.find((rangeItem) => rangeItem.key === item.range)?.label} · {item.sections.map((section) => reportSectionLabels[section]).join(", ")}</span></button><button type="button" className="text-button" disabled={deleteSaved.isPending} onClick={() => { if (window.confirm(`Delete saved report “${item.name}”?`)) deleteSaved.mutate(item.id); }}>Delete</button></article>)}</div> : <p className="muted-copy">No saved reports yet.</p>}</div><div><h3>Recent exports</h3>{exports.isPending ? <p className="muted-copy">Loading exports…</p> : exports.data?.exports.length ? <div className="reports-export-list">{exports.data.exports.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{item.format.toUpperCase()} · {new Date(item.created_at).toLocaleString()} · {(item.file_size / 1024).toFixed(1)} KB</span></div><div><a className="text-link" href={`/api/v1/reports/exports/${item.id}/download`} download>Download</a><button type="button" className="text-button" disabled={deleteExport.isPending} onClick={() => deleteExport.mutate(item.id)}>Remove</button></div></article>)}</div> : <p className="muted-copy">Exports you create will appear here.</p>}</div></div></section>}
 
       {activeQuery.isPending && <LoadingState label="Building your financial report" />}
       {activeQuery.isError && <ErrorState message="Reports could not be loaded." onRetry={() => void activeQuery.refetch()} />}

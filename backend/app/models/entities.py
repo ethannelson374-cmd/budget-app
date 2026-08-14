@@ -12,16 +12,20 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.mysql import MEDIUMBLOB, MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 
 MONEY = Numeric(19, 4)
+LARGE_TEXT = Text().with_variant(MEDIUMTEXT(), "mysql")
+LARGE_BINARY = LargeBinary().with_variant(MEDIUMBLOB(), "mysql")
 
 
 class InstallationState(Base):
@@ -681,6 +685,43 @@ class FinancialSnapshot(TimestampMixin, Base):
     projected_90_day: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     planned_debt_free_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+class SavedReport(TimestampMixin, Base):
+    __tablename__ = "saved_reports"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_saved_report_id_user"),
+        UniqueConstraint("user_id", "name", name="uq_saved_report_user_name"),
+        CheckConstraint("range_key IN ('30d','3m','6m','ytd','1y')", name="saved_report_range_allowed"),
+        Index("ix_saved_reports_user_updated", "user_id", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    range_key: Mapped[str] = mapped_column(String(8), nullable=False)
+    sections_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class ReportExport(Base):
+    __tablename__ = "report_exports"
+    __table_args__ = (
+        CheckConstraint("format IN ('csv','pdf')", name="report_export_format_allowed"),
+        CheckConstraint("range_key IN ('30d','3m','6m','ytd','1y')", name="report_export_range_allowed"),
+        Index("ix_report_exports_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    saved_report_id: Mapped[int | None] = mapped_column(ForeignKey("saved_reports.id", ondelete="SET NULL"), nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    range_key: Mapped[str] = mapped_column(String(8), nullable=False)
+    sections_json: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[str] = mapped_column(LARGE_TEXT, nullable=False)
+    content_blob: Mapped[bytes] = mapped_column(LARGE_BINARY, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
 
 class InsightRecord(TimestampMixin, Base):
     __tablename__ = "insight_records"
@@ -814,7 +855,7 @@ class AdvisorProposalAction(Base):
     target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     label: Mapped[str] = mapped_column(String(180), nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
-    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[str] = mapped_column(LARGE_TEXT, nullable=False)
     before_json: Mapped[str] = mapped_column(Text, nullable=False)
     after_json: Mapped[str] = mapped_column(Text, nullable=False)
 

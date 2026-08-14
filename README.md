@@ -547,3 +547,21 @@ The Reports workspace now adds deterministic transaction-derived spending/cash-f
 ### Phase 3D Stage 3 — goals, debt, and forecast analytics
 
 The Reports `Goals & Debt` section combines current goal progress, manual contribution activity, debt payoff modeling, daily reporting snapshots, and the existing deterministic 30/60/90-day forecast engine. Snapshot history drives aggregate goal/debt trajectories and lets Budget score matured forecasts against the actual spendable cash captured on the target date. Forecast accuracy remains empty until enough daily snapshot history exists; no historical values are reconstructed or invented.
+
+### Phase 3D Stage 4 — report center, exports, and Advisor handoff
+
+The Reports workspace now closes Phase 3D with named saved views, reproducible export history, and direct Ask Budget handoff. Users can save a report configuration containing a range plus any combination of Overview, Spending, Budget, and Goals & Debt. The Report Center reopens those configurations and keeps recent CSV/PDF exports available for later download.
+
+Exports are generated server-side from Budget's deterministic reporting services. Each export stores both the normalized report payload and the exact generated file bytes, plus a SHA-256 integrity digest, so later downloads remain identical even if live financial data or the renderer changes. CSV output neutralizes spreadsheet-formula-like text while preserving numeric values. PDF output is generated without an external PDF runtime and presents report KPIs, category detail, budget performance, goals, debt, and forecast data in a compact financial-report layout.
+
+`Ask Budget` can be launched from any Reports section. The frontend sends only the selected report section and range; the backend rebuilds the report context from owner-scoped deterministic services rather than trusting client-supplied financial values. Report context is bounded before it reaches the provider, and merchant names remain excluded unless the user's existing Advisor merchant-sharing preference is enabled.
+
+Report Center APIs:
+
+- `GET/POST /api/v1/reports/saved`
+- `PUT/DELETE /api/v1/reports/saved/{report_id}`
+- `GET/POST /api/v1/reports/exports`
+- `GET /api/v1/reports/exports/{export_id}/download`
+- `DELETE /api/v1/reports/exports/{export_id}`
+
+Migration `20260814_0012` adds owner-scoped saved report configurations and exact export history. Stage 4 adds no new provider SDK, daemon, external rendering service, or public listener.

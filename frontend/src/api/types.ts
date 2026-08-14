@@ -868,3 +868,41 @@ export interface ReportsGoalsDebt {
   forecast: ForecastHorizon[];
   accuracy: ReportsForecastAccuracy[];
 }
+
+export type ReportSectionKey = "overview" | "spending" | "budget" | "goals";
+export type ReportExportFormat = "csv" | "pdf";
+
+export interface SavedReport {
+  id: number;
+  name: string;
+  range: ReportRangeKey;
+  sections: ReportSectionKey[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedReportList {
+  reports: SavedReport[];
+}
+
+export interface ReportExport {
+  id: number;
+  saved_report_id: number | null;
+  name: string;
+  format: ReportExportFormat;
+  range: ReportRangeKey;
+  sections: ReportSectionKey[];
+  content_sha256: string;
+  file_size: number;
+  created_at: string;
+}
+
+export interface ReportExportList {
+  exports: ReportExport[];
+}
+
+export interface AdvisorReportContext {
+  section: ReportSectionKey;
+  range: ReportRangeKey;
+  label: string;
+}

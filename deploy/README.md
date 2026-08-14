@@ -442,3 +442,37 @@ sudo systemctl enable --now budget-snapshot.timer
 ```
 
 The timer wakes hourly. The command upserts the current local calendar day's snapshot for each user, so repeated runs are safe and do not create duplicate daily history.
+
+## Phase 3D report center and exports
+
+The completed Phase 3D release adds migration `20260814_0012` on top of the reporting snapshot schema. Apply migrations before restarting the API and verify the database is at head:
+
+```bash
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-phase3d-migrate \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic upgrade head
+
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-phase3d-verify \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic current
+```
+
+Expected head is `20260814_0012`. Stage 4 adds no new environment variable, inbound port, daemon, PDF service, or provider credential. Keep the Stage 1 `budget-snapshot.timer` enabled because Goals/Debt trajectory and forecast-accuracy reporting rely on the daily history it maintains.
+
+Build the frontend off-host and use the normal verified `dist` swap. After deployment, smoke-test all four Reports tabs and then: save/reopen a named report; create and download both CSV and PDF exports; download a prior export again from Report Center; and launch **Ask Budget** from Spending, Budget, and Goals & Debt at least once. With Advisor merchant sharing disabled, report-based Advisor questions must not expose top-merchant names. Export responses should be private/no-store and include the stored SHA-256 integrity header.

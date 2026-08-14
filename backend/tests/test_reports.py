@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.models import FinancialSnapshot, RecurringStream, User
+from app.services.report_center import advisor_report_context, render_csv
 from app.services.reports import capture_snapshot
 from tests.conftest import csrf_headers
 
@@ -268,3 +269,141 @@ def test_report_range_validation(authenticated) -> None:
     assert client.get("/api/v1/reports/spending?range=wat").status_code == 422
     assert client.get("/api/v1/reports/budget?range=wat").status_code == 422
     assert client.get("/api/v1/reports/goals-debt?range=wat").status_code == 422
+
+
+def test_report_center_saved_config_exports_and_reproducible_download(authenticated, database) -> None:
+    client, csrf = authenticated
+    _account(client, csrf, "4200.0000")
+
+    created = client.post(
+        "/api/v1/reports/saved",
+        headers=csrf_headers(csrf),
+        json={"name": "Monthly Review", "range": "3m", "sections": ["overview", "spending"]},
+    )
+    assert created.status_code == 201, created.text
+    saved = created.json()
+    assert saved["name"] == "Monthly Review"
+    assert saved["sections"] == ["overview", "spending"]
+
+    listed = client.get("/api/v1/reports/saved")
+    assert listed.status_code == 200
+    assert listed.json()["reports"][0]["id"] == saved["id"]
+
+    exported = client.post(
+        "/api/v1/reports/exports",
+        headers=csrf_headers(csrf),
+        json={
+            "name": "Monthly Review",
+            "format": "pdf",
+            "range": "3m",
+            "sections": ["overview"],
+            "saved_report_id": saved["id"],
+        },
+    )
+    assert exported.status_code == 201, exported.text
+    export = exported.json()
+    assert export["format"] == "pdf"
+    assert export["file_size"] > 500
+    assert len(export["content_sha256"]) == 64
+
+    first_download = client.get(f"/api/v1/reports/exports/{export['id']}/download")
+    assert first_download.status_code == 200
+    assert first_download.headers["content-type"].startswith("application/pdf")
+    assert first_download.content.startswith(b"%PDF-1.4")
+    assert first_download.headers["x-content-sha256"] == export["content_sha256"]
+
+    # Stored export bytes remain identical even after live financial data changes.
+    with database.session_factory() as db:
+        from app.models import Account
+
+        account = db.scalar(select(Account))
+        assert account is not None
+        account.current_balance = Decimal("9999.0000")
+        account.available_balance = Decimal("9999.0000")
+        db.commit()
+    second_download = client.get(f"/api/v1/reports/exports/{export['id']}/download")
+    assert second_download.content == first_download.content
+
+    csv_export = client.post(
+        "/api/v1/reports/exports",
+        headers=csrf_headers(csrf),
+        json={"name": "Cash Snapshot", "format": "csv", "range": "30d", "sections": ["overview"]},
+    )
+    assert csv_export.status_code == 201, csv_export.text
+    csv_download = client.get(f"/api/v1/reports/exports/{csv_export.json()['id']}/download")
+    assert csv_download.status_code == 200
+    assert "Budget Financial Report" in csv_download.content.decode("utf-8-sig")
+
+    history = client.get("/api/v1/reports/exports")
+    assert history.status_code == 200
+    assert len(history.json()["exports"]) == 2
+
+
+def test_advisor_report_context_respects_merchant_privacy(authenticated, database) -> None:
+    client, csrf = authenticated
+    account_id = _account(client, csrf, "2500.0000")
+    categories = {
+        item["key"]: item["id"]
+        for item in client.get("/api/v1/categories/selection").json()["categories"]
+    }
+    today = datetime.now(ZoneInfo("America/Chicago")).date()
+    created = client.post(
+        "/api/v1/transactions",
+        headers=csrf_headers(csrf),
+        json={
+            "account_id": account_id,
+            "category_id": categories["groceries"],
+            "posted_date": today.isoformat(),
+            "authorized_date": None,
+            "merchant": "Private Grocer",
+            "description": "Private Grocer receipt",
+            "amount": "-125.0000",
+            "kind": "expense",
+            "pending": False,
+            "notes": None,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    with database.session_factory() as db:
+        user = db.scalar(select(User).where(User.normalized_username == "owner"))
+        assert user is not None
+        hidden = advisor_report_context(db, user, section="spending", range_key="30d")
+        assert hidden["data"]["top_merchants"] == []
+
+    opted = client.patch(
+        "/api/v1/settings",
+        headers=csrf_headers(csrf),
+        json={"advisor_share_merchants": True},
+    )
+    assert opted.status_code == 200, opted.text
+    with database.session_factory() as db:
+        user = db.scalar(select(User).where(User.normalized_username == "owner"))
+        assert user is not None
+        shared = advisor_report_context(db, user, section="spending", range_key="30d")
+        assert any(item["name"] == "Private Grocer" for item in shared["data"]["top_merchants"])
+
+
+def test_csv_export_neutralizes_formula_like_text() -> None:
+    payload = {
+        "generated_at": "2026-08-14T12:00:00Z",
+        "range_label": "Last 30 days",
+        "sections": ["spending"],
+        "spending": {
+            "summary": {},
+            "categories": [
+                {
+                    "name": "=HYPERLINK(\"https://example.invalid\")",
+                    "amount": "10.0000",
+                    "previous_amount": "0.0000",
+                    "change_amount": "-10.0000",
+                    "change_pct": None,
+                    "transaction_count": 1,
+                }
+            ],
+        },
+    }
+    text = render_csv(payload).decode("utf-8-sig")
+    assert "'=HYPERLINK" in text
+    assert "-10.0000" in text
+    assert "'-10.0000" not in text

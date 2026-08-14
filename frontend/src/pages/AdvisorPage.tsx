@@ -11,6 +11,7 @@ import type {
   AdvisorProposal,
   AdvisorProposalAction,
   AdvisorReply,
+  AdvisorReportContext,
   AdvisorStatus,
   InsightItem,
 } from "../api/types";
@@ -149,14 +150,18 @@ function ReplyCard({ row }: { row: ChatRow }) {
 export function AdvisorPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan" } | null);
+  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext } | null);
   const routedInsight = routeState?.insight ?? null;
+  const routedReport = routeState?.report ?? null;
   const initialPrompt = routedInsight
     ? routeState?.intent === "plan"
       ? `Build a practical action plan to address this insight: ${routedInsight.title}`
       : `Explain this insight and what I should do next: ${routedInsight.title}`
-    : "";
+    : routedReport
+      ? `Analyze this ${routedReport.label} report. What stands out, what improved or worsened, and what should I focus on next?`
+      : "";
   const [attachedInsight, setAttachedInsight] = useState<InsightItem | null>(routedInsight);
+  const [attachedReport, setAttachedReport] = useState<AdvisorReportContext | null>(routedReport);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [input, setInput] = useState(initialPrompt);
@@ -202,6 +207,7 @@ export function AdvisorPage() {
     setMessages([]);
     setInput("");
     setAttachedInsight(null);
+    setAttachedReport(null);
     setStreamError(null);
   };
 
@@ -210,6 +216,7 @@ export function AdvisorPage() {
     setMessages([]);
     setSelectedId(id);
     setAttachedInsight(null);
+    setAttachedReport(null);
     setStreamError(null);
   };
 
@@ -219,7 +226,9 @@ export function AdvisorPage() {
     setBusy(true);
     setStreamError(null);
     const insightForRequest = attachedInsight;
+    const reportForRequest = attachedReport;
     setAttachedInsight(null);
+    setAttachedReport(null);
     const userRow: ChatRow = { key: `user-${Date.now()}`, role: "user", content: message };
     const assistantKey = `assistant-${Date.now()}`;
     setMessages((current) => [...current, userRow, { key: assistantKey, role: "assistant", content: "", reply: null }]);
@@ -236,7 +245,12 @@ export function AdvisorPage() {
       let metaFacts: AdvisorFact[] = [];
       await apiEventStream(`/advisor/conversations/${conversationId}/messages/stream`, {
         method: "POST",
-        body: JSON.stringify({ message, insight_id: insightForRequest?.id ?? null }),
+        body: JSON.stringify({
+          message,
+          insight_id: insightForRequest?.id ?? null,
+          report_section: reportForRequest?.section ?? null,
+          report_range: reportForRequest?.range ?? null,
+        }),
       }, ({ event, data }) => {
         const payload = (data ?? {}) as Record<string, unknown>;
         if (event === "meta") {
@@ -279,6 +293,7 @@ export function AdvisorPage() {
       <PageHeader title="Ask Budget" description="Ask questions, model options, or review a plan before Budget changes anything." actions={<button className="button secondary" type="button" onClick={newConversation}>New conversation</button>} />
       {!storeHistory && <div className="notice-banner"><strong>Private session.</strong> Budget will not keep Advisor messages, and action plans are not created in private sessions.</div>}
       {attachedInsight && <div className="advisor-insight-context"><div><span className="eyebrow">Attached insight</span><strong>{attachedInsight.title}</strong><p>{attachedInsight.summary}</p></div><button type="button" className="button ghost" onClick={() => setAttachedInsight(null)}>Remove</button></div>}
+      {attachedReport && <div className="advisor-insight-context"><div><span className="eyebrow">Attached report</span><strong>{attachedReport.label}</strong><p>Ask Budget will receive this report directly from Budget's deterministic reporting engine.</p></div><button type="button" className="button ghost" onClick={() => setAttachedReport(null)}>Remove</button></div>}
       <div className={`advisor-layout${storeHistory ? "" : " private"}`}>
         {storeHistory && <aside className="panel advisor-history"><div className="advisor-history-heading"><strong>Conversations</strong><button type="button" className="text-button" onClick={newConversation}>New</button></div>{conversations.isPending && <p className="muted-copy">Loading history…</p>}{conversations.data?.conversations.length ? <div className="advisor-history-list">{conversations.data.conversations.map((item) => <div className={`advisor-history-row${selectedId === item.id ? " active" : ""}`} key={item.id}><button type="button" className="advisor-history-open" onClick={() => openConversation(item.id)}><strong>{item.title}</strong><small>{new Date(item.updated_at).toLocaleDateString()}</small></button><button type="button" className="advisor-history-delete" aria-label={`Delete ${item.title}`} disabled={deleteConversation.isPending || busy} onClick={() => { if (window.confirm(`Delete ${item.title}?`)) deleteConversation.mutate(item.id); }}>×</button></div>)}</div> : <p className="muted-copy">No saved conversations yet.</p>}</aside>}
         <section className="panel advisor-chat">

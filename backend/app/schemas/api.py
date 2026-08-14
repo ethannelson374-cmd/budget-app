@@ -943,6 +943,14 @@ class AdvisorConversationListView(ViewModel):
 class AdvisorPrompt(StrictModel):
     message: Annotated[str, Field(min_length=1, max_length=4000)]
     insight_id: Annotated[int, Field(gt=0)] | None = None
+    report_section: Literal["overview", "spending", "budget", "goals"] | None = None
+    report_range: Literal["30d", "3m", "6m", "ytd", "1y"] | None = None
+
+    @model_validator(mode="after")
+    def validate_report_context(self) -> AdvisorPrompt:
+        if (self.report_section is None) != (self.report_range is None):
+            raise ValueError("report_section and report_range must be provided together")
+        return self
 
     @field_validator("message")
     @classmethod
@@ -1225,3 +1233,67 @@ class ReportsGoalsDebtView(ViewModel):
     trajectory: list[ReportsTrajectoryPointView]
     forecast: list[ForecastHorizonView]
     accuracy: list[ReportsForecastAccuracyView]
+
+
+# Phase 3D — report center, exports, and reproducible saved configurations
+ReportSectionKey = Literal["overview", "spending", "budget", "goals"]
+ReportExportFormat = Literal["csv", "pdf"]
+
+
+class SavedReportWrite(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    range: ReportRangeKey
+    sections: Annotated[list[ReportSectionKey], Field(min_length=1, max_length=4)]
+
+    @field_validator("name")
+    @classmethod
+    def strip_saved_report_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be blank")
+        return value
+
+
+class SavedReportView(ViewModel):
+    id: int
+    name: str
+    range: ReportRangeKey
+    sections: list[ReportSectionKey]
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedReportListView(ViewModel):
+    reports: list[SavedReportView]
+
+
+class ReportExportCreate(StrictModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    format: ReportExportFormat
+    range: ReportRangeKey
+    sections: Annotated[list[ReportSectionKey], Field(min_length=1, max_length=4)]
+    saved_report_id: Annotated[int, Field(gt=0)] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_report_export_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be blank")
+        return value
+
+
+class ReportExportView(ViewModel):
+    id: int
+    saved_report_id: int | None
+    name: str
+    format: ReportExportFormat
+    range: ReportRangeKey
+    sections: list[ReportSectionKey]
+    content_sha256: str
+    file_size: int
+    created_at: datetime
+
+
+class ReportExportListView(ViewModel):
+    exports: list[ReportExportView]

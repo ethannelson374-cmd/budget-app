@@ -50,6 +50,7 @@ from app.services.advisor_actions import (
     undo_proposal,
 )
 from app.services.auth import Principal, add_audit_event
+from app.services.report_center import advisor_report_context
 
 router = APIRouter(prefix="/advisor", tags=["advisor"])
 
@@ -221,6 +222,13 @@ def stream_advisor_message(
     try:
         snapshot = sanitized_snapshot(db, principal.user)
         insight = attached_insight(db, principal.user, payload.insight_id)
+        if payload.report_section is not None and payload.report_range is not None:
+            snapshot["attached_report"] = advisor_report_context(
+                db,
+                principal.user,
+                section=payload.report_section,
+                range_key=payload.report_range,
+            )
         history = recent_history(db, principal.user, conversation.id)
         provider = provider_for_settings(settings)
         calls = provider.plan(message=payload.message, mode=mode, snapshot=snapshot, history=history, attached_insight=insight, tools=TOOL_DEFINITIONS, max_tool_calls=settings.ai_max_tool_calls)
@@ -255,7 +263,19 @@ def stream_advisor_message(
         raise
 
     if store_history:
-        save_message(db, principal.user, conversation, role="user", content=payload.message, context={"mode": mode, "insight_id": payload.insight_id})
+        save_message(
+            db,
+            principal.user,
+            conversation,
+            role="user",
+            content=payload.message,
+            context={
+                "mode": mode,
+                "insight_id": payload.insight_id,
+                "report_section": payload.report_section,
+                "report_range": payload.report_range,
+            },
+        )
     # Deterministic planning helpers may materialize default settings. Commit before
     # streaming so the request-scoped connection holds no write lock while the
     # stream uses a short-lived session for outcome/history persistence.
@@ -303,7 +323,20 @@ def stream_advisor_message(
                 return
             if success and reply is not None and store_history:
                 conv = get_conversation(save_db, user, conversation_id)
-                save_message(save_db, user, conv, role="assistant", content=str(reply.get("answer", "")), response=reply, context={"mode": mode, "tool_count": len(tool_results)})
+                save_message(
+                    save_db,
+                    user,
+                    conv,
+                    role="assistant",
+                    content=str(reply.get("answer", "")),
+                    response=reply,
+                    context={
+                        "mode": mode,
+                        "tool_count": len(tool_results),
+                        "report_section": payload.report_section,
+                        "report_range": payload.report_range,
+                    },
+                )
             add_audit_event(save_db, settings, action="advisor.answer", outcome="success" if success else "failure", request_id=request_id, user_id=user_id, detail=f"{mode}:tools={len(tool_results)}" if success else (error_code or "stream_error"))
             if not store_history:
                 discard_private_conversation(save_db, user_id, conversation_id)

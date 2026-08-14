@@ -52,6 +52,9 @@ const goalsDebt = {
   accuracy: [],
 };
 
+const savedReports = { reports: [{ id: 1, name: "Monthly Review", range: "3m", sections: ["overview", "spending"], created_at: "2026-08-14T12:00:00Z", updated_at: "2026-08-14T12:00:00Z" }] };
+const reportExports = { exports: [{ id: 2, saved_report_id: 1, name: "Monthly Review", format: "pdf", range: "3m", sections: ["overview"], content_sha256: "a".repeat(64), file_size: 2048, created_at: "2026-08-14T12:00:00Z" }] };
+
 function renderReports() {
   return render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ReportsPage /></QueryClientProvider></MemoryRouter>);
 }
@@ -62,6 +65,8 @@ describe("ReportsPage", () => {
       if (path.startsWith("/reports/spending")) return spending as never;
       if (path.startsWith("/reports/budget")) return budget as never;
       if (path.startsWith("/reports/goals-debt")) return goalsDebt as never;
+      if (path.startsWith("/reports/saved")) return savedReports as never;
+      if (path.startsWith("/reports/exports")) return reportExports as never;
       return overview as never;
     });
   });
@@ -106,6 +111,19 @@ describe("ReportsPage", () => {
     expect(screen.getByRole("heading", { name: "30 / 60 / 90-day outlook" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Forecast accuracy" })).toBeInTheDocument();
     expect(screen.getByText("Forecast accuracy needs time")).toBeInTheDocument();
+  });
+
+  it("opens the report center and exposes saved views, exports, and Advisor handoff", async () => {
+    const user = userEvent.setup();
+    renderReports();
+    expect(await screen.findByRole("link", { name: "Ask Budget" })).toHaveAttribute("href", "/advisor");
+    await user.click(screen.getByRole("button", { name: "Report center" }));
+    expect(await screen.findByRole("heading", { name: "Saved reports & export history" })).toBeInTheDocument();
+    expect(screen.getAllByText("Monthly Review").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/v1/reports/exports/2/download");
+    await user.click(screen.getByRole("button", { name: "Export" }));
+    expect(screen.getByRole("heading", { name: "Build a reproducible report" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "PDF report" })).toBeEnabled();
   });
 
 });
