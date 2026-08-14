@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 
-from app.api import advisor, auth, budget, finance, insights, plaid, planning, reports, security, setup
+from app.api import advisor, auth, budget, finance, insights, operations, plaid, planning, reports, security, setup
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(setup.router)
 api_router.include_router(auth.router)
 api_router.include_router(security.router)
+api_router.include_router(operations.router)
 api_router.include_router(finance.router)
 api_router.include_router(budget.router)
 api_router.include_router(planning.router)

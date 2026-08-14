@@ -220,6 +220,24 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class OperationalJob(Base):
+    __tablename__ = "operational_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('never','running','success','failed')",
+            name="operational_job_status_allowed",
+        ),
+    )
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), default="never", nullable=False)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    summary_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
 class FinancialInstitution(TimestampMixin, Base):
     __tablename__ = "financial_institutions"
     __table_args__ = (

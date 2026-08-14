@@ -175,6 +175,7 @@ def test_production_first_start_requires_token_but_initialized_start_does_not(
         db_user="budgetapp",
         db_password="not-used-by-injected-test-database",
         db_ssl_required=True,
+        backup_dir=tmp_path / "backups",
     )
     test_database = Database.from_settings(
         Settings(

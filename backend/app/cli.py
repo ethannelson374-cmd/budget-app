@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import calendar
 import getpass
+import json
 import sys
 from datetime import date, datetime
 from decimal import Decimal
@@ -35,6 +36,7 @@ from app.models import (
     LoginThrottle,
     MonthlyBudget,
     MonthlyBudgetCategory,
+    OperationalJob,
     PlaidItem,
     SessionRecord,
     Transaction,
@@ -42,7 +44,17 @@ from app.models import (
     UserSettings,
 )
 from app.services.auth import add_audit_event, revoke_user_sessions
+from app.services.backups import BackupError, create_backup, restore_test_backup, verify_backup
 from app.services.catalog import DEFAULT_CATEGORIES
+from app.services.operations import (
+    JOB_BACKUP,
+    JOB_BACKUP_VERIFY,
+    JOB_PLAID_SYNC,
+    JOB_REPORT_SNAPSHOT,
+    operations_status,
+    record_job_finished,
+    record_job_started,
+)
 from app.services.plaid_transactions import sync_all_plaid_items
 from app.services.reports import capture_all_snapshots
 
@@ -108,6 +120,7 @@ def reset_demo(settings: Settings) -> None:
                 PlaidItem,
                 FinancialInstitution,
                 Category,
+                OperationalJob,
                 SessionRecord,
                 LoginThrottle,
                 AuditEvent,
@@ -574,6 +587,65 @@ def snapshot_reports(settings: Settings) -> dict[str, int]:
         database.engine.dispose()
 
 
+def _record_job(
+    settings: Settings,
+    key: str,
+    *,
+    started: bool,
+    success: bool = False,
+    summary: dict[str, object] | None = None,
+    error_code: str | None = None,
+) -> None:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            if started:
+                record_job_started(db, key)
+            else:
+                record_job_finished(
+                    db, key, success=success, summary=summary, error_code=error_code
+                )
+    finally:
+        database.engine.dispose()
+
+
+def _tracked(settings: Settings, key: str, operation):
+    _record_job(settings, key, started=True)
+    try:
+        result = operation()
+        failed = result.get("failed", 0) if isinstance(result, dict) else 0
+        success = not bool(failed)
+        _record_job(
+            settings,
+            key,
+            started=False,
+            success=success,
+            summary=result if isinstance(result, dict) else {},
+        )
+        return result
+    except Exception as exc:
+        try:
+            _record_job(
+                settings,
+                key,
+                started=False,
+                success=False,
+                error_code=type(exc).__name__[:120],
+            )
+        except Exception:
+            pass
+        raise
+
+
+def current_operations_status(settings: Settings) -> dict[str, object]:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            return operations_status(db, settings)
+    finally:
+        database.engine.dispose()
+
+
 def parser() -> argparse.ArgumentParser:
     command_parser = argparse.ArgumentParser(prog="python -m app.cli")
     subcommands = command_parser.add_subparsers(dest="command", required=True)
@@ -593,6 +665,22 @@ def parser() -> argparse.ArgumentParser:
     subcommands.add_parser(
         "snapshot-reports", help="Capture or refresh today's reporting snapshot for every user"
     )
+    subcommands.add_parser(
+        "backup-db", help="Create a compressed logical database backup and apply retention"
+    )
+    subcommands.add_parser(
+        "verify-backup", help="Verify the newest backup checksum, archive, and structure"
+    )
+    restore = subcommands.add_parser(
+        "restore-test-backup", help="Restore-test the newest backup without touching the live database"
+    )
+    restore.add_argument(
+        "--target-db-name",
+        help="Existing empty MySQL database named budget_restore_*; SQLite uses a temporary target",
+    )
+    subcommands.add_parser(
+        "operations-status", help="Print the admin-safe reliability status as JSON"
+    )
     return command_parser
 
 
@@ -607,7 +695,7 @@ def main(argv: list[str] | None = None) -> int:
             reset_password(settings, args.username)
             print("Password reset and active sessions revoked.")
         elif args.command == "sync-plaid":
-            result = sync_plaid(settings, args.item_id)
+            result = _tracked(settings, JOB_PLAID_SYNC, lambda: sync_plaid(settings, args.item_id))
             print(
                 f"Plaid transaction sync complete: {result['succeeded']} succeeded, "
                 f"{result['failed']} failed."
@@ -615,14 +703,38 @@ def main(argv: list[str] | None = None) -> int:
             if result["failed"]:
                 return 1
         elif args.command == "snapshot-reports":
-            result = snapshot_reports(settings)
+            result = _tracked(settings, JOB_REPORT_SNAPSHOT, lambda: snapshot_reports(settings))
             print(
                 f"Reporting snapshot capture complete: {result['succeeded']} succeeded, "
                 f"{result['failed']} failed."
             )
             if result["failed"]:
                 return 1
-    except (LookupError, RuntimeError, ValueError) as exc:
+        elif args.command == "backup-db":
+            result = _tracked(settings, JOB_BACKUP, lambda: create_backup(settings))
+            print(
+                f"Database backup created: {result['archive']} ({result['size']} bytes, "
+                f"schema {result['schema_version']})."
+            )
+        elif args.command == "verify-backup":
+            result = _tracked(settings, JOB_BACKUP_VERIFY, lambda: verify_backup(settings))
+            print(
+                f"Backup verified: {result['archive']} ({result['verification']}, "
+                f"schema {result['schema_version']})."
+            )
+        elif args.command == "restore-test-backup":
+            result = _tracked(
+                settings,
+                JOB_BACKUP_VERIFY,
+                lambda: restore_test_backup(settings, args.target_db_name),
+            )
+            print(
+                f"Backup restore test passed: {result['archive']} -> {result['target']} "
+                f"(schema {result['schema_version']})."
+            )
+        elif args.command == "operations-status":
+            print(json.dumps(current_operations_status(settings), default=str, indent=2))
+    except (LookupError, RuntimeError, ValueError, BackupError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0

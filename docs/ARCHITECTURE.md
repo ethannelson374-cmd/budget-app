@@ -308,3 +308,26 @@ Invitation, password-reset, session, OAuth-state, and two-factor challenge beare
 Password reset is deliberately non-enumerating and revokes every current session after a successful reset. Session rows record only a bounded User-Agent string plus the existing timestamps/client metadata needed for the user's own session-management screen. A user can revoke individual non-current sessions or all other sessions. Self-service deletion removes the owner-scoped user graph through existing database cascades and attempts configured Plaid item disconnection first. The sole administrator cannot delete their account while other users remain, preventing an unmanaged family installation.
 
 Email delivery is optional. SMTP transports only invitation/reset links and is not part of the authentication trust decision. When SMTP is disabled or delivery fails, an authenticated administrator may retrieve the corresponding one-time link for manual private delivery. Google and SMTP credentials stay in the backend environment and are never exposed through frontend configuration or API status responses.
+
+## Phase 4 Stage 2 reliability boundary
+
+Operational reliability is deliberately small-install oriented. `operational_jobs` stores only
+the latest heartbeat/status for database backup, backup verification, Plaid sync, and reporting
+snapshot jobs. It is global installation metadata rather than owner-scoped financial data and
+is readable through the API only by an authenticated administrator. Error detail is reduced to
+a bounded error code/type; exception messages, provider bodies, credentials, and dump content
+are never persisted in the heartbeat table.
+
+Database backups remain outside MySQL. Production uses a server-side `mysqldump` over the same
+required TLS database path, streams it into gzip, writes mode-0600 archives plus SHA-256
+manifests, and applies grandfather/father/son retention (daily/weekly/monthly). Credentials are
+passed through a short-lived private MySQL option file rather than command-line arguments.
+SQLite/demo mode uses SQLite's online backup API and exercises a complete disposable restore in
+tests. Production restore drills are guarded to a separate empty database whose name begins
+`budget_restore_`; the application refuses to restore into the configured live database.
+
+The health model separates liveness from operational attention. `/api/health` remains a cheap
+process liveness response. `/api/ready` validates database access/setup and, in production when
+an Alembic revision is present, verifies that the database revision matches application head.
+Backup age or a missed background job does not take the API out of service; those conditions
+appear in the authenticated admin operations status instead.

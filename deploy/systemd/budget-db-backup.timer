@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Budget database backup daily
+
+[Timer]
+OnCalendar=*-*-* 08:15:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=budget-db-backup.service
+
+[Install]
+WantedBy=timers.target

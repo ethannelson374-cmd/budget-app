@@ -22,6 +22,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import Database
 from app.core.errors import ApiError
 from app.schemas.api import StatusView
+from app.services.operations import schema_versions
 from app.services.setup import ensure_installation_state, installation_initialized
 
 logger = logging.getLogger("budget.api")
@@ -72,6 +73,18 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        for field in (
+            "request_id",
+            "method",
+            "path",
+            "status",
+            "duration_ms",
+            "error_type",
+            "operation",
+        ):
+            value = getattr(record, field, None)
+            if value is not None:
+                payload[field] = value
         return json.dumps(payload, separators=(",", ":"))
 
 
@@ -166,12 +179,14 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
         if not isinstance(route_path, str):
             route_path = "unmatched"
         logger.info(
-            "request method=%s path=%s status=%s duration_ms=%s request_id=%s",
-            request.method,
-            route_path,
-            response.status_code,
-            round((perf_counter() - started) * 1000, 2),
-            request_id,
+            "request",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": route_path,
+                "status": response.status_code,
+                "duration_ms": round((perf_counter() - started) * 1000, 2),
+            },
         )
         return response
 
@@ -209,9 +224,11 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     @application.exception_handler(SQLAlchemyError)
     async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
         logger.error(
-            "database request failure type=%s request_id=%s",
-            type(exc).__name__,
-            getattr(request.state, "request_id", "unknown"),
+            "database request failure",
+            extra={
+                "error_type": type(exc).__name__,
+                "request_id": getattr(request.state, "request_id", "unknown"),
+            },
         )
         return JSONResponse(
             status_code=503,
@@ -223,9 +240,11 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     @application.exception_handler(Exception)
     async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.error(
-            "unhandled request failure type=%s request_id=%s",
-            type(exc).__name__,
-            getattr(request.state, "request_id", "unknown"),
+            "unhandled request failure",
+            extra={
+                "error_type": type(exc).__name__,
+                "request_id": getattr(request.state, "request_id", "unknown"),
+            },
         )
         return JSONResponse(
             status_code=500,
@@ -244,6 +263,14 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
                 connection.execute(text("SELECT 1"))
             with db_object.session_factory() as session:
                 initialized = installation_initialized(session)
+                if resolved_settings.is_production:
+                    current_schema, head_schema = schema_versions(session)
+                    if current_schema is not None and current_schema != head_schema:
+                        raise ApiError(
+                            503,
+                            "schema_not_current",
+                            "The database schema is not at the application migration head",
+                        )
             if (
                 resolved_settings.is_production
                 and not initialized

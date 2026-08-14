@@ -575,3 +575,12 @@ Users can authenticate with a local password or an explicitly linked Google Open
 Security Settings now includes active-session management, password reset, Google connection management, optional TOTP for password sign-in, one-time recovery codes, administrator invitation/user controls, and self-service account deletion. Password reset invalidates all existing sessions. TOTP secrets and recovery codes are encrypted at rest with the existing application encryption key. Google OAuth state and nonce values, invitation tokens, reset tokens, session tokens, and 2FA challenge tokens are stored only as keyed digests rather than plaintext.
 
 Google and SMTP are optional. With `EMAIL_DELIVERY=disabled`, the administrator can copy private invitation and password-reset links directly from Settings, which keeps the app useful for a small trusted family deployment without adding a mail provider. Migration `20260814_0013` adds the Stage 1 identity/security records and marks the existing owner as the first administrator.
+
+### Phase 4 Stage 2 — reliability and backups
+
+The private-family deployment now includes admin-only operational health, scheduled logical DB
+backups, retention, integrity verification, guarded restore drills, and structured request
+logging. Local/demo backups are full-restored into a disposable SQLite database for verification;
+production MySQL restore drills require a separate empty `budget_restore_*` database so the live
+database can never be selected accidentally. See `deploy/README.md` for the systemd units and
+production procedure.

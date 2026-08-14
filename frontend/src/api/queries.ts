@@ -34,6 +34,7 @@ export const queryKeys = {
   authSessions: ["auth-sessions"] as const,
   userInvitations: ["user-invitations"] as const,
   adminUsers: ["admin-users"] as const,
+  operationsStatus: ["operations-status"] as const,
 };
 
 export function useSetupStatus() {

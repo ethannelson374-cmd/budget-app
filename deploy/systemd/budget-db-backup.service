@@ -1,0 +1,43 @@
+[Unit]
+Description=Budget encrypted-transport logical database backup
+Documentation=file:/opt/budget-app/current/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsDirectory=/opt/budget-app/current/backend
+ConditionPathExists=/etc/budget-app/budget.env
+
+[Service]
+Type=oneshot
+User=budgetapp
+Group=budgetapp
+WorkingDirectory=/opt/budget-app/current/backend
+EnvironmentFile=/etc/budget-app/budget.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/budget-app/venv/bin/python -m app.cli backup-db
+TimeoutStartSec=30min
+Nice=10
+UMask=0077
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=budget-db-backup
+
+StateDirectory=budget-app
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/budget-app/backups
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

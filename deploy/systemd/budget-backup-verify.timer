@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify Budget database backup weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 09:15:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=budget-backup-verify.service
+
+[Install]
+WantedBy=timers.target

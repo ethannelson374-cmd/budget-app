@@ -1425,3 +1425,40 @@ class ReportExportView(ViewModel):
 
 class ReportExportListView(ViewModel):
     exports: list[ReportExportView]
+
+
+# Phase 4 Stage 2 — admin-safe reliability and backup status
+OperationalStatus = Literal["healthy", "attention", "failed", "running", "disabled"]
+
+
+class OperationalJobView(ViewModel):
+    status: OperationalStatus
+    last_started_at: datetime | None
+    last_finished_at: datetime | None
+    last_success_at: datetime | None
+    age_hours: float | None
+    error_code: str | None
+    summary: dict[str, object]
+
+
+class OperationalSchemaView(ViewModel):
+    status: Literal["healthy", "attention"]
+    current: str | None
+    head: str
+
+
+class OperationalStorageView(ViewModel):
+    path: str
+    archive_count: int
+    archive_bytes: int
+    free_bytes: int | None
+
+
+class OperationsStatusView(ViewModel):
+    generated_at: datetime
+    overall: Literal["healthy", "attention"]
+    database: dict[str, Literal["healthy"]]
+    migration: OperationalSchemaView
+    jobs: dict[str, OperationalJobView]
+    backup_storage: OperationalStorageView
+    attention: list[str]

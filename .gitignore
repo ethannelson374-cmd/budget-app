@@ -24,3 +24,4 @@ playwright-report/
 .DS_Store
 .vscode/
 *.log
+/backend/data/backups/

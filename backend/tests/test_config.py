@@ -32,6 +32,7 @@ def production_values() -> dict[str, object]:
         "db_password": "database-secret-with-reserved:/@?#[]",
         "db_ssl_required": True,
         "allowed_hosts": "budget.example.com",
+        "backup_dir": Path("/var/lib/budget-app/backups"),
     }
 
 

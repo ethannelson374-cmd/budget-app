@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     smtp_from_email: str | None = None
     smtp_starttls: bool = True
 
+    backup_dir: Path = Path("./data/backups")
+    backup_retention_daily: Annotated[int, Field(ge=1, le=31)] = 7
+    backup_retention_weekly: Annotated[int, Field(ge=0, le=26)] = 4
+    backup_retention_monthly: Annotated[int, Field(ge=0, le=24)] = 12
+    backup_max_age_hours: Annotated[int, Field(ge=12, le=168)] = 36
+    mysqldump_path: str = "mysqldump"
+    mysql_path: str = "mysql"
+
     @field_validator("demo_mode", "db_ssl_required", "ai_enabled", "smtp_starttls", mode="before")
     @classmethod
     def validate_exact_boolean(cls, value: Any) -> bool | None:
@@ -216,6 +224,8 @@ class Settings(BaseSettings):
         "smtp_host",
         "smtp_username",
         "smtp_from_email",
+        "mysqldump_path",
+        "mysql_path",
         mode="before",
     )
     @classmethod
@@ -223,6 +233,13 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("backup_dir", mode="before")
+    @classmethod
+    def normalize_backup_dir(cls, value: Any) -> Any:
+        if isinstance(value, str) and value.strip():
+            return Path(value.strip())
+        return value
 
     @field_validator(
         "bootstrap_token",
@@ -306,6 +323,8 @@ class Settings(BaseSettings):
                 raise ValueError("PUBLIC_APP_URL must use HTTPS in production")
 
         if self.app_env == "production":
+            if not self.backup_dir.is_absolute():
+                raise ValueError("BACKUP_DIR must be an absolute path in production")
             if self.demo_mode:
                 raise ValueError("DEMO_MODE cannot be enabled in production")
             required_database = {

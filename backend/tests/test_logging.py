@@ -33,3 +33,23 @@ def test_secret_filter_handles_overlapping_values() -> None:
     assert longer not in message
     assert "long-session-suffix" not in message
     assert "plaid-api-secret-value" not in message
+
+
+def test_json_formatter_emits_request_correlation_fields() -> None:
+    import json
+
+    from app.main import JsonFormatter
+
+    record = logging.LogRecord("budget.api", logging.INFO, __file__, 1, "request", (), None)
+    record.request_id = "request-123"
+    record.method = "GET"
+    record.path = "/api/v1/operations/status"
+    record.status = 200
+    record.duration_ms = 12.5
+    payload = json.loads(JsonFormatter().format(record))
+    assert payload["message"] == "request"
+    assert payload["request_id"] == "request-123"
+    assert payload["method"] == "GET"
+    assert payload["path"] == "/api/v1/operations/status"
+    assert payload["status"] == 200
+    assert payload["duration_ms"] == 12.5

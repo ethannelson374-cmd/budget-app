@@ -586,3 +586,145 @@ sudo systemd-run \
 ```
 
 The command prompts for the new password without putting it in shell history and revokes the user's active sessions.
+
+## Phase 4 Stage 2 reliability and backups
+
+Phase 4 Stage 2 adds migration `20260814_0014` and an admin-only reliability view. The
+migration stores only the most recent status/heartbeat for a few scheduled jobs; it does not
+copy financial data into a second application table.
+
+### Backup configuration
+
+Production must use an absolute backup directory. The supplied systemd units are hardened for:
+
+```text
+BACKUP_DIR=/var/lib/budget-app/backups
+BACKUP_RETENTION_DAILY=7
+BACKUP_RETENTION_WEEKLY=4
+BACKUP_RETENTION_MONTHLY=12
+BACKUP_MAX_AGE_HOURS=36
+MYSQLDUMP_PATH=mysqldump
+MYSQL_PATH=mysql
+```
+
+Archives and manifests are created mode `0600` inside a mode `0700` directory owned by
+`budgetapp`. The production logical dump uses the existing TLS-protected MySQL connection
+settings and never places the database password in process arguments; a short-lived mode-0600
+MySQL option file is created in a private temporary directory instead. Backup files contain
+financial data, encrypted Plaid credentials, Advisor history, and identity records, so treat
+the backup directory as sensitive data and include it in the VM/storage encryption and access
+controls.
+
+The backup format is a gzip-compressed `mysqldump` plus a sidecar JSON manifest containing only
+the archive name, schema revision, size, SHA-256 digest, database type, and creation time. The
+dump deliberately uses `--single-transaction`, `--quick`, `--skip-lock-tables`, and
+`--no-tablespaces` so the application DB account does not need broad server-level privileges.
+
+Before enabling the timers, confirm both MySQL client programs exist:
+
+```bash
+command -v mysqldump
+command -v mysql
+```
+
+Do not enable the timer until both commands resolve. Install the MySQL client package for the
+VM's Ubuntu release if either is absent.
+
+### Install the timers
+
+After applying migration `20260814_0014`, copy and verify the four new units:
+
+```bash
+sudo cp /opt/budget-app/current/deploy/systemd/budget-db-backup.service /etc/systemd/system/
+sudo cp /opt/budget-app/current/deploy/systemd/budget-db-backup.timer /etc/systemd/system/
+sudo cp /opt/budget-app/current/deploy/systemd/budget-backup-verify.service /etc/systemd/system/
+sudo cp /opt/budget-app/current/deploy/systemd/budget-backup-verify.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  /etc/systemd/system/budget-db-backup.service \
+  /etc/systemd/system/budget-db-backup.timer \
+  /etc/systemd/system/budget-backup-verify.service \
+  /etc/systemd/system/budget-backup-verify.timer
+```
+
+Run the first backup and verification manually before enabling schedules:
+
+```bash
+sudo systemctl start budget-db-backup.service
+sudo systemctl status budget-db-backup.service --no-pager
+sudo journalctl -u budget-db-backup.service -n 50 --no-pager
+
+sudo systemctl start budget-backup-verify.service
+sudo systemctl status budget-backup-verify.service --no-pager
+sudo journalctl -u budget-backup-verify.service -n 50 --no-pager
+```
+
+Then enable the daily backup and weekly integrity check:
+
+```bash
+sudo systemctl enable --now budget-db-backup.timer budget-backup-verify.timer
+sudo systemctl list-timers budget-db-backup.timer budget-backup-verify.timer --all
+```
+
+The backup timer runs daily at 08:15 UTC with up to 20 minutes of randomized delay. The verify
+timer runs weekly on Sunday at 09:15 UTC with up to 30 minutes of randomized delay. Both are
+persistent, so a missed run is recovered after the VM next starts.
+
+### Restore drills
+
+`verify-backup` validates the newest manifest, SHA-256 digest, gzip stream, and MySQL dump
+structure. That is an integrity check, not a substitute for a restore drill.
+
+For local SQLite/demo mode, `restore-test-backup` performs a complete restore to a disposable
+temporary SQLite database, runs `PRAGMA integrity_check`, and verifies the Alembic revision:
+
+```bash
+python -m app.cli backup-db
+python -m app.cli verify-backup
+python -m app.cli restore-test-backup
+```
+
+For production MySQL, create an **empty disposable database** named with the
+`budget_restore_` prefix and grant the Budget DB account access to only that disposable target.
+Never use the live `DB_NAME`. Then run:
+
+```bash
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-restore-drill \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/python -m app.cli restore-test-backup \
+  --target-db-name budget_restore_YYYYMMDD
+```
+
+The command refuses the configured live `DB_NAME`, refuses target names outside the guarded
+`budget_restore_*` namespace, requires an empty target, restores the newest archive, and checks
+that its `alembic_version` matches the manifest. It intentionally leaves the disposable target
+in place for operator inspection; drop it afterward using the database administration path,
+not the Budget application account unless that permission was deliberately granted.
+
+### Operations status and logging
+
+The existing `budget-sync` and `budget-snapshot` CLI commands now update one-row operational
+heartbeats, as do backup and verification jobs. Admins can view the safe aggregate status at:
+
+```text
+GET /api/v1/operations/status
+```
+
+The Settings page renders this as **Reliability & backups -> System health**. It reports schema
+revision, latest successful worker times, backup age, archive count/size, and free disk space.
+It does not expose database credentials, backup contents, Plaid tokens, provider responses, or
+financial records. A failed or stale critical job produces an in-app admin attention state;
+email/push notification delivery remains a later notifications-stage concern.
+
+API journal logs remain JSON, but request metadata is now emitted as structured fields
+(`request_id`, method, route, status, and duration) so a UI request ID can be correlated directly
+with the corresponding journal entry. `/api/ready` additionally rejects a known production
+schema revision that does not match the application's Alembic head.

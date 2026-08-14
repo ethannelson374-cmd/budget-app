@@ -980,3 +980,35 @@ export interface AdvisorReportContext {
   range: ReportRangeKey;
   label: string;
 }
+
+export type OperationalStatus = "healthy" | "attention" | "failed" | "running" | "disabled";
+
+export interface OperationalJobStatus {
+  status: OperationalStatus;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_success_at: string | null;
+  age_hours: number | null;
+  error_code: string | null;
+  summary: Record<string, unknown>;
+}
+
+export interface OperationsStatus {
+  generated_at: string;
+  overall: "healthy" | "attention";
+  database: { status: "healthy" };
+  migration: { status: "healthy" | "attention"; current: string | null; head: string };
+  jobs: {
+    database_backup: OperationalJobStatus;
+    backup_verify: OperationalJobStatus;
+    report_snapshot: OperationalJobStatus;
+    plaid_sync: OperationalJobStatus;
+  };
+  backup_storage: {
+    path: string;
+    archive_count: number;
+    archive_bytes: number;
+    free_bytes: number | null;
+  };
+  attention: string[];
+}
