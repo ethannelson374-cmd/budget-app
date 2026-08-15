@@ -144,6 +144,7 @@ def _mysql_dump(settings: Settings, archive: Path) -> None:
             settings.mysqldump_path,
             f"--defaults-extra-file={options}",
             "--single-transaction",
+            "--set-gtid-purged=OFF",
             "--quick",
             "--skip-lock-tables",
             "--no-tablespaces",

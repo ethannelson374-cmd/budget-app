@@ -617,8 +617,12 @@ controls.
 
 The backup format is a gzip-compressed `mysqldump` plus a sidecar JSON manifest containing only
 the archive name, schema revision, size, SHA-256 digest, database type, and creation time. The
-dump deliberately uses `--single-transaction`, `--quick`, `--skip-lock-tables`, and
-`--no-tablespaces` so the application DB account does not need broad server-level privileges.
+dump deliberately uses `--single-transaction`, `--set-gtid-purged=OFF`, `--quick`,
+`--skip-lock-tables`, and `--no-tablespaces` so the application DB account does not need broad
+server-level privileges. `--set-gtid-purged=OFF` is intentional for the application-schema
+backup: on MySQL 8.0.32+ a GTID-enabled server can otherwise make `mysqldump
+--single-transaction` request `FLUSH TABLES WITH READ LOCK`, which requires the restricted
+`RELOAD` or `FLUSH_TABLES` privilege.
 
 Before enabling the timers, confirm both MySQL client programs exist:
 
