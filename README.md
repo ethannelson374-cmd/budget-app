@@ -611,3 +611,11 @@ python -m app.cli plaid-readiness
 ```
 
 The preflight requires Production mode, configured credentials, HTTPS redirect/webhook URLs, Transactions, and no remaining Sandbox Items. It prints configuration state and connection counts but never prints Plaid secrets or access tokens.
+
+### Phase 4 Stage 6 — performance and maintenance
+
+Stage 6 keeps the private/family deployment bounded without introducing queues, caches, or a second runtime. Migration `20260815_0019` extends the primary transaction date index with the stable `id` tie-breaker used by transaction pagination and adds expiry/retention indexes for sessions, invitations, password-reset tokens, login throttles, and report exports.
+
+`python -m app.cli run-maintenance` performs conservative database housekeeping. It removes only expired authentication artifacts, old audit events, and reproducible report-export blobs beyond the configured age/count limits. It never automatically deletes transactions, accounts, budgets, goals, financial snapshots, notifications, Advisor history, or Plaid Items. The supplied `budget-maintenance.timer` runs this bounded cleanup daily and records its result in the existing operational heartbeat table.
+
+Admin **System health** now shows the maintenance worker, report-export database storage, active retention policy, and a low-free-space warning using the configured minimum. The defaults keep 7 days of expired auth artifacts, 365 days of audit history, report exports for 90 days with at most 50 per user, and warn when the backup volume falls below 2 GB free.

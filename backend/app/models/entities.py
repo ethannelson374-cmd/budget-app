@@ -147,6 +147,7 @@ class SessionRecord(Base):
     __table_args__ = (
         Index("ix_sessions_user_expires", "user_id", "absolute_expires_at"),
         Index("ix_sessions_idle_expires", "idle_expires_at"),
+        Index("ix_sessions_revoked", "revoked_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -185,6 +186,7 @@ class UserInvitation(Base):
     __table_args__ = (
         Index("ix_user_invitations_email_status", "normalized_email", "expires_at"),
         Index("ix_user_invitations_inviter", "invited_by_user_id", "created_at"),
+        Index("ix_user_invitations_expires", "expires_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -202,7 +204,10 @@ class UserInvitation(Base):
 
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
-    __table_args__ = (Index("ix_password_reset_user_expires", "user_id", "expires_at"),)
+    __table_args__ = (
+        Index("ix_password_reset_user_expires", "user_id", "expires_at"),
+        Index("ix_password_reset_expires", "expires_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -257,6 +262,7 @@ class UserTotp(Base):
 
 class LoginThrottle(Base):
     __tablename__ = "login_throttles"
+    __table_args__ = (Index("ix_login_throttles_updated", "updated_at"),)
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -457,7 +463,7 @@ class Transaction(TimestampMixin, Base):
             "OR (kind = 'expense' AND amount <= 0) OR kind = 'transfer'",
             name="amount_sign",
         ),
-        Index("ix_transactions_user_posted", "user_id", "posted_date"),
+        Index("ix_transactions_user_posted", "user_id", "posted_date", "id"),
         Index("ix_transactions_user_account_posted", "user_id", "account_id", "posted_date"),
         Index("ix_transactions_user_category_posted", "user_id", "category_id", "posted_date"),
         Index("ix_transactions_user_source_posted", "user_id", "source_type", "posted_date"),
@@ -886,6 +892,7 @@ class ReportExport(Base):
         CheckConstraint("format IN ('csv','pdf')", name="report_export_format_allowed"),
         CheckConstraint("range_key IN ('30d','3m','6m','ytd','1y')", name="report_export_range_allowed"),
         Index("ix_report_exports_user_created", "user_id", "created_at"),
+        Index("ix_report_exports_created", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

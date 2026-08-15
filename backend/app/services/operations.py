@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.models import OperationalJob, PlaidItem, User
+from app.services.maintenance import maintenance_storage_status
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 JOB_BACKUP = "database_backup"
@@ -20,7 +21,15 @@ JOB_BACKUP_VERIFY = "backup_verify"
 JOB_PLAID_SYNC = "plaid_sync"
 JOB_REPORT_SNAPSHOT = "report_snapshot"
 JOB_NOTIFICATIONS = "notifications"
-KNOWN_JOBS = (JOB_BACKUP, JOB_BACKUP_VERIFY, JOB_PLAID_SYNC, JOB_REPORT_SNAPSHOT, JOB_NOTIFICATIONS)
+JOB_MAINTENANCE = "maintenance"
+KNOWN_JOBS = (
+    JOB_BACKUP,
+    JOB_BACKUP_VERIFY,
+    JOB_PLAID_SYNC,
+    JOB_REPORT_SNAPSHOT,
+    JOB_NOTIFICATIONS,
+    JOB_MAINTENANCE,
+)
 
 
 def _utc_now() -> datetime:
@@ -184,6 +193,11 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
         stale_after_hours=3,
         disabled=users == 0,
     )
+    maintenance = _job_state(
+        rows.get(JOB_MAINTENANCE),
+        now=now,
+        stale_after_hours=30,
+    )
 
     backup_dir = settings.backup_dir.expanduser()
     backup_count = 0
@@ -202,6 +216,8 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
     except OSError:
         free_bytes = None
 
+    maintenance_storage = maintenance_storage_status(db, settings)
+
     attention = []
     if not schema_current:
         attention.append("Database schema is not at the application migration head.")
@@ -211,11 +227,16 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
         ("Reporting snapshot", snapshot),
         ("Plaid sync", plaid),
         ("Financial notifications", notifications),
+        ("Database maintenance", maintenance),
     ):
         if item["status"] == "failed":
             attention.append(f"{label} last run failed.")
         elif item["status"] == "attention":
             attention.append(f"{label} has not completed successfully within its expected window.")
+
+    minimum_free_bytes = int(maintenance_storage["minimum_free_bytes"])
+    if free_bytes is not None and free_bytes < minimum_free_bytes:
+        attention.append("Backup volume free space is below the configured maintenance floor.")
 
     return {
         "generated_at": now,
@@ -232,7 +253,9 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
             "report_snapshot": snapshot,
             "plaid_sync": plaid,
             "notifications": notifications,
+            "maintenance": maintenance,
         },
+        "maintenance": maintenance_storage,
         "backup_storage": {
             "path": str(backup_dir),
             "archive_count": backup_count,

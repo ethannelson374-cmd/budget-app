@@ -829,3 +829,53 @@ The preflight exits non-zero until all Sandbox connections have been removed. Th
 After the first real institution is linked, verify in this order: connection environment shows Production; initial manual sync succeeds; `/api/ready` remains healthy; signed `SYNC_UPDATES_AVAILABLE` webhooks arrive; the sync worker heartbeat stays healthy; disconnect/reconnect behavior works; and no access token or Plaid secret appears in application logs.
 
 Update-mode repairs are part of the production path. `ITEM_LOGIN_REQUIRED`, `PENDING_DISCONNECT`, and expiring consent surface a **Reconnect/Renew access** action. `NEW_ACCOUNTS_AVAILABLE` surfaces **Review accounts** with account selection enabled. A successful update-mode session keeps the existing access token and schedules transaction sync; it does not repeat `/item/public_token/exchange`.
+
+## Phase 4 Stage 6 performance and maintenance
+
+Stage 6 adds migration `20260815_0019`. Apply it through the normal protected production environment before restarting the API:
+
+```bash
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-phase4-stage6-migrate \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic upgrade head
+```
+
+Expected head is `20260815_0019`. The migration keeps the existing transaction date index name but extends it to `(user_id, posted_date, id)` for the API's stable paging order. It also adds expiry/retention indexes used by daily housekeeping; no financial rows are rewritten.
+
+Optional production overrides in `/etc/budget-app/budget.env` are:
+
+```text
+MAINTENANCE_AUTH_RETENTION_DAYS=7
+MAINTENANCE_AUDIT_RETENTION_DAYS=365
+MAINTENANCE_EXPORT_RETENTION_DAYS=90
+MAINTENANCE_EXPORT_MAX_PER_USER=50
+MAINTENANCE_MIN_FREE_GB=2
+```
+
+Install and validate the daily maintenance worker:
+
+```bash
+sudo cp /opt/budget-app/current/deploy/systemd/budget-maintenance.service /etc/systemd/system/
+sudo cp /opt/budget-app/current/deploy/systemd/budget-maintenance.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  /etc/systemd/system/budget-maintenance.service \
+  /etc/systemd/system/budget-maintenance.timer
+
+sudo systemctl start budget-maintenance.service
+sudo journalctl -u budget-maintenance.service -n 50 --no-pager
+sudo systemctl enable --now budget-maintenance.timer
+sudo systemctl list-timers budget-maintenance.timer --all
+```
+
+The maintenance job is intentionally conservative. It prunes expired sessions/invitations/reset tokens/OAuth states/2FA challenges/login throttles, audit events older than the configured retention window, and reproducible report-export blobs over the age/count limit. It does **not** automatically delete transactions, accounts, budgets, goals, snapshots, notifications, Advisor conversations, or Plaid connections.
+
+After deployment, open **Settings → Reliability & backups → System health** as an administrator. Database maintenance should be healthy after its first run, the export-storage counters should load, and the backup-volume free-space value should remain above the configured minimum. Run `python -m app.cli operations-status` through the protected environment for the same secret-free status in the shell.

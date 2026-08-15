@@ -47,12 +47,14 @@ from app.models import (
 from app.services.auth import add_audit_event, revoke_user_sessions
 from app.services.backups import BackupError, create_backup, restore_test_backup, verify_backup
 from app.services.catalog import DEFAULT_CATEGORIES
+from app.services.maintenance import run_maintenance
 from app.services.operations import (
     JOB_BACKUP,
     JOB_BACKUP_VERIFY,
     JOB_PLAID_SYNC,
     JOB_REPORT_SNAPSHOT,
     JOB_NOTIFICATIONS,
+    JOB_MAINTENANCE,
     operations_status,
     record_job_finished,
     record_job_started,
@@ -650,6 +652,15 @@ def run_notifications(settings: Settings, *, force_summaries: bool = False) -> d
         database.engine.dispose()
 
 
+def maintain_database(settings: Settings) -> dict[str, int]:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            return run_maintenance(db, settings)
+    finally:
+        database.engine.dispose()
+
+
 def current_operations_status(settings: Settings) -> dict[str, object]:
     database = Database.from_settings(settings)
     try:
@@ -698,6 +709,9 @@ def parser() -> argparse.ArgumentParser:
         "--force-summaries",
         action="store_true",
         help="Generate this period's weekly/monthly summaries even outside their normal schedule",
+    )
+    subcommands.add_parser(
+        "run-maintenance", help="Prune expired operational history and bounded report exports"
     )
     subcommands.add_parser(
         "operations-status", help="Print the admin-safe reliability status as JSON"
@@ -769,6 +783,7 @@ def main(argv: list[str] | None = None) -> int:
             result = _tracked(
                 settings,
                 JOB_NOTIFICATIONS,
+    JOB_MAINTENANCE,
                 lambda: run_notifications(settings, force_summaries=args.force_summaries),
             )
             print(
@@ -777,6 +792,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             if result["failed"]:
                 return 1
+        elif args.command == "run-maintenance":
+            result = _tracked(settings, JOB_MAINTENANCE, lambda: maintain_database(settings))
+            print(
+                "Maintenance complete: "
+                f"{result['report_exports_deleted']} report exports, "
+                f"{result['audit_events_deleted']} audit events, "
+                f"{result['sessions_deleted']} sessions removed."
+            )
         elif args.command == "operations-status":
             print(json.dumps(current_operations_status(settings), default=str, indent=2))
         elif args.command == "plaid-readiness":

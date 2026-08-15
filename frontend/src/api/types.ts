@@ -1013,6 +1013,16 @@ export interface OperationsStatus {
     report_snapshot: OperationalJobStatus;
     plaid_sync: OperationalJobStatus;
     notifications: OperationalJobStatus;
+    maintenance: OperationalJobStatus;
+  };
+  maintenance: {
+    report_export_count: number;
+    report_export_bytes: number;
+    export_retention_days: number;
+    export_max_per_user: number;
+    auth_retention_days: number;
+    audit_retention_days: number;
+    minimum_free_bytes: number;
   };
   backup_storage: {
     path: string;

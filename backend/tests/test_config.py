@@ -291,3 +291,17 @@ def test_ai_provider_requires_only_selected_provider_key() -> None:
             ai_enabled=True,
             ai_provider="gemini",
         )
+
+
+def test_maintenance_retention_limits_are_bounded() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.maintenance_auth_retention_days == 7
+    assert settings.maintenance_audit_retention_days == 365
+    assert settings.maintenance_export_retention_days == 90
+    assert settings.maintenance_export_max_per_user == 50
+    assert settings.maintenance_min_free_gb == 2
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, maintenance_export_max_per_user=0)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, maintenance_min_free_gb=0)

@@ -10,7 +10,13 @@ from app.core.config import Settings
 from app.core.database import Database
 from app.models import OperationalJob, User
 from app.services.backups import create_backup, restore_test_backup, verify_backup
-from app.services.operations import JOB_BACKUP, operations_status, record_job_finished, record_job_started
+from app.services.operations import (
+    JOB_BACKUP,
+    JOB_MAINTENANCE,
+    operations_status,
+    record_job_finished,
+    record_job_started,
+)
 from tests.conftest import csrf_headers
 
 
@@ -55,6 +61,10 @@ def test_operational_job_status_tracks_success_without_storing_exception_text(tm
         with database.session_factory() as db:
             record_job_started(db, JOB_BACKUP)
             record_job_finished(db, JOB_BACKUP, success=True, summary={"size": 123})
+            record_job_started(db, JOB_MAINTENANCE)
+            record_job_finished(
+                db, JOB_MAINTENANCE, success=True, summary={"report_exports_deleted": 2}
+            )
             row = db.get(OperationalJob, JOB_BACKUP)
             assert row is not None
             assert row.status == "success"
@@ -62,6 +72,9 @@ def test_operational_job_status_tracks_success_without_storing_exception_text(tm
             status = operations_status(db, settings)
             assert status["jobs"]["database_backup"]["status"] == "healthy"
             assert status["jobs"]["database_backup"]["summary"] == {"size": 123}
+            assert status["jobs"]["maintenance"]["status"] == "healthy"
+            assert status["jobs"]["maintenance"]["summary"] == {"report_exports_deleted": 2}
+            assert status["maintenance"]["export_max_per_user"] == 50
     finally:
         database.engine.dispose()
 

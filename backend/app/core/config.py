@@ -125,6 +125,12 @@ class Settings(BaseSettings):
     mysqldump_path: str = "mysqldump"
     mysql_path: str = "mysql"
 
+    maintenance_auth_retention_days: Annotated[int, Field(ge=1, le=90)] = 7
+    maintenance_audit_retention_days: Annotated[int, Field(ge=30, le=3650)] = 365
+    maintenance_export_retention_days: Annotated[int, Field(ge=7, le=3650)] = 90
+    maintenance_export_max_per_user: Annotated[int, Field(ge=5, le=500)] = 50
+    maintenance_min_free_gb: Annotated[int, Field(ge=1, le=100)] = 2
+
     @field_validator("demo_mode", "db_ssl_required", "ai_enabled", "smtp_starttls", mode="before")
     @classmethod
     def validate_exact_boolean(cls, value: Any) -> bool | None:

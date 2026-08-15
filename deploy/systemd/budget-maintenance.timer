@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Budget bounded database maintenance daily
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=1d
+AccuracySec=30min
+RandomizedDelaySec=15min
+Persistent=true
+Unit=budget-maintenance.service
+
+[Install]
+WantedBy=timers.target

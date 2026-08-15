@@ -69,7 +69,7 @@ export function OperationsStatusCard() {
         <div>
           <span className="eyebrow">Reliability & backups</span>
           <h2 id="operations-heading">System health</h2>
-          <p>Admin-only status for Budget's database, backups, and scheduled workers.</p>
+          <p>Admin-only status for Budget's database, backups, scheduled workers, and bounded maintenance history.</p>
         </div>
         <span className={`status-pill ${data.overall === "healthy" ? "success" : "warning"}`}>{data.overall === "healthy" ? "All systems healthy" : "Needs attention"}</span>
       </div>
@@ -93,6 +93,16 @@ export function OperationsStatusCard() {
           <small className="muted-copy operations-path">{data.backup_storage.path}</small>
         </article>
 
+        <article className="panel operations-card">
+          <div className="security-card-heading"><div><span className="eyebrow">Housekeeping</span><h3>Database maintenance</h3></div><span className={pillClass(data.jobs.maintenance.status)}>{statusLabel(data.jobs.maintenance.status)}</span></div>
+          <div className="operations-stat-grid">
+            <div><small>Saved exports</small><strong>{data.maintenance.report_export_count}</strong></div>
+            <div><small>Export storage</small><strong>{bytes(data.maintenance.report_export_bytes)}</strong></div>
+            <div><small>Keep per user</small><strong>{data.maintenance.export_max_per_user}</strong></div>
+          </div>
+          <small className="muted-copy operations-path">Exports: {data.maintenance.export_retention_days}d · Auth history: {data.maintenance.auth_retention_days}d · Audit history: {data.maintenance.audit_retention_days}d</small>
+        </article>
+
         <article className="panel operations-card operations-jobs">
           <div className="security-card-heading"><div><span className="eyebrow">Scheduled work</span><h3>Worker history</h3></div><button className="button ghost" type="button" onClick={() => void status.refetch()}>Refresh</button></div>
           <JobRow label="Database backup" job={data.jobs.database_backup} />
@@ -100,6 +110,7 @@ export function OperationsStatusCard() {
           <JobRow label="Reporting snapshot" job={data.jobs.report_snapshot} />
           <JobRow label="Plaid sync" job={data.jobs.plaid_sync} />
           <JobRow label="Financial notifications" job={data.jobs.notifications} />
+          <JobRow label="Database maintenance" job={data.jobs.maintenance} />
         </article>
       </div>
     </section>

@@ -1463,12 +1463,23 @@ class OperationalStorageView(ViewModel):
     free_bytes: int | None
 
 
+class OperationalMaintenanceView(ViewModel):
+    report_export_count: int
+    report_export_bytes: int
+    export_retention_days: int
+    export_max_per_user: int
+    auth_retention_days: int
+    audit_retention_days: int
+    minimum_free_bytes: int
+
+
 class OperationsStatusView(ViewModel):
     generated_at: datetime
     overall: Literal["healthy", "attention"]
     database: dict[str, Literal["healthy"]]
     migration: OperationalSchemaView
     jobs: dict[str, OperationalJobView]
+    maintenance: OperationalMaintenanceView
     backup_storage: OperationalStorageView
     attention: list[str]
 
