@@ -38,6 +38,7 @@ from app.models.entities import (
     Transaction,
     TransactionRule,
     User,
+    UserDashboardPreference,
     UserSettings,
 )
 
@@ -81,5 +82,6 @@ __all__ = [
     "Transaction",
     "TransactionRule",
     "User",
+    "UserDashboardPreference",
     "UserSettings",
 ]

@@ -6,6 +6,8 @@ export const queryKeys = {
   setup: ["setup-status"] as const,
   setupOptions: ["setup-options"] as const,
   dashboard: (month: string) => ["dashboard", month] as const,
+  dashboardPreferences: ["dashboard-preferences"] as const,
+  dashboardOnboarding: ["dashboard-onboarding"] as const,
   accounts: ["accounts"] as const,
   plaidConnections: ["plaid-connections"] as const,
   transactions: (search: string) => ["transactions", search] as const,

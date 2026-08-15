@@ -19,6 +19,9 @@ from app.schemas.api import (
     AccountsView,
     CategorySelectionUpdate,
     CategorySelectionView,
+    DashboardOnboardingView,
+    DashboardPreferencesUpdate,
+    DashboardPreferencesView,
     DashboardView,
     OkView,
     SettingsPatch,
@@ -34,6 +37,12 @@ from app.schemas.api import (
 )
 from app.services.auth import Principal, add_audit_event
 from app.services.catalog import CATEGORY_BY_KEY, DEFAULT_CATEGORIES
+from app.services.dashboard_experience import (
+    dashboard_preferences,
+    dismiss_onboarding,
+    onboarding_status,
+    save_dashboard_preferences,
+)
 from app.services.finance import dashboard_data, transaction_page
 from app.services.manual_finance import (
     create_manual_account,
@@ -259,6 +268,49 @@ def get_dashboard(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     return dashboard_data(db, principal.user, month)
+
+
+@router.get("/dashboard/preferences", response_model=DashboardPreferencesView)
+def get_dashboard_preferences(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return dashboard_preferences(db, principal.user)
+
+
+@router.put("/dashboard/preferences", response_model=DashboardPreferencesView)
+def put_dashboard_preferences(
+    payload: DashboardPreferencesUpdate,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    result = save_dashboard_preferences(db, principal.user, cards=[card.model_dump() for card in payload.cards], preset=payload.preset)
+    add_audit_event(db, settings, action="dashboard.preferences.update", outcome="success", request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail=f"{payload.preset}:cards={len(payload.cards)}")
+    db.commit()
+    return result
+
+
+@router.get("/dashboard/onboarding", response_model=DashboardOnboardingView)
+def get_dashboard_onboarding(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return onboarding_status(db, principal.user)
+
+
+@router.post("/dashboard/onboarding/dismiss", response_model=DashboardOnboardingView)
+def post_dashboard_onboarding_dismiss(
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    result = dismiss_onboarding(db, principal.user)
+    add_audit_event(db, settings, action="dashboard.onboarding.dismiss", outcome="success", request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail=f"completed={result['completed']}/{result['total']}")
+    db.commit()
+    return result
 
 
 @router.get("/transactions", response_model=TransactionPageView)

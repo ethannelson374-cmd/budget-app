@@ -331,3 +331,6 @@ process liveness response. `/api/ready` validates database access/setup and, in 
 an Alembic revision is present, verifies that the database revision matches application head.
 Backup age or a missed background job does not take the API out of service; those conditions
 appear in the authenticated admin operations status instead.
+
+## Phase 4 Stage 3 dashboard experience boundary
+Dashboard personalization is owner-scoped and presentation-only. `user_dashboard_preferences` stores ordered card IDs, bounded semantic sizes, visibility, preset, and onboarding dismissal. Guided onboarding is derived from real account/income/budget/goal/insight state. The Dashboard Ask Budget card reuses the existing authenticated Advisor stream; the browser never supplies trusted financial totals. Layouts collapse responsively from a 12-column desktop grid to a single mobile column.

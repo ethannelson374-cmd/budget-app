@@ -584,3 +584,6 @@ logging. Local/demo backups are full-restored into a disposable SQLite database 
 production MySQL restore drills require a separate empty `budget_restore_*` database so the live
 database can never be selected accidentally. See `deploy/README.md` for the systemd units and
 production procedure.
+
+### Phase 4 Stage 3 — onboarding and customizable dashboard
+The Dashboard now has per-user card ordering/resizing/hiding, presets, guided onboarding, data-freshness indicators, app-wide toast feedback, and an embedded Ask Budget chat card with contextual prompts and full-Advisor continuation.

@@ -4,7 +4,8 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { DashboardData, InsightsResponse, MonthlyBudgetView } from "../api/types";
+import type { AdvisorStatus, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView } from "../api/types";
+import { ToastProvider } from "../toast/ToastContext";
 import { DashboardPage } from "./DashboardPage";
 
 vi.mock("../api/client", async (importOriginal) => {
@@ -70,17 +71,28 @@ const budget: MonthlyBudgetView = {
   categories: [],
 };
 
+
+const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismissed_at: null, cards: [
+  { id: "net_worth", size: "small", visible: true }, { id: "cash_available", size: "small", visible: true }, { id: "income", size: "small", visible: true }, { id: "spending", size: "small", visible: true }, { id: "net_cash_flow", size: "small", visible: true }, { id: "savings_rate", size: "small", visible: true },
+  { id: "cash_flow", size: "wide", visible: true }, { id: "top_spending", size: "medium", visible: true }, { id: "ask_budget", size: "wide", visible: true }, { id: "budget", size: "large", visible: true }, { id: "insights", size: "large", visible: true }, { id: "recent_transactions", size: "large", visible: true }, { id: "accounts", size: "large", visible: true }, { id: "data_freshness", size: "medium", visible: true }
+] };
+const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
+const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
+
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.mocked(apiRequest).mockReset().mockImplementation((path) => {
       if (path === "/insights/refresh") return Promise.resolve(insights as never);
       if (path.startsWith("/budget/")) return Promise.resolve(budget as never);
+      if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
+      if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
+      if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
       return Promise.resolve(dashboard as never);
     });
   });
 
   function renderDashboard() {
-    return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><DashboardPage /></MemoryRouter></QueryClientProvider>);
+    return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider><MemoryRouter><DashboardPage /></MemoryRouter></ToastProvider></QueryClientProvider>);
   }
 
   it("renders summary arithmetic, budget summary, excluded currencies, and honest empty states", async () => {
@@ -101,6 +113,9 @@ describe("DashboardPage", () => {
     vi.mocked(apiRequest).mockImplementation((path) => {
       if (path === "/insights/refresh") return Promise.resolve(insights as never);
       if (path.startsWith("/budget/")) return Promise.resolve(budget as never);
+      if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
+      if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
+      if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
       dashboardCalls += 1;
       return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
     });

@@ -728,3 +728,6 @@ API journal logs remain JSON, but request metadata is now emitted as structured 
 (`request_id`, method, route, status, and duration) so a UI request ID can be correlated directly
 with the corresponding journal entry. `/api/ready` additionally rejects a known production
 schema revision that does not match the application's Alembic head.
+
+## Phase 4 Stage 3 dashboard experience
+Stage 3 adds migration `20260814_0015` for owner-scoped dashboard preferences. It adds no new environment variable, daemon, listener, or external provider. Apply `alembic upgrade head`; expected head is `20260814_0015`.

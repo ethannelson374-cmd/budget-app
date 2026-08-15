@@ -10,6 +10,14 @@ function syncStatus(connection: PlaidConnection): string {
   return `Transactions synced ${formatDateTime(connection.transactions_last_synced_at)}`;
 }
 
+
+function freshness(connection: PlaidConnection): { label: string; tone: "fresh" | "stale" | "never" } {
+  const raw = connection.transactions_last_synced_at ?? connection.last_synced_at;
+  if (!raw) return { label: "Not synced", tone: "never" };
+  const ageHours = (Date.now() - new Date(raw).getTime()) / 3_600_000;
+  return ageHours > 12 ? { label: "May be stale", tone: "stale" } : { label: "Fresh", tone: "fresh" };
+}
+
 export function PlaidConnectionCard({
   connection,
   syncBusy,
@@ -23,6 +31,7 @@ export function PlaidConnectionCard({
   onSync: (connection: PlaidConnection) => void;
   onDisconnect: (connection: PlaidConnection) => void;
 }) {
+  const freshnessState = freshness(connection);
   const logo = connection.institution.logo
     ? `data:image/png;base64,${connection.institution.logo}`
     : null;
@@ -36,7 +45,7 @@ export function PlaidConnectionCard({
             <h2>{connection.institution.name}</h2>
           </div>
         </div>
-        <span className={`connection-status ${connection.status}`}>{connection.status}</span>
+        <div className="connection-badges"><span className={`freshness-badge ${freshnessState.tone}`}>{freshnessState.label}</span><span className={`connection-status ${connection.status}`}>{connection.status}</span></div>
       </header>
       <div className="connection-account-list">
         {connection.accounts.map((account) => (

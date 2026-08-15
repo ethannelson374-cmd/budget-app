@@ -1462,3 +1462,53 @@ class OperationsStatusView(ViewModel):
     jobs: dict[str, OperationalJobView]
     backup_storage: OperationalStorageView
     attention: list[str]
+
+# Phase 4 Stage 3 — per-user dashboard experience and guided onboarding
+DashboardCardId = Literal[
+    "net_worth", "cash_available", "income", "spending", "net_cash_flow", "savings_rate",
+    "cash_flow", "top_spending", "ask_budget", "budget", "insights", "recent_transactions",
+    "accounts", "data_freshness",
+]
+DashboardCardSize = Literal["small", "medium", "wide", "large"]
+DashboardPreset = Literal["everyday", "minimal", "planning", "analytics", "custom"]
+
+
+class DashboardCardPreference(StrictModel):
+    id: DashboardCardId
+    size: DashboardCardSize
+    visible: bool = True
+
+
+class DashboardPreferencesUpdate(StrictModel):
+    cards: Annotated[list[DashboardCardPreference], Field(min_length=1, max_length=20)]
+    preset: DashboardPreset = "custom"
+
+    @model_validator(mode="after")
+    def unique_dashboard_cards(self) -> DashboardPreferencesUpdate:
+        ids = [card.id for card in self.cards]
+        if len(ids) != len(set(ids)):
+            raise ValueError("dashboard card ids must be unique")
+        return self
+
+
+class DashboardPreferencesView(ViewModel):
+    cards: list[DashboardCardPreference]
+    preset: DashboardPreset
+    onboarding_dismissed_at: datetime | None
+
+
+class DashboardOnboardingTaskView(ViewModel):
+    key: Literal["account", "income", "budget", "goal", "insights"]
+    label: str
+    description: str
+    route: str
+    complete: bool
+
+
+class DashboardOnboardingView(ViewModel):
+    tasks: list[DashboardOnboardingTaskView]
+    completed: int
+    total: int
+    complete: bool
+    dismissed: bool
+    dismissed_at: datetime | None

@@ -81,6 +81,19 @@ class UserSettings(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="settings")
 
 
+class UserDashboardPreference(TimestampMixin, Base):
+    __tablename__ = "user_dashboard_preferences"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    layout_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    preset: Mapped[str] = mapped_column(String(24), default="everyday", nullable=False)
+    onboarding_dismissed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class SessionRecord(Base):
     __tablename__ = "sessions"
     __table_args__ = (

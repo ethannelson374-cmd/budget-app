@@ -150,7 +150,7 @@ function ReplyCard({ row }: { row: ChatRow }) {
 export function AdvisorPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext } | null);
+  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext; conversationId?: number } | null);
   const routedInsight = routeState?.insight ?? null;
   const routedReport = routeState?.report ?? null;
   const initialPrompt = routedInsight
@@ -162,7 +162,7 @@ export function AdvisorPage() {
       : "";
   const [attachedInsight, setAttachedInsight] = useState<InsightItem | null>(routedInsight);
   const [attachedReport, setAttachedReport] = useState<AdvisorReportContext | null>(routedReport);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(routeState?.conversationId ?? null);
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [input, setInput] = useState(initialPrompt);
   const [busy, setBusy] = useState(false);
