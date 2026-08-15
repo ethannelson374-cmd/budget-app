@@ -349,3 +349,13 @@ and read state are independent of the underlying insight status. Disabling in-ap
 hides the inbox/badge while retaining fingerprints needed to avoid duplicate email events.
 Email is optional and uses the existing server-side SMTP delivery boundary; provider secrets
 and raw provider responses never enter notification rows or frontend payloads.
+
+## Phase 4 Stage 5 Plaid Production/update-mode boundary
+
+Every `plaid_items` row records the Plaid environment that issued its encrypted access token. Provider calls are rejected when the row environment does not match the running server's `PLAID_ENV`; scheduled transaction sync selects only matching Items. This prevents a Sandbox token from accidentally being sent to Production (or vice versa). Existing pre-Stage-5 Items migrate as `sandbox` because the application had not yet performed a Production cutover.
+
+A new connection still follows Link -> one-time public-token exchange -> encrypted access-token storage. An existing connection that needs user action follows a different path: Budget decrypts the existing Item access token only on the server, creates an update-mode Link token, and after Link succeeds refreshes `/item/get`, the selected accounts, webhook URL, consent metadata, and transaction-sync request state. The browser stores only the short-lived Link session and connection identifier across an OAuth redirect. Update mode never re-exchanges a public token because the Item access token is unchanged.
+
+Item and Transactions webhooks remain signature/body-hash verified before mutation. `SYNC_UPDATES_AVAILABLE` schedules incremental `/transactions/sync`. Item `ERROR`, `PENDING_DISCONNECT`, `PENDING_EXPIRATION`, `NEW_ACCOUNTS_AVAILABLE`, `LOGIN_REPAIRED`, and `USER_PERMISSION_REVOKED` update a bounded connection-health state. The notification worker turns only that local state into owner-scoped bank-connection alerts; it does not persist Plaid webhook bodies or credentials.
+
+Environment mismatch is intentionally recoverable but not migratable. After the server switches to Production, a legacy Sandbox Item is displayed as a test connection, cannot sync or enter update mode, and may be removed locally without calling Plaid Sandbox with Production credentials. A Production Item is never silently downgraded or locally discarded merely because a server is misconfigured for Sandbox.

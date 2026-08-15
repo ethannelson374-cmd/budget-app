@@ -63,3 +63,31 @@ describe("PlaidOAuthPage", () => {
     expect(window.sessionStorage.getItem("budget.plaid.link_token")).toBeNull();
   });
 });
+
+it("completes OAuth update mode without exchanging a new access token", async () => {
+  window.sessionStorage.setItem("budget.plaid.link_session", JSON.stringify({ token: "link-update-oauth", mode: "update", connectionId: 11 }));
+  let options: PlaidLinkOptions | undefined;
+  const handler: PlaidHandler = { open: vi.fn(), exit: vi.fn(), destroy: vi.fn() };
+  window.Plaid = { create: vi.fn((value) => { options = value; return handler; }) };
+
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={["/plaid/oauth?oauth_state_id=update"]}>
+        <Routes>
+          <Route path="/plaid/oauth" element={<PlaidOAuthPage />} />
+          <Route path="/accounts" element={<div>Updated account restored</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() => expect(window.Plaid?.create).toHaveBeenCalled());
+  expect(options?.token).toBe("link-update-oauth");
+  options?.onSuccess(null, { institution: null, accounts: [] });
+  await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith(
+    "/plaid/connections/11/refresh",
+    expect.objectContaining({ method: "POST" }),
+  ));
+  expect(await screen.findByText("Updated account restored")).toBeInTheDocument();
+  expect(window.sessionStorage.getItem("budget.plaid.link_session")).toBeNull();
+});

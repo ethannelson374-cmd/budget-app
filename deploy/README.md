@@ -780,3 +780,48 @@ The timer wakes hourly. Notification fingerprints prevent the same financial eve
 inserted repeatedly. The worker records its latest success/failure under the Stage 2 operational
 health system, where admins see **Financial notifications** alongside backups, snapshots, and
 Plaid sync.
+
+## Phase 4 Stage 5 Plaid Production cutover
+
+Stage 5 adds migration `20260815_0017`, which records the issuing Plaid environment and update-mode health on every Item. Existing Items are deliberately marked `sandbox`. Apply the migration before changing `PLAID_ENV`. While the API is still running with Sandbox credentials, preferably disconnect/remove the existing test connections through Accounts first; the environment-mismatch cleanup path remains a fallback if any test rows survive the switch.
+
+Do **not** copy Sandbox access tokens into Production or attempt to reuse existing test Items. Before the final cutover, confirm Production access in the Plaid Dashboard and that these public endpoints are registered/allowed by the Plaid application:
+
+```text
+https://budget.od3ssa.com/plaid/oauth
+https://budget.od3ssa.com/api/v1/plaid/webhook
+```
+
+The production environment file should ultimately contain server-side values like:
+
+```text
+PLAID_ENV=production
+PLAID_CLIENT_ID=<Plaid client id>
+PLAID_SECRET=<Production secret>
+PLAID_REDIRECT_URI=https://budget.od3ssa.com/plaid/oauth
+PLAID_WEBHOOK_URI=https://budget.od3ssa.com/api/v1/plaid/webhook
+PLAID_PRODUCTS=transactions
+PLAID_COUNTRY_CODES=US
+```
+
+Never put `PLAID_SECRET` in Vite variables, Git, shell history, screenshots, or frontend bundles. After editing `/etc/budget-app/budget.env`, use the application's preflight rather than echoing the environment:
+
+```bash
+sudo systemd-run \
+  --wait \
+  --collect \
+  --pipe \
+  --unit=budget-plaid-readiness \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/python -m app.cli plaid-readiness
+```
+
+The preflight exits non-zero until all Sandbox connections have been removed. This is intentional: Plaid does not migrate Items between Sandbox and Production. Once the server is in Production, Accounts will label old rows as **Sandbox / test connection**; remove those rows from Budget, then use **Connect a bank** to create fresh Production Items.
+
+After the first real institution is linked, verify in this order: connection environment shows Production; initial manual sync succeeds; `/api/ready` remains healthy; signed `SYNC_UPDATES_AVAILABLE` webhooks arrive; the sync worker heartbeat stays healthy; disconnect/reconnect behavior works; and no access token or Plaid secret appears in application logs.
+
+Update-mode repairs are part of the production path. `ITEM_LOGIN_REQUIRED`, `PENDING_DISCONNECT`, and expiring consent surface a **Reconnect/Renew access** action. `NEW_ACCOUNTS_AVAILABLE` surfaces **Review accounts** with account selection enabled. A successful update-mode session keeps the existing access token and schedules transaction sync; it does not repeat `/item/public_token/exchange`.

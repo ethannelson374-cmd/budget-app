@@ -316,7 +316,14 @@ export interface PlaidInstitution {
 export interface PlaidConnection {
   id: number;
   status: "active" | "error";
+  environment: "sandbox" | "production";
+  environment_matches: boolean;
+  health: "healthy" | "needs_attention" | "environment_mismatch";
+  update_required: boolean;
+  update_reason: string | null;
   last_error_code: string | null;
+  consent_expiration_at: string | null;
+  last_webhook_at: string | null;
   last_synced_at: string | null;
   transactions_update_status: string | null;
   transactions_last_synced_at: string | null;
@@ -334,6 +341,8 @@ export interface PlaidConnectionsResponse {
 export interface PlaidLinkTokenResponse {
   link_token: string;
   environment: "sandbox" | "production";
+  mode: "connect" | "update";
+  connection_id: number | null;
 }
 
 export interface PlaidSyncResult {

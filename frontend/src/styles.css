@@ -421,6 +421,9 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
 .connection-status, .environment-badge { padding: 5px 8px; border-radius: 999px; color: var(--positive); background: var(--positive-soft); font-size: 0.65rem; font-weight: 800; text-transform: capitalize; }
 .connection-status.error { color: var(--negative); background: var(--danger-soft); }
 .environment-badge { color: var(--text-muted); background: var(--surface-muted); }
+.environment-badge.production { color: var(--positive); background: var(--positive-soft); }
+.connection-card.needs-attention { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.connection-attention { margin: -3px 0 0; }
 .connection-account-list { display: grid; border-top: 1px solid var(--border); }
 .connection-account-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .connection-account-row > div { display: grid; gap: 2px; }

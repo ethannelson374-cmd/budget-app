@@ -51,8 +51,9 @@ without containers.
 - Connected account balances are refreshed from transaction-sync responses while
   manual records remain unaffected and Plaid transactions remain read-only.
 
-AI-generated insights, reports, Plaid Production cutover, and deployment
-automation are intentionally deferred to later work.
+Later phases add deterministic/AI-assisted planning, reports, production-readiness
+controls, notifications, and Plaid Production/update-mode support while keeping the
+same small-install FastAPI/MySQL deployment model.
 
 ## Architecture
 
@@ -587,3 +588,26 @@ production procedure.
 
 ### Phase 4 Stage 3 — onboarding and customizable dashboard
 The Dashboard now has per-user card ordering/resizing/hiding, presets, guided onboarding, data-freshness indicators, app-wide toast feedback, and an embedded Ask Budget chat card with contextual prompts and full-Advisor continuation.
+
+### Phase 4 Stage 5 Plaid Production readiness
+
+Stage 5 makes the Plaid environment explicit per connected Item and adds update-mode repair flows before the server is switched from Sandbox to Production. Existing Items created before this migration are marked `sandbox`; Plaid Items are not portable across environments, so a Sandbox test connection must be removed and linked again after Production credentials are enabled.
+
+Connection cards expose a small user-facing health model (`Connected`, `Needs attention`, or a Sandbox/Production mismatch) rather than raw provider state. `ITEM_LOGIN_REQUIRED`, expiring authorization, planned disconnects, revoked permission, and newly detected accounts can launch Link in update mode. Update mode reuses the existing encrypted access token; Budget never exchanges the Link `public_token` again for an updated Item.
+
+For safe local testing, a Sandbox connection can be forced into the login-required state with:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.cli plaid-sandbox-reset-login
+# If more than one Sandbox connection exists, pass --item-id <connection-id>.
+```
+
+Then open **Accounts → Reconnect** and complete Link. The command refuses to run when `PLAID_ENV` is not `sandbox`.
+
+Before the eventual production cutover, run the secret-free preflight from the production environment:
+
+```bash
+python -m app.cli plaid-readiness
+```
+
+The preflight requires Production mode, configured credentials, HTTPS redirect/webhook URLs, Transactions, and no remaining Sandbox Items. It prints configuration state and connection counts but never prints Plaid secrets or access tokens.

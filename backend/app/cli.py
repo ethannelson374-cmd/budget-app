@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import Settings
 from app.core.database import Database, build_database_url
+from app.core.errors import ApiError
 from app.core.security import hash_password, normalize_identity, utc_now
 from app.models import (
     Account,
@@ -56,6 +57,7 @@ from app.services.operations import (
     record_job_finished,
     record_job_started,
 )
+from app.services.plaid import production_readiness, sandbox_reset_login
 from app.services.plaid_transactions import sync_all_plaid_items
 from app.services.notifications import scan_all_notifications
 from app.services.reports import capture_all_snapshots
@@ -700,6 +702,18 @@ def parser() -> argparse.ArgumentParser:
     subcommands.add_parser(
         "operations-status", help="Print the admin-safe reliability status as JSON"
     )
+    subcommands.add_parser(
+        "plaid-readiness", help="Check secret-free Plaid Production cutover readiness"
+    )
+    plaid_reset = subcommands.add_parser(
+        "plaid-sandbox-reset-login",
+        help="Force a Sandbox connection into ITEM_LOGIN_REQUIRED for update-mode testing",
+    )
+    plaid_reset.add_argument(
+        "--item-id",
+        type=int,
+        help="Budget Plaid connection id; optional when exactly one Sandbox connection exists",
+    )
     return command_parser
 
 
@@ -765,7 +779,26 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         elif args.command == "operations-status":
             print(json.dumps(current_operations_status(settings), default=str, indent=2))
-    except (LookupError, RuntimeError, ValueError, BackupError) as exc:
+        elif args.command == "plaid-readiness":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = production_readiness(db, settings)
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+            if not result["ready"]:
+                return 1
+        elif args.command == "plaid-sandbox-reset-login":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = sandbox_reset_login(db, settings, args.item_id)
+                    db.commit()
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+    except (LookupError, RuntimeError, ValueError, BackupError, ApiError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0

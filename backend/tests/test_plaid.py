@@ -23,12 +23,17 @@ from tests.conftest import csrf_headers
 class FakePlaidClient:
     removed: list[str] = []
     sync_calls: list[str | None] = []
+    item_error: str | None = None
 
     def __init__(self, _settings: Settings) -> None:
         pass
 
     def create_link_token(self, **_kwargs: object) -> dict[str, object]:
         return {"link_token": "link-sandbox-test"}
+
+    def create_update_link_token(self, **kwargs: object) -> dict[str, object]:
+        assert kwargs["access_token"] == "access-sandbox-secret"
+        return {"link_token": "link-update-test"}
 
     def exchange_public_token(self, public_token: str) -> dict[str, object]:
         assert public_token == "public-sandbox-test"
@@ -73,6 +78,27 @@ class FakePlaidClient:
                 },
             ],
         }
+
+    def item_get(self, access_token: str) -> dict[str, object]:
+        assert access_token == "access-sandbox-secret"
+        error = (
+            {"error_code": self.item_error, "error_type": "ITEM_ERROR"}
+            if self.item_error
+            else None
+        )
+        return {
+            "item": {
+                "item_id": "item-sandbox-1",
+                "institution_id": "ins_109508",
+                "institution_name": "First Platypus Bank",
+                "error": error,
+                "consent_expiration_time": "2027-08-15T12:00:00Z",
+            }
+        }
+
+    def item_webhook_update(self, access_token: str, _webhook_uri: str) -> dict[str, object]:
+        assert access_token == "access-sandbox-secret"
+        return {"request_id": "request-webhook"}
 
     def institution_get(self, institution_id: str, _country_codes: list[str]) -> dict[str, object]:
         assert institution_id == "ins_109508"
@@ -240,6 +266,10 @@ class FakePlaidClient:
         self.removed.append(access_token)
         return {"request_id": "request-remove"}
 
+    def sandbox_item_reset_login(self, access_token: str) -> dict[str, object]:
+        assert access_token == "access-sandbox-secret"
+        return {"reset_login": True, "request_id": "request-reset"}
+
 
 @pytest.fixture
 def plaid_app(
@@ -270,6 +300,7 @@ def plaid_app(
     monkeypatch.setattr("app.services.plaid_transactions.PlaidClient", FakePlaidClient)
     FakePlaidClient.removed.clear()
     FakePlaidClient.sync_calls.clear()
+    FakePlaidClient.item_error = None
     try:
         with TestClient(create_app(settings, database)) as client:
             setup = client.post("/api/v1/setup", json=setup_payload)
@@ -355,7 +386,7 @@ def test_plaid_link_exchange_import_list_and_disconnect(
 
     link = client.post("/api/v1/plaid/link-token", headers=headers)
     assert link.status_code == 200
-    assert link.json() == {"link_token": "link-sandbox-test", "environment": "sandbox"}
+    assert link.json() == {"link_token": "link-sandbox-test", "environment": "sandbox", "mode": "connect", "connection_id": None}
 
     exchange = client.post(
         "/api/v1/plaid/exchange",
@@ -366,6 +397,10 @@ def test_plaid_link_exchange_import_list_and_disconnect(
     payload = exchange.json()
     assert payload["configured"] is True
     assert payload["connections"][0]["institution"]["name"] == "First Platypus Bank"
+    assert payload["connections"][0]["environment"] == "sandbox"
+    assert payload["connections"][0]["environment_matches"] is True
+    assert payload["connections"][0]["health"] == "healthy"
+    assert payload["connections"][0]["consent_expiration_at"] is not None
     assert len(payload["connections"][0]["accounts"]) == 2
 
     with database.session_factory() as db:
@@ -400,6 +435,79 @@ def test_plaid_link_exchange_import_list_and_disconnect(
     with database.session_factory() as db:
         assert db.scalar(select(PlaidItem)) is None
         assert list(db.scalars(select(Account)).all()) == []
+
+
+def test_plaid_update_mode_repairs_item_and_refreshes_accounts(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    client, database, csrf = plaid_app
+    headers = csrf_headers(csrf)
+    exchange = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=headers,
+    )
+    assert exchange.status_code == 200
+    connection_id = exchange.json()["connections"][0]["id"]
+
+    with database.session_factory() as db:
+        item = db.get(PlaidItem, connection_id)
+        assert item is not None
+        item.status = "error"
+        item.last_error_code = "ITEM_LOGIN_REQUIRED"
+        item.update_required = True
+        item.update_reason = "ITEM_LOGIN_REQUIRED"
+        db.commit()
+
+    token = client.post(f"/api/v1/plaid/connections/{connection_id}/link-token", headers=headers)
+    assert token.status_code == 200, token.text
+    assert token.json() == {
+        "link_token": "link-update-test",
+        "environment": "sandbox",
+        "mode": "update",
+        "connection_id": connection_id,
+    }
+
+    refreshed = client.post(f"/api/v1/plaid/connections/{connection_id}/refresh", headers=headers)
+    assert refreshed.status_code == 200, refreshed.text
+    connection = refreshed.json()["connections"][0]
+    assert connection["health"] == "healthy"
+    assert connection["update_required"] is False
+    assert connection["update_reason"] is None
+    assert connection["status"] == "active"
+
+
+def test_plaid_environment_mismatch_blocks_sync_and_allows_sandbox_cleanup_after_cutover(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    client, database, csrf = plaid_app
+    headers = csrf_headers(csrf)
+    exchange = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=headers,
+    )
+    connection_id = exchange.json()["connections"][0]["id"]
+    settings = client.app.state.settings
+    settings.plaid_env = "production"
+
+    listed = client.get("/api/v1/plaid/connections")
+    assert listed.status_code == 200
+    connection = listed.json()["connections"][0]
+    assert connection["environment"] == "sandbox"
+    assert connection["environment_matches"] is False
+    assert connection["health"] == "environment_mismatch"
+
+    sync = client.post(f"/api/v1/plaid/connections/{connection_id}/sync", headers=headers)
+    assert sync.status_code == 409
+    assert sync.json()["error"]["code"] == "plaid_environment_mismatch"
+
+    FakePlaidClient.removed.clear()
+    removed = client.delete(f"/api/v1/plaid/connections/{connection_id}", headers=headers)
+    assert removed.status_code == 200
+    assert FakePlaidClient.removed == []
+    with database.session_factory() as db:
+        assert db.get(PlaidItem, connection_id) is None
 
 
 def test_duplicate_link_metadata_rejected_before_token_exchange(
@@ -657,3 +765,127 @@ def test_transaction_sync_local_apply_is_atomic(
         assert db.scalar(
             select(Transaction).where(Transaction.external_id == "txn-invalid-account")
         ) is None
+
+
+def test_item_webhook_marks_reconnect_and_login_repaired() -> None:
+    from app.api.plaid import _handle_item_webhook
+
+    item = PlaidItem(
+        user_id=1,
+        external_id="item-webhook",
+        access_token_ciphertext="ciphertext",
+        access_token_nonce="nonce",
+        environment="production",
+        status="active",
+    )
+    _handle_item_webhook(
+        item,
+        {
+            "webhook_code": "PENDING_DISCONNECT",
+            "disconnect_time": "2026-09-01T12:00:00Z",
+        },
+    )
+    assert item.update_required is True
+    assert item.update_reason == "PENDING_DISCONNECT"
+    assert item.consent_expiration_at is not None
+    assert item.last_webhook_at is not None
+
+    _handle_item_webhook(item, {"webhook_code": "LOGIN_REPAIRED"})
+    assert item.status == "active"
+    assert item.last_error_code is None
+    assert item.update_required is False
+    assert item.update_reason is None
+    assert item.sync_requested_at is not None
+
+
+def test_plaid_production_readiness_reports_sandbox_items(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    from app.services.plaid import production_readiness
+
+    client, database, csrf = plaid_app
+    response = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=csrf_headers(csrf),
+    )
+    assert response.status_code == 200
+    settings = client.app.state.settings
+    settings.plaid_env = "production"
+    settings.plaid_redirect_uri = "https://budget.example.test/plaid/oauth"
+    settings.plaid_webhook_uri = "https://budget.example.test/api/v1/plaid/webhook"
+    with database.session_factory() as db:
+        readiness = production_readiness(db, settings)
+    assert readiness["ready"] is False
+    assert readiness["sandbox_connections"] == 1
+    assert any("cannot be migrated" in issue for issue in readiness["issues"])
+
+
+def test_sandbox_reset_login_marks_connection_for_update_mode(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    from app.services.plaid import sandbox_reset_login
+
+    client, database, csrf = plaid_app
+    response = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=csrf_headers(csrf),
+    )
+    assert response.status_code == 200
+    connection_id = response.json()["connections"][0]["id"]
+    with database.session_factory() as db:
+        result = sandbox_reset_login(db, client.app.state.settings, connection_id)
+        db.commit()
+        item = db.get(PlaidItem, connection_id)
+        assert item is not None
+        assert item.status == "error"
+        assert item.update_required is True
+        assert item.update_reason == "ITEM_LOGIN_REQUIRED"
+    assert result["reset_login"] is True
+
+
+def test_sandbox_reset_login_auto_selects_only_connection(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    from app.services.plaid import sandbox_reset_login
+
+    client, database, csrf = plaid_app
+    response = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=csrf_headers(csrf),
+    )
+    assert response.status_code == 200
+    connection_id = response.json()["connections"][0]["id"]
+    with database.session_factory() as db:
+        result = sandbox_reset_login(db, client.app.state.settings)
+        db.commit()
+    assert result["connection_id"] == connection_id
+    assert result["reset_login"] is True
+
+
+def test_failed_update_refresh_commits_provider_attention_state(
+    plaid_app: tuple[TestClient, Database, str],
+) -> None:
+    client, database, csrf = plaid_app
+    headers = csrf_headers(csrf)
+    exchange = client.post(
+        "/api/v1/plaid/exchange",
+        json={"public_token": "public-sandbox-test"},
+        headers=headers,
+    )
+    assert exchange.status_code == 200
+    connection_id = exchange.json()["connections"][0]["id"]
+
+    FakePlaidClient.item_error = "ITEM_LOGIN_REQUIRED"
+    failed = client.post(f"/api/v1/plaid/connections/{connection_id}/refresh", headers=headers)
+    assert failed.status_code == 409
+    assert failed.json()["error"]["code"] == "plaid_update_incomplete"
+
+    with database.session_factory() as db:
+        item = db.get(PlaidItem, connection_id)
+        assert item is not None
+        assert item.status == "error"
+        assert item.update_required is True
+        assert item.update_reason == "ITEM_LOGIN_REQUIRED"

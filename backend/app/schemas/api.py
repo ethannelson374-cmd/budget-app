@@ -387,6 +387,8 @@ class PlaidExchangeRequest(StrictModel):
 class PlaidLinkTokenView(ViewModel):
     link_token: str
     environment: Literal["sandbox", "production"]
+    mode: Literal["connect", "update"]
+    connection_id: int | None
 
 
 class PlaidInstitutionView(ViewModel):
@@ -400,7 +402,14 @@ class PlaidInstitutionView(ViewModel):
 class PlaidConnectionView(ViewModel):
     id: int
     status: Literal["active", "error"]
+    environment: Literal["sandbox", "production"]
+    environment_matches: bool
+    health: Literal["healthy", "needs_attention", "environment_mismatch"]
+    update_required: bool
+    update_reason: str | None
     last_error_code: str | None
+    consent_expiration_at: datetime | None
+    last_webhook_at: datetime | None
     last_synced_at: datetime | None
     transactions_update_status: str | None
     transactions_last_synced_at: datetime | None

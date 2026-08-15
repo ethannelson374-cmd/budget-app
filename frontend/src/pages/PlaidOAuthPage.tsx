@@ -6,67 +6,69 @@ import { queryKeys } from "../api/queries";
 import type { PlaidConnectionsResponse } from "../api/types";
 import { Brand } from "../components/Brand";
 import { ErrorState, PageLoading } from "../components/States";
-import { clearPlaidLinkToken, createPlaidHandler, storedPlaidLinkToken } from "../lib/plaid";
+import { clearPlaidLinkSession, createPlaidHandler, storedPlaidLinkSession } from "../lib/plaid";
 
 export function PlaidOAuthPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [startupError, setStartupError] = useState<string | null>(null);
-  const exchange = useMutation({
-    mutationFn: ({ publicToken, metadata }: { publicToken: string; metadata: PlaidLinkSuccessMetadata }) =>
-      apiRequest<PlaidConnectionsResponse>("/plaid/exchange", {
+  const complete = useMutation({
+    mutationFn: async ({ publicToken, metadata }: { publicToken: string | null; metadata: PlaidLinkSuccessMetadata }) => {
+      const session = storedPlaidLinkSession();
+      if (!session) throw new Error("This Plaid session has expired.");
+      if (session.mode === "update") {
+        if (session.connectionId === null) throw new Error("Budget lost track of the connection being updated.");
+        return apiRequest<PlaidConnectionsResponse>(`/plaid/connections/${session.connectionId}/refresh`, { method: "POST" });
+      }
+      if (!publicToken) throw new Error("Plaid did not return a connection token.");
+      return apiRequest<PlaidConnectionsResponse>("/plaid/exchange", {
         method: "POST",
         body: JSON.stringify({
           public_token: publicToken,
           institution_id: metadata.institution?.institution_id ?? null,
           accounts: metadata.accounts.map(({ name, mask }) => ({ name, mask })),
         }),
-      }),
+      });
+    },
     onSuccess: async () => {
-      clearPlaidLinkToken();
+      clearPlaidLinkSession();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.plaidConnections }),
         queryClient.invalidateQueries({ queryKey: queryKeys.accounts }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
       ]);
       navigate("/accounts", { replace: true });
     },
-    onError: () => clearPlaidLinkToken(),
+    onError: () => clearPlaidLinkSession(),
   });
 
-  const exchangePublicToken = exchange.mutate;
+  const completeLink = complete.mutate;
 
   useEffect(() => {
-    const token = storedPlaidLinkToken();
-    if (!token) {
-      setStartupError("This Plaid session has expired. Return to Accounts and connect the bank again.");
+    const session = storedPlaidLinkSession();
+    if (!session) {
+      setStartupError("This Plaid session has expired. Return to Accounts and try again.");
       return;
     }
     let handler: PlaidHandler | undefined;
     try {
       handler = createPlaidHandler({
-        token,
+        token: session.token,
         receivedRedirectUri: window.location.href,
-        onSuccess: (publicToken, metadata) => {
-          if (!publicToken) {
-            clearPlaidLinkToken();
-            setStartupError("Plaid did not return a connection token.");
-            return;
-          }
-          exchangePublicToken({ publicToken, metadata });
-        },
+        onSuccess: (publicToken, metadata) => completeLink({ publicToken, metadata }),
         onExit: () => {
-          clearPlaidLinkToken();
+          clearPlaidLinkSession();
           navigate("/accounts", { replace: true });
         },
         onLoad: () => handler?.open(),
       });
     } catch (error) {
-      clearPlaidLinkToken();
+      clearPlaidLinkSession();
       setStartupError(error instanceof Error ? error.message : "Plaid Link could not be resumed.");
     }
     return () => handler?.destroy();
-  }, [exchangePublicToken, navigate]);
+  }, [completeLink, navigate]);
 
   if (startupError) {
     return (
@@ -76,11 +78,11 @@ export function PlaidOAuthPage() {
       </main>
     );
   }
-  if (exchange.isError) {
+  if (complete.isError) {
     return (
       <main className="centered-page error-page">
         <Brand linked={false} />
-        <ErrorState title="Bank connection could not finish" message={exchange.error.message} onRetry={() => navigate("/accounts", { replace: true })} />
+        <ErrorState title="Bank connection could not finish" message={complete.error.message} onRetry={() => navigate("/accounts", { replace: true })} />
       </main>
     );
   }

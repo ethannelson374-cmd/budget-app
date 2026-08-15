@@ -17,7 +17,7 @@ import { AccountEditor } from "../components/AccountEditor";
 import { PlaidConnectionCard } from "../components/PlaidConnectionCard";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { PageHeader } from "../components/PageHeader";
-import { createPlaidHandler, rememberPlaidLinkToken, clearPlaidLinkToken } from "../lib/plaid";
+import { clearPlaidLinkSession, createPlaidHandler, rememberPlaidLinkSession } from "../lib/plaid";
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : error instanceof Error ? error.message : "The request could not be completed.";
@@ -71,46 +71,84 @@ export function AccountsPage() {
         }),
       }),
     onSuccess: async () => {
-      clearPlaidLinkToken();
+      clearPlaidLinkSession();
       setPlaidError(null);
       await refreshFinancialData();
     },
     onError: (error) => {
-      clearPlaidLinkToken();
+      clearPlaidLinkSession();
       setPlaidError(errorMessage(error));
     },
   });
 
-  const connectPlaid = useMutation({
-    mutationFn: () => apiRequest<PlaidLinkTokenResponse>("/plaid/link-token", { method: "POST" }),
-    onSuccess: ({ link_token }) => {
-      rememberPlaidLinkToken(link_token);
+  const finishPlaidUpdate = useMutation({
+    mutationFn: (connectionId: number) =>
+      apiRequest<PlaidConnectionsResponse>(`/plaid/connections/${connectionId}/refresh`, { method: "POST" }),
+    onSuccess: async () => {
+      clearPlaidLinkSession();
       setPlaidError(null);
-      let handler: PlaidHandler | undefined;
-      try {
-        handler = createPlaidHandler({
-          token: link_token,
-          onSuccess: (publicToken, metadata) => {
-            handler?.destroy();
-            if (!publicToken) {
-              clearPlaidLinkToken();
-              setPlaidError("Plaid did not return a connection token.");
+      setPlaidNotice("Bank connection updated. Budget will refresh transactions next.");
+      await refreshFinancialData();
+    },
+    onError: (error) => {
+      clearPlaidLinkSession();
+      setPlaidNotice(null);
+      setPlaidError(errorMessage(error));
+    },
+  });
+
+  const launchPlaid = (response: PlaidLinkTokenResponse) => {
+    rememberPlaidLinkSession({
+      token: response.link_token,
+      mode: response.mode,
+      connectionId: response.connection_id,
+    });
+    setPlaidError(null);
+    let handler: PlaidHandler | undefined;
+    try {
+      handler = createPlaidHandler({
+        token: response.link_token,
+        onSuccess: (publicToken, metadata) => {
+          handler?.destroy();
+          if (response.mode === "update") {
+            if (response.connection_id === null) {
+              clearPlaidLinkSession();
+              setPlaidError("Budget lost track of the bank connection being updated.");
               return;
             }
-            exchangePlaid.mutate({ publicToken, metadata });
-          },
-          onExit: (error) => {
-            handler?.destroy();
-            clearPlaidLinkToken();
-            if (error) setPlaidError("The bank connection was not completed. Try again.");
-          },
-          onLoad: () => handler?.open(),
-        });
-      } catch (error) {
-        clearPlaidLinkToken();
-        setPlaidError(errorMessage(error));
-      }
-    },
+            finishPlaidUpdate.mutate(response.connection_id);
+            return;
+          }
+          if (!publicToken) {
+            clearPlaidLinkSession();
+            setPlaidError("Plaid did not return a connection token.");
+            return;
+          }
+          exchangePlaid.mutate({ publicToken, metadata });
+        },
+        onExit: (error) => {
+          handler?.destroy();
+          clearPlaidLinkSession();
+          if (error) setPlaidError(response.mode === "update" ? "The bank connection was not updated. Try again." : "The bank connection was not completed. Try again.");
+        },
+        onLoad: () => handler?.open(),
+      });
+    } catch (error) {
+      clearPlaidLinkSession();
+      setPlaidError(errorMessage(error));
+    }
+  };
+
+  const connectPlaid = useMutation({
+    mutationFn: () => apiRequest<PlaidLinkTokenResponse>("/plaid/link-token", { method: "POST" }),
+    onSuccess: launchPlaid,
+    onError: (error) => setPlaidError(errorMessage(error)),
+  });
+
+  const updatePlaid = useMutation({
+    mutationFn: (connection: PlaidConnection) =>
+      apiRequest<PlaidLinkTokenResponse>(`/plaid/connections/${connection.id}/link-token`, { method: "POST" }),
+    onSuccess: launchPlaid,
     onError: (error) => setPlaidError(errorMessage(error)),
   });
 
@@ -146,7 +184,7 @@ export function AccountsPage() {
   };
 
   const manualAccounts = accounts.data?.accounts.filter((account) => account.source_type === "manual") ?? [];
-  const plaidBusy = connectPlaid.isPending || exchangePlaid.isPending;
+  const plaidBusy = connectPlaid.isPending || exchangePlaid.isPending || updatePlaid.isPending || finishPlaidUpdate.isPending;
   const configured = connections.data?.configured ?? false;
 
   return (
@@ -178,7 +216,7 @@ export function AccountsPage() {
               <span className="eyebrow">Automatic</span>
               <h2 id="connected-institutions-title">Connected institutions</h2>
             </div>
-            {connections.data.environment === "sandbox" && <span className="environment-badge">Sandbox</span>}
+            <span className={`environment-badge ${connections.data.environment === "production" ? "production" : ""}`}>{connections.data.environment === "production" ? "Production" : "Sandbox"}</span>
           </div>
           <div className="connection-grid">
             {connections.data.connections.map((connection) => (
@@ -186,8 +224,10 @@ export function AccountsPage() {
                 key={connection.id}
                 connection={connection}
                 syncBusy={syncPlaid.isPending && syncPlaid.variables?.id === connection.id}
+                updateBusy={(updatePlaid.isPending && updatePlaid.variables?.id === connection.id) || (finishPlaidUpdate.isPending && finishPlaidUpdate.variables === connection.id)}
                 disconnectBusy={disconnectPlaid.isPending && disconnectPlaid.variables?.id === connection.id}
                 onSync={(item) => { setPlaidNotice(null); syncPlaid.mutate(item); }}
+                onUpdate={(item) => { setPlaidNotice(null); updatePlaid.mutate(item); }}
                 onDisconnect={requestDisconnect}
               />
             ))}

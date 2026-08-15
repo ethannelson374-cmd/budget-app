@@ -401,6 +401,12 @@ def sync_plaid_item(db: Session, settings: Settings, user: User, item_id: int) -
     )
     if item is None:
         raise ApiError(404, "plaid_connection_not_found", "The bank connection was not found")
+    if item.environment != settings.plaid_env:
+        raise ApiError(
+            409,
+            "plaid_environment_mismatch",
+            "This bank connection belongs to a different Plaid environment.",
+        )
 
     access_token = decrypt_plaid_access_token(
         item.access_token_ciphertext,
@@ -420,6 +426,8 @@ def sync_plaid_item(db: Session, settings: Settings, user: User, item_id: int) -
         if exc.error_code in ITEM_ERRORS:
             item.status = "error"
             item.last_error_code = exc.error_code[:80]
+            item.update_required = True
+            item.update_reason = exc.error_code[:80]
         db.flush()
         raise _provider_error(exc) from exc
 
@@ -448,6 +456,9 @@ def sync_plaid_item(db: Session, settings: Settings, user: User, item_id: int) -
         item.transactions_last_error_code = None
         item.status = "active"
         item.last_error_code = None
+        if item.update_reason == "ITEM_LOGIN_REQUIRED":
+            item.update_required = False
+            item.update_reason = None
         item.last_synced_at = now
         item.sync_requested_at = None
         rebuild_recurring_streams(db, user)
@@ -478,7 +489,10 @@ def sync_all_plaid_items(
 ) -> dict[str, int]:
     if not settings.plaid_configured:
         raise RuntimeError("Plaid is not configured")
-    statement = select(PlaidItem.id, PlaidItem.user_id).where(PlaidItem.status == "active")
+    statement = select(PlaidItem.id, PlaidItem.user_id).where(
+        PlaidItem.status == "active",
+        PlaidItem.environment == settings.plaid_env,
+    )
     if item_id is not None:
         statement = statement.where(PlaidItem.id == item_id)
     else:

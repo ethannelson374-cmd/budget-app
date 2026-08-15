@@ -17,6 +17,7 @@ from app.models import (
     FinancialGoal,
     InsightRecord,
     Notification,
+    PlaidItem,
     Transaction,
     User,
     UserNotificationPreference,
@@ -313,6 +314,59 @@ def _goal_notifications(
     return created
 
 
+def _plaid_connection_notifications(
+    db: Session, settings: Settings, user: User
+) -> list[Notification]:
+    items = list(
+        db.scalars(
+            select(PlaidItem)
+            .options(joinedload(PlaidItem.institution))
+            .where(PlaidItem.user_id == user.id)
+            .order_by(PlaidItem.id)
+        ).all()
+    )
+    created: list[Notification] = []
+    for item in items:
+        reason = item.update_reason or item.last_error_code
+        if item.environment != settings.plaid_env:
+            reason = "ENVIRONMENT_MISMATCH"
+        if not reason and item.status != "error":
+            continue
+        institution = item.institution.name if item.institution else "Bank connection"
+        if reason == "NEW_ACCOUNTS_AVAILABLE":
+            title = f"New accounts available at {institution}"
+            body = "Your bank reports additional accounts that can be shared with Budget. Review the connection to choose them."
+            severity = "info"
+        elif reason in {"PENDING_DISCONNECT", "PENDING_EXPIRATION"}:
+            title = f"Renew access to {institution}"
+            body = "Your bank authorization is nearing expiration. Reconnect now to keep transaction updates working."
+            severity = "important"
+        elif reason == "ENVIRONMENT_MISMATCH":
+            title = f"Replace the test connection for {institution}"
+            body = "This Plaid Sandbox connection cannot move into Production. Remove it and connect the real institution again."
+            severity = "important"
+        else:
+            title = f"Reconnect {institution}"
+            body = "Budget can no longer refresh this bank connection automatically. Open Accounts and reconnect it through Plaid."
+            severity = "important"
+        stamp = item.last_webhook_at or item.updated_at or item.created_at
+        bucket = stamp.strftime("%Y-%m-%d") if stamp else "current"
+        row = _create(
+            db,
+            user,
+            fingerprint=f"plaid:{item.id}:{reason}:{bucket}",
+            notification_type="bank_connection",
+            severity=severity,
+            title=title,
+            body=body,
+            action_route="/accounts",
+            data={"connection_id": item.id, "reason": reason},
+        )
+        if row is not None:
+            created.append(row)
+    return created
+
+
 def _large_transaction_notifications(
     db: Session, user: User, prefs: UserNotificationPreference
 ) -> list[Notification]:
@@ -469,6 +523,7 @@ def scan_user_notifications(
     if prefs.in_app_enabled or prefs.email_enabled:
         created.extend(_insight_notifications(db, user, prefs))
         created.extend(_goal_notifications(db, user, prefs))
+        created.extend(_plaid_connection_notifications(db, settings, user))
         created.extend(_large_transaction_notifications(db, user, prefs))
         if prefs.weekly_summary:
             row = _summary_notification(db, user, kind="weekly", force=force_summaries)

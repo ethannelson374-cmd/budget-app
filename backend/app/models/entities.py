@@ -326,7 +326,9 @@ class PlaidItem(TimestampMixin, Base):
             name="fk_plaid_item_institution_owner",
         ),
         CheckConstraint("status IN ('active','error')", name="plaid_item_status_allowed"),
+        CheckConstraint("environment IN ('sandbox','production')", name="plaid_item_environment_allowed"),
         Index("ix_plaid_items_user_status", "user_id", "status"),
+        Index("ix_plaid_items_user_environment", "user_id", "environment"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -338,6 +340,9 @@ class PlaidItem(TimestampMixin, Base):
     access_token_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     access_token_nonce: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), default="sandbox", nullable=False)
+    update_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    update_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     consent_expiration_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -350,6 +355,7 @@ class PlaidItem(TimestampMixin, Base):
     )
     transactions_last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     sync_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_webhook_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     webhook_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     institution: Mapped[FinancialInstitution | None] = relationship(viewonly=True)

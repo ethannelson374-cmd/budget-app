@@ -88,11 +88,40 @@ class PlaidClient:
             payload["webhook"] = webhook_uri
         return self._post("/link/token/create", payload)
 
+    def create_update_link_token(
+        self,
+        *,
+        client_user_id: str,
+        access_token: str,
+        redirect_uri: str,
+        country_codes: list[str],
+        webhook_uri: str | None = None,
+        account_selection_enabled: bool = False,
+    ) -> dict[str, Any]:
+        # Plaid update mode reuses the existing Item access token. Per Plaid's
+        # guidance, ordinary repair flows do not repeat the products array.
+        payload: dict[str, Any] = {
+            "user": {"client_user_id": client_user_id},
+            "client_name": "Budget",
+            "country_codes": country_codes,
+            "language": "en",
+            "redirect_uri": redirect_uri,
+            "access_token": access_token,
+        }
+        if account_selection_enabled:
+            payload["update"] = {"account_selection_enabled": True}
+        if webhook_uri:
+            payload["webhook"] = webhook_uri
+        return self._post("/link/token/create", payload)
+
     def exchange_public_token(self, public_token: str) -> dict[str, Any]:
         return self._post("/item/public_token/exchange", {"public_token": public_token})
 
     def accounts_get(self, access_token: str) -> dict[str, Any]:
         return self._post("/accounts/get", {"access_token": access_token})
+
+    def item_get(self, access_token: str) -> dict[str, Any]:
+        return self._post("/item/get", {"access_token": access_token})
 
     def institution_get(self, institution_id: str, country_codes: list[str]) -> dict[str, Any]:
         return self._post(
@@ -127,3 +156,6 @@ class PlaidClient:
 
     def item_remove(self, access_token: str) -> dict[str, Any]:
         return self._post("/item/remove", {"access_token": access_token})
+
+    def sandbox_item_reset_login(self, access_token: str) -> dict[str, Any]:
+        return self._post("/sandbox/item/reset_login", {"access_token": access_token})

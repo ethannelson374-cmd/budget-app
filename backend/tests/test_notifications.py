@@ -149,3 +149,43 @@ def test_read_all_marks_only_current_users_notifications(
         other_unread = int(db.scalar(select(func.count(Notification.id)).where(Notification.fingerprint == "other:n", Notification.read_at.is_(None))) or 0)
         assert owner_unread == 0
         assert other_unread == 1
+
+
+def test_plaid_connection_attention_creates_owner_scoped_notification(
+    authenticated: tuple[TestClient, str], database: Database, settings: Settings
+) -> None:
+    from app.models import FinancialInstitution, PlaidItem
+    from app.services.notifications import _plaid_connection_notifications
+
+    client, _ = authenticated
+    del client
+    with database.session_factory() as db:
+        user = db.scalar(select(User).options(selectinload(User.settings)))
+        assert user is not None
+        institution = FinancialInstitution(
+            user_id=user.id,
+            external_id="ins_test",
+            name="Test Bank",
+        )
+        db.add(institution)
+        db.flush()
+        db.add(
+            PlaidItem(
+                user_id=user.id,
+                institution_id=institution.id,
+                external_id="item-test",
+                access_token_ciphertext="ciphertext",
+                access_token_nonce="nonce",
+                status="error",
+                environment=settings.plaid_env,
+                update_required=True,
+                update_reason="ITEM_LOGIN_REQUIRED",
+                last_error_code="ITEM_LOGIN_REQUIRED",
+            )
+        )
+        db.flush()
+        created = _plaid_connection_notifications(db, settings, user)
+        assert len(created) == 1
+        assert created[0].notification_type == "bank_connection"
+        assert created[0].action_route == "/accounts"
+        assert created[0].title == "Reconnect Test Bank"
