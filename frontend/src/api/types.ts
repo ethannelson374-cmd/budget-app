@@ -1003,6 +1003,7 @@ export interface OperationsStatus {
     backup_verify: OperationalJobStatus;
     report_snapshot: OperationalJobStatus;
     plaid_sync: OperationalJobStatus;
+    notifications: OperationalJobStatus;
   };
   backup_storage: {
     path: string;
@@ -1023,3 +1024,33 @@ export interface DashboardCardPreference { id: DashboardCardId; size: DashboardC
 export interface DashboardPreferences { cards: DashboardCardPreference[]; preset: DashboardPreset; onboarding_dismissed_at: string | null; }
 export interface DashboardOnboardingTask { key: "account" | "income" | "budget" | "goal" | "insights"; label: string; description: string; route: string; complete: boolean; }
 export interface DashboardOnboarding { tasks: DashboardOnboardingTask[]; completed: number; total: number; complete: boolean; dismissed: boolean; dismissed_at: string | null; }
+
+export type NotificationSeverity = "info" | "opportunity" | "important" | "critical";
+export interface BudgetNotification {
+  id: number;
+  type: string;
+  severity: NotificationSeverity;
+  title: string;
+  body: string;
+  action_route: string | null;
+  data: Record<string, unknown>;
+  occurred_at: string;
+  read_at: string | null;
+  dismissed_at: string | null;
+  email_sent_at: string | null;
+}
+export interface NotificationList { unread_count: number; notifications: BudgetNotification[]; }
+export interface NotificationCount { unread_count: number; }
+export interface NotificationPreferences {
+  in_app_enabled: boolean;
+  email_enabled: boolean;
+  email_delivery_available: boolean;
+  spending_alerts: boolean;
+  forecast_alerts: boolean;
+  goal_milestones: boolean;
+  recurring_changes: boolean;
+  large_transaction_alerts: boolean;
+  large_transaction_threshold: string;
+  weekly_summary: boolean;
+  monthly_summary: boolean;
+}

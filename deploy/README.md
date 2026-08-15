@@ -722,7 +722,7 @@ The Settings page renders this as **Reliability & backups -> System health**. It
 revision, latest successful worker times, backup age, archive count/size, and free disk space.
 It does not expose database credentials, backup contents, Plaid tokens, provider responses, or
 financial records. A failed or stale critical job produces an in-app admin attention state;
-email/push notification delivery remains a later notifications-stage concern.
+Stage 4 adds owner-configurable in-app/email financial notifications; push delivery is still out of scope.
 
 API journal logs remain JSON, but request metadata is now emitted as structured fields
 (`request_id`, method, route, status, and duration) so a UI request ID can be correlated directly
@@ -731,3 +731,52 @@ schema revision that does not match the application's Alembic head.
 
 ## Phase 4 Stage 3 dashboard experience
 Stage 3 adds migration `20260814_0015` for owner-scoped dashboard preferences. It adds no new environment variable, daemon, listener, or external provider. Apply `alembic upgrade head`; expected head is `20260814_0015`.
+
+## Phase 4 Stage 4 financial notifications
+
+Stage 4 adds migration `20260815_0016` for owner-scoped notification preferences and the
+notification inbox. Notification decisions are deterministic and reuse Budget's existing
+budget, forecast, recurring-stream, transaction, goal, and Insight Engine calculations. The
+AI Advisor is not used to decide whether an alert fires.
+
+The notification worker runs with:
+
+```bash
+python -m app.cli run-notifications
+```
+
+For local/demo testing only, the current weekly and monthly summary can be generated outside
+its normal schedule with:
+
+```bash
+python -m app.cli run-notifications --force-summaries
+```
+
+Normal scheduling generates a weekly summary on Monday for the prior seven days and a monthly
+summary on the first day of the month for the prior calendar month. Per-user preferences can
+disable spending/safe-to-spend alerts, forecast reserve warnings, goal milestones, recurring
+price changes, large-transaction alerts, and weekly/monthly summaries. Large-transaction
+alerts default off. Email delivery also defaults off and is available only when the existing
+SMTP configuration is enabled; in-app notifications require no email provider.
+
+Install the notification worker and hourly timer only when the completed Phase 4 release is
+ready for production:
+
+```bash
+sudo cp /opt/budget-app/current/deploy/systemd/budget-notifications.service /etc/systemd/system/
+sudo cp /opt/budget-app/current/deploy/systemd/budget-notifications.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  /etc/systemd/system/budget-notifications.service \
+  /etc/systemd/system/budget-notifications.timer
+
+sudo systemctl start budget-notifications.service
+sudo journalctl -u budget-notifications.service -n 50 --no-pager
+sudo systemctl enable --now budget-notifications.timer
+sudo systemctl list-timers budget-notifications.timer --all
+```
+
+The timer wakes hourly. Notification fingerprints prevent the same financial event from being
+inserted repeatedly. The worker records its latest success/failure under the Stage 2 operational
+health system, where admins see **Financial notifications** alongside backups, snapshots, and
+Plaid sync.

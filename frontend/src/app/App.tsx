@@ -22,6 +22,7 @@ import { RecurringPage } from "../pages/RecurringPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { SetupPage } from "../pages/SetupPage";
 import { TransactionsPage } from "../pages/TransactionsPage";
+import { NotificationsPage } from "../pages/NotificationsPage";
 
 function SetupError({ error, retry }: { error: Error; retry: () => void }) {
   const apiError = error instanceof ApiError ? error : null;
@@ -118,6 +119,7 @@ export function App() {
         <Route path="/advisor" element={<AdvisorPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -94,6 +94,54 @@ class UserDashboardPreference(TimestampMixin, Base):
     )
 
 
+class UserNotificationPreference(TimestampMixin, Base):
+    __tablename__ = "user_notification_preferences"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    in_app_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    spending_alerts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    forecast_alerts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    goal_milestones: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    recurring_changes: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    large_transaction_alerts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    large_transaction_threshold: Mapped[Decimal] = mapped_column(
+        MONEY, default=Decimal("250.0000"), nullable=False
+    )
+    weekly_summary: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    monthly_summary: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        UniqueConstraint("user_id", "fingerprint", name="uq_notification_user_fingerprint"),
+        CheckConstraint(
+            "severity IN ('info','opportunity','important','critical')",
+            name="notification_severity_allowed",
+        ),
+        Index("ix_notifications_user_occurred", "user_id", "occurred_at"),
+        Index("ix_notifications_user_read", "user_id", "read_at", "dismissed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    action_route: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    data_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_error: Mapped[str | None] = mapped_column(String(160), nullable=True)
+
+
 class SessionRecord(Base):
     __tablename__ = "sessions"
     __table_args__ = (

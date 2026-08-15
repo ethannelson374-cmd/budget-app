@@ -1512,3 +1512,70 @@ class DashboardOnboardingView(ViewModel):
     complete: bool
     dismissed: bool
     dismissed_at: datetime | None
+
+# Phase 4 Stage 4 — deterministic financial notifications and summaries
+NotificationSeverity = Literal["info", "opportunity", "important", "critical"]
+NotificationStatusFilter = Literal["all", "unread"]
+
+
+class NotificationPreferencesPatch(StrictModel):
+    in_app_enabled: bool | None = None
+    email_enabled: bool | None = None
+    spending_alerts: bool | None = None
+    forecast_alerts: bool | None = None
+    goal_milestones: bool | None = None
+    recurring_changes: bool | None = None
+    large_transaction_alerts: bool | None = None
+    large_transaction_threshold: Annotated[
+        Decimal, Field(ge=1, le=1000000, max_digits=19, decimal_places=4)
+    ] | None = None
+    weekly_summary: bool | None = None
+    monthly_summary: bool | None = None
+
+
+class NotificationPreferencesView(ViewModel):
+    in_app_enabled: bool
+    email_enabled: bool
+    email_delivery_available: bool
+    spending_alerts: bool
+    forecast_alerts: bool
+    goal_milestones: bool
+    recurring_changes: bool
+    large_transaction_alerts: bool
+    large_transaction_threshold: str
+    weekly_summary: bool
+    monthly_summary: bool
+
+
+class NotificationView(ViewModel):
+    id: int
+    type: str
+    severity: NotificationSeverity
+    title: str
+    body: str
+    action_route: str | None
+    data: dict[str, object]
+    occurred_at: datetime
+    read_at: datetime | None
+    dismissed_at: datetime | None
+    email_sent_at: datetime | None
+
+
+class NotificationListView(ViewModel):
+    unread_count: int
+    notifications: list[NotificationView]
+
+
+class NotificationCountView(ViewModel):
+    unread_count: int
+
+
+class NotificationPatch(StrictModel):
+    read: bool | None = None
+    dismissed: bool | None = None
+
+    @model_validator(mode="after")
+    def require_notification_change(self) -> NotificationPatch:
+        if not self.model_fields_set:
+            raise ValueError("at least one notification field must be supplied")
+        return self

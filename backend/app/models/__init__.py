@@ -30,6 +30,7 @@ from app.models.entities import (
     LoginThrottle,
     MonthlyBudget,
     MonthlyBudgetCategory,
+    Notification,
     PlaidItem,
     RecurringStream,
     ReportExport,
@@ -39,6 +40,7 @@ from app.models.entities import (
     TransactionRule,
     User,
     UserDashboardPreference,
+    UserNotificationPreference,
     UserSettings,
 )
 
@@ -74,6 +76,7 @@ __all__ = [
     "LoginThrottle",
     "MonthlyBudget",
     "MonthlyBudgetCategory",
+    "Notification",
     "PlaidItem",
     "RecurringStream",
     "ReportExport",
@@ -83,5 +86,6 @@ __all__ = [
     "TransactionRule",
     "User",
     "UserDashboardPreference",
+    "UserNotificationPreference",
     "UserSettings",
 ]

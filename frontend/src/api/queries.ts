@@ -37,6 +37,9 @@ export const queryKeys = {
   userInvitations: ["user-invitations"] as const,
   adminUsers: ["admin-users"] as const,
   operationsStatus: ["operations-status"] as const,
+  notificationCount: ["notification-count"] as const,
+  notifications: (status: string) => ["notifications", status] as const,
+  notificationPreferences: ["notification-preferences"] as const,
 };
 
 export function useSetupStatus() {

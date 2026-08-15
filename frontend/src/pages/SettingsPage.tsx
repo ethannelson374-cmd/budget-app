@@ -9,6 +9,7 @@ import { ErrorState, LoadingState } from "../components/States";
 import { useAuth } from "../auth/AuthContext";
 import { SecuritySettings } from "../components/SecuritySettings";
 import { OperationsStatusCard } from "../components/OperationsStatusCard";
+import { NotificationSettings } from "../components/NotificationSettings";
 
 function getTimezones(current: string): string[] {
   const values = (Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.("timeZone") ?? ["UTC"];
@@ -29,6 +30,7 @@ export function SettingsPage() {
       {(settings.isError || categories.isError || options.isError || rules.isError || advisorStatus.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); void rules.refetch(); void advisorStatus.refetch(); }} />}
       {settings.data && categories.data && options.data && rules.data && advisorStatus.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${settings.data.advisor_enabled}-${settings.data.advisor_store_history}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} advisorStatus={advisorStatus.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
       <SecuritySettings />
+      <NotificationSettings />
       <OperationsStatusCard />
     </div>
   );

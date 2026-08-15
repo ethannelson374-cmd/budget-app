@@ -1,0 +1,13 @@
+[Unit]
+Description=Generate Budget financial notifications hourly
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+AccuracySec=5min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=budget-notifications.service
+
+[Install]
+WantedBy=timers.target

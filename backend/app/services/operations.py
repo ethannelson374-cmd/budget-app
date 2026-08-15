@@ -19,7 +19,8 @@ JOB_BACKUP = "database_backup"
 JOB_BACKUP_VERIFY = "backup_verify"
 JOB_PLAID_SYNC = "plaid_sync"
 JOB_REPORT_SNAPSHOT = "report_snapshot"
-KNOWN_JOBS = (JOB_BACKUP, JOB_BACKUP_VERIFY, JOB_PLAID_SYNC, JOB_REPORT_SNAPSHOT)
+JOB_NOTIFICATIONS = "notifications"
+KNOWN_JOBS = (JOB_BACKUP, JOB_BACKUP_VERIFY, JOB_PLAID_SYNC, JOB_REPORT_SNAPSHOT, JOB_NOTIFICATIONS)
 
 
 def _utc_now() -> datetime:
@@ -177,6 +178,12 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
         stale_after_hours=2,
         disabled=not settings.plaid_configured or active_plaid == 0,
     )
+    notifications = _job_state(
+        rows.get(JOB_NOTIFICATIONS),
+        now=now,
+        stale_after_hours=3,
+        disabled=users == 0,
+    )
 
     backup_dir = settings.backup_dir.expanduser()
     backup_count = 0
@@ -203,6 +210,7 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
         ("Backup verification", backup_verify),
         ("Reporting snapshot", snapshot),
         ("Plaid sync", plaid),
+        ("Financial notifications", notifications),
     ):
         if item["status"] == "failed":
             attention.append(f"{label} last run failed.")
@@ -223,6 +231,7 @@ def operations_status(db: Session, settings: Settings) -> dict[str, Any]:
             "backup_verify": backup_verify,
             "report_snapshot": snapshot,
             "plaid_sync": plaid,
+            "notifications": notifications,
         },
         "backup_storage": {
             "path": str(backup_dir),

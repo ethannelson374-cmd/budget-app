@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "../toast/ToastContext";
 import { apiRequest } from "../api/client";
 import { SettingsPage } from "./SettingsPage";
 
@@ -42,6 +43,7 @@ describe("SettingsPage", () => {
       if (path === "/advisor/status") return advisorStatus;
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
+      if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });
@@ -49,7 +51,7 @@ describe("SettingsPage", () => {
 
   it("updates preferences and category selection through CSRF-protected API mutations", async () => {
     const user = userEvent.setup();
-    render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider>);
+    render(<QueryClientProvider client={new QueryClient()}><ToastProvider><MemoryRouter><SettingsPage /></MemoryRouter></ToastProvider></QueryClientProvider>);
     await screen.findByRole("heading", { name: "Financial preferences" });
     await user.click(screen.getByRole("radio", { name: "Dark" }));
     await user.click(screen.getByRole("button", { name: "Save preferences" }));
@@ -73,12 +75,13 @@ describe("SettingsPage", () => {
       if (path === "/advisor/status") return advisorStatus;
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
+      if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
     });
     const client = new QueryClient();
     const user = userEvent.setup();
-    render(<QueryClientProvider client={client}><MemoryRouter><SettingsPage /></MemoryRouter></QueryClientProvider>);
+    render(<QueryClientProvider client={client}><ToastProvider><MemoryRouter><SettingsPage /></MemoryRouter></ToastProvider></QueryClientProvider>);
     await screen.findByRole("heading", { name: "Financial preferences" });
     await user.click(screen.getByRole("radio", { name: "Dark" }));
     await user.click(screen.getByRole("button", { name: "Save preferences" }));

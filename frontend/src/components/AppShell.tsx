@@ -3,7 +3,10 @@ import { useAuth } from "../auth/AuthContext";
 import { Brand } from "./Brand";
 import { Icon, type IconName } from "./Icon";
 import { useState } from "react";
-import { ApiError } from "../api/client";
+import { ApiError, apiRequest } from "../api/client";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "../api/queries";
+import type { NotificationCount } from "../api/types";
 
 const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
@@ -33,6 +36,8 @@ export function AppShell() {
   const location = useLocation();
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const notificationCount = useQuery({ queryKey: queryKeys.notificationCount, queryFn: () => apiRequest<NotificationCount>("/notifications/unread-count"), refetchInterval: 60_000, enabled: Boolean(user) });
+  const unread = notificationCount.data?.unread_count ?? 0;
 
   const signOut = async () => {
     setLogoutBusy(true);
@@ -54,6 +59,7 @@ export function AppShell() {
         <Brand />
         <nav className="primary-nav" aria-label="Primary navigation"><NavItems /></nav>
         <div className="sidebar-user">
+          <NavLink className="notification-bell" to="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Icon name="bell" />{unread > 0 && <span>{unread > 99 ? "99+" : unread}</span>}</NavLink>
           <div className="user-avatar" aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</div>
           <div className="user-summary"><strong>{user?.username}</strong><span>{user?.email}</span></div>
           <button type="button" className="icon-button" disabled={logoutBusy} onClick={() => void signOut()} aria-label="Sign out"><Icon name="logout" /></button>
@@ -61,7 +67,7 @@ export function AppShell() {
       </aside>
       <header className="mobile-topbar">
         <Brand />
-        <button type="button" className="icon-button" disabled={logoutBusy} onClick={() => void signOut()} aria-label="Sign out"><Icon name="logout" /></button>
+        <div className="mobile-topbar-actions"><NavLink className="notification-bell" to="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Icon name="bell" />{unread > 0 && <span>{unread > 99 ? "99+" : unread}</span>}</NavLink><button type="button" className="icon-button" disabled={logoutBusy} onClick={() => void signOut()} aria-label="Sign out"><Icon name="logout" /></button></div>
       </header>
       <main id="main-content" className="main-content" tabIndex={-1}>
         {logoutError && <div className="logout-alert" role="alert"><span>{logoutError}</span><button type="button" onClick={() => void signOut()}>Try again</button></div>}

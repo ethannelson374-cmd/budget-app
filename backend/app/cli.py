@@ -51,11 +51,13 @@ from app.services.operations import (
     JOB_BACKUP_VERIFY,
     JOB_PLAID_SYNC,
     JOB_REPORT_SNAPSHOT,
+    JOB_NOTIFICATIONS,
     operations_status,
     record_job_finished,
     record_job_started,
 )
 from app.services.plaid_transactions import sync_all_plaid_items
+from app.services.notifications import scan_all_notifications
 from app.services.reports import capture_all_snapshots
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -637,6 +639,15 @@ def _tracked(settings: Settings, key: str, operation):
         raise
 
 
+def run_notifications(settings: Settings, *, force_summaries: bool = False) -> dict[str, int]:
+    database = Database.from_settings(settings)
+    try:
+        with database.session_factory() as db:
+            return scan_all_notifications(db, settings, force_summaries=force_summaries)
+    finally:
+        database.engine.dispose()
+
+
 def current_operations_status(settings: Settings) -> dict[str, object]:
     database = Database.from_settings(settings)
     try:
@@ -677,6 +688,14 @@ def parser() -> argparse.ArgumentParser:
     restore.add_argument(
         "--target-db-name",
         help="Existing empty MySQL database named budget_restore_*; SQLite uses a temporary target",
+    )
+    notify = subcommands.add_parser(
+        "run-notifications", help="Generate deterministic financial notifications for every user"
+    )
+    notify.add_argument(
+        "--force-summaries",
+        action="store_true",
+        help="Generate this period's weekly/monthly summaries even outside their normal schedule",
     )
     subcommands.add_parser(
         "operations-status", help="Print the admin-safe reliability status as JSON"
@@ -732,6 +751,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"Backup restore test passed: {result['archive']} -> {result['target']} "
                 f"(schema {result['schema_version']})."
             )
+        elif args.command == "run-notifications":
+            result = _tracked(
+                settings,
+                JOB_NOTIFICATIONS,
+                lambda: run_notifications(settings, force_summaries=args.force_summaries),
+            )
+            print(
+                f"Notification scan complete: {result['created']} created, "
+                f"{result['emailed']} emailed, {result['failed']} failed users."
+            )
+            if result["failed"]:
+                return 1
         elif args.command == "operations-status":
             print(json.dumps(current_operations_status(settings), default=str, indent=2))
     except (LookupError, RuntimeError, ValueError, BackupError) as exc:

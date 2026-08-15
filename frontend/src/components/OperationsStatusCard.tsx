@@ -99,6 +99,7 @@ export function OperationsStatusCard() {
           <JobRow label="Backup verification" job={data.jobs.backup_verify} />
           <JobRow label="Reporting snapshot" job={data.jobs.report_snapshot} />
           <JobRow label="Plaid sync" job={data.jobs.plaid_sync} />
+          <JobRow label="Financial notifications" job={data.jobs.notifications} />
         </article>
       </div>
     </section>
