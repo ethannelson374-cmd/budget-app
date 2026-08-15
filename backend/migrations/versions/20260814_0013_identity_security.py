@@ -128,7 +128,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), primary_key=True),
         sa.Column("secret_ciphertext", sa.Text(), nullable=False),
         sa.Column("secret_nonce", sa.String(64), nullable=False),
-        sa.Column("recovery_codes_json", sa.Text(), nullable=False, server_default="[]"),
+        sa.Column("recovery_codes_json", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("enabled_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),

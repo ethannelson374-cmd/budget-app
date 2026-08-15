@@ -23,7 +23,7 @@ def upgrade() -> None:
         sa.Column("last_started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_success_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("summary_json", sa.Text(), nullable=False, server_default="{}"),
+        sa.Column("summary_json", sa.Text(), nullable=False),
         sa.Column("error_code", sa.String(length=120), nullable=True),
         sa.CheckConstraint(
             "status IN ('never','running','success','failed')",
