@@ -44,6 +44,7 @@ export interface UserSettings {
   pay_frequency: PayFrequency | null;
   advisor_enabled: boolean;
   advisor_share_merchants: boolean;
+  advisor_share_planning_names: boolean;
   advisor_include_descriptions: boolean;
   advisor_store_history: boolean;
 }
@@ -250,6 +251,14 @@ export interface DashboardData {
 
 export interface AccountsResponse {
   accounts: AccountSummary[];
+}
+
+export interface CsvImportError { row: number; message: string; }
+export interface CsvTransactionImportResult {
+  total_rows: number;
+  imported: number;
+  skipped_duplicates: number;
+  errors: CsvImportError[];
 }
 
 export interface AccountWritePayload {

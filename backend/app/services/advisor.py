@@ -182,6 +182,13 @@ def _privacy_safe_insight(item: dict[str, object], share_merchants: bool) -> dic
 
 
 
+def _planning_item(item: dict[str, object], *, label: str, share_names: bool, keys: tuple[str, ...]) -> dict[str, object]:
+    result = {key: item.get(key) for key in keys}
+    if not share_names:
+        result["name"] = f"{label} #{item.get('id')}"
+    return result
+
+
 def _json_safe(value: object) -> object:
     if isinstance(value, (date, datetime, Decimal)):
         return str(value)
@@ -226,12 +233,12 @@ def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
         "goals": {
             "total_target": goals["total_target"], "total_current": goals["total_current"],
             "monthly_contributions": goals["monthly_contributions"],
-            "items": [{k: item.get(k) for k in ("id", "name", "goal_type", "target_amount", "current_amount", "remaining_amount", "monthly_contribution", "target_date", "projected_date", "active")} for item in cast(list[dict[str, object]], goals["goals"])[:12]],
+            "items": [_planning_item(item, label="Goal", share_names=user.settings.advisor_share_planning_names, keys=("id", "name", "goal_type", "target_amount", "current_amount", "remaining_amount", "monthly_contribution", "target_date", "projected_date", "active")) for item in cast(list[dict[str, object]], goals["goals"])[:12]],
         },
         "debts": {
             "strategy": debts["strategy"], "total_balance": debts["total_balance"], "planned_monthly_payment": debts["planned_monthly_payment"],
             "interest_saved": debts["interest_saved"], "planned_debt_free_date": debts["planned_debt_free_date"],
-            "items": [{k: item.get(k) for k in ("id", "name", "debt_type", "balance", "apr", "minimum_payment", "extra_payment", "planned_payoff_date", "interest_saved", "active")} for item in cast(list[dict[str, object]], debts["debts"])[:12]],
+            "items": [_planning_item(item, label="Debt", share_names=user.settings.advisor_share_planning_names, keys=("id", "name", "debt_type", "balance", "apr", "minimum_payment", "extra_payment", "planned_payoff_date", "interest_saved", "active")) for item in cast(list[dict[str, object]], debts["debts"])[:12]],
         },
         "forecast": {
             "cash_available": forecast["cash_available"], "goal_reserves": forecast["goal_reserves"], "spendable_cash": forecast["spendable_cash"],
@@ -241,6 +248,7 @@ def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
         "privacy": {
             "merchant_names_shared": user.settings.advisor_share_merchants,
             "transaction_descriptions_shared": user.settings.advisor_include_descriptions,
+            "planning_names_shared": user.settings.advisor_share_planning_names,
         },
     }
     return cast(dict[str, object], _json_safe(snapshot))
@@ -375,7 +383,7 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         goal = next((item for item in goals if item["id"] == goal_id), None)
         if goal is None:
             raise ApiError(404, "goal_not_found", "Goal was not found")
-        return goal
+        return _planning_item(goal, label="Goal", share_names=user.settings.advisor_share_planning_names, keys=tuple(goal.keys()))
     if name == "get_debt_projection":
         debt_id = _int_arg(arguments.get("debt_id"), minimum=1, maximum=2_147_483_647)
         extra = _decimal_arg(arguments.get("extra_payment"), minimum=Decimal("0"), maximum=Decimal("10000000"))
@@ -384,7 +392,8 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         if debt is None:
             raise ApiError(404, "debt_not_found", "Debt was not found")
         scenario = scenario_view(db, user, {"extra_debt_payment": extra, "goal_contribution_adjustment": Decimal("0"), "spending_reduction": Decimal("0"), "new_monthly_expense": Decimal("0")})
-        return {"debt": debt, "extra_payment": str(extra), "scenario_debt_free_date": scenario["scenario_debt_free_date"], "interest_saved": scenario["interest_saved"], "cash_impact_90_days": scenario["cash_impact_90_days"]}
+        safe_debt = _planning_item(debt, label="Debt", share_names=user.settings.advisor_share_planning_names, keys=tuple(debt.keys()))
+        return {"debt": safe_debt, "extra_payment": str(extra), "scenario_debt_free_date": scenario["scenario_debt_free_date"], "interest_saved": scenario["interest_saved"], "cash_impact_90_days": scenario["cash_impact_90_days"]}
     if name == "run_cash_scenario":
         payload = {key: _decimal_arg(arguments.get(key), minimum=Decimal("0"), maximum=Decimal("10000000")) for key in ("extra_debt_payment", "spending_reduction", "new_monthly_expense")}
         payload["goal_contribution_adjustment"] = _decimal_arg(arguments.get("goal_contribution_adjustment"), minimum=Decimal("-10000000"), maximum=Decimal("10000000"))

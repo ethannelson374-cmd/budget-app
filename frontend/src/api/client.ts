@@ -159,3 +159,28 @@ export async function apiEventStream(
     if (done) break;
   }
 }
+
+export async function apiDownload(path: string): Promise<void> {
+  const response = await fetch(apiUrl(path), { credentials: "include", cache: "no-store" });
+  if (!response.ok) {
+    let message = "The download could not be completed.";
+    try {
+      const payload = (await response.json()) as ApiErrorPayload;
+      message = payload.error?.message ?? message;
+    } catch { /* non-JSON response */ }
+    if (response.status === 401) unauthorizedHandler?.();
+    throw new ApiError(message, { status: response.status, code: "download_failed" });
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] ?? "budget-download";
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

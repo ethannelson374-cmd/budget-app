@@ -75,6 +75,7 @@ class UserSettings(TimestampMixin, Base):
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     advisor_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     advisor_share_merchants: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    advisor_share_planning_names: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     advisor_include_descriptions: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     advisor_store_history: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

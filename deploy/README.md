@@ -879,3 +879,9 @@ sudo systemctl list-timers budget-maintenance.timer --all
 The maintenance job is intentionally conservative. It prunes expired sessions/invitations/reset tokens/OAuth states/2FA challenges/login throttles, audit events older than the configured retention window, and reproducible report-export blobs over the age/count limit. It does **not** automatically delete transactions, accounts, budgets, goals, snapshots, notifications, Advisor conversations, or Plaid connections.
 
 After deployment, open **Settings → Reliability & backups → System health** as an administrator. Database maintenance should be healthy after its first run, the export-storage counters should load, and the backup-volume free-space value should remain above the configured minimum. Run `python -m app.cli operations-status` through the protected environment for the same secret-free status in the shell.
+
+## Phase 4 Stage 7 privacy and import
+
+Stage 7 adds migration `20260815_0020`, which introduces the `advisor_share_planning_names` user preference. Apply it with the same protected Alembic `systemd-run` workflow used by the earlier Phase 4 migrations, then restart `budget-api` and publish the Windows-built Vite `frontend/dist` through the established Nginx static deployment path.
+
+No new daemon or timer is introduced. Data exports are generated on demand and intentionally omit password hashes, session/CSRF material, TOTP/recovery secrets, OAuth state, Plaid access-token ciphertext/nonces, and transaction cursors. CSV imports are capped at 2 MB / 5,000 rows and are accepted only for manual accounts.

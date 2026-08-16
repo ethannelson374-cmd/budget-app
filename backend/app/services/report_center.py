@@ -213,6 +213,13 @@ def advisor_report_context(
     elif section == "goals":
         trajectory = cast(list[dict[str, object]], context.get("trajectory") or [])
         context["trajectory"] = _sample_rows(trajectory, 24)
+        if not user.settings.advisor_share_planning_names:
+            for key, label in (("goals", "Goal"), ("debts", "Debt")):
+                rows = cast(list[dict[str, object]], context.get(key) or [])
+                context[key] = [
+                    {**row, "name": f"{label} #{row.get('id')}"}
+                    for row in rows
+                ]
     return {
         "section": section,
         "section_label": SECTION_LABELS[section],

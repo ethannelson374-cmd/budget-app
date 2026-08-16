@@ -10,6 +10,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SecuritySettings } from "../components/SecuritySettings";
 import { OperationsStatusCard } from "../components/OperationsStatusCard";
 import { NotificationSettings } from "../components/NotificationSettings";
+import { DataPrivacySettings } from "../components/DataPrivacySettings";
 
 function getTimezones(current: string): string[] {
   const values = (Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.("timeZone") ?? ["UTC"];
@@ -28,9 +29,10 @@ export function SettingsPage() {
       <PageHeader title="Settings" description="Manage your preferences and spending categories." />
       {(settings.isPending || categories.isPending || options.isPending || rules.isPending || advisorStatus.isPending) && <LoadingState label="Loading settings" />}
       {(settings.isError || categories.isError || options.isError || rules.isError || advisorStatus.isError) && <ErrorState message="Settings could not be loaded." onRetry={() => { void settings.refetch(); void categories.refetch(); void options.refetch(); void rules.refetch(); void advisorStatus.refetch(); }} />}
-      {settings.data && categories.data && options.data && rules.data && advisorStatus.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${settings.data.advisor_enabled}-${settings.data.advisor_store_history}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} advisorStatus={advisorStatus.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
+      {settings.data && categories.data && options.data && rules.data && advisorStatus.data && <SettingsForms key={`${settings.data.currency}-${settings.data.timezone}-${settings.data.advisor_enabled}-${settings.data.advisor_share_planning_names}-${settings.data.advisor_store_history}-${categories.data.categories.map((item) => `${item.id}:${item.enabled}`).join(",")}`} initialSettings={settings.data} initialCategories={categories.data} initialRules={rules.data} advisorStatus={advisorStatus.data} currencies={options.data.currencies} payFrequencies={options.data.pay_frequencies} />}
       <SecuritySettings />
       <NotificationSettings />
+      <DataPrivacySettings />
       <OperationsStatusCard />
     </div>
   );
@@ -47,6 +49,7 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, advis
   const [payFrequency, setPayFrequency] = useState<PayFrequency | "">(initialSettings.pay_frequency ?? "");
   const [advisorEnabled, setAdvisorEnabled] = useState(initialSettings.advisor_enabled);
   const [shareMerchants, setShareMerchants] = useState(initialSettings.advisor_share_merchants);
+  const [sharePlanningNames, setSharePlanningNames] = useState(initialSettings.advisor_share_planning_names);
   const [includeDescriptions, setIncludeDescriptions] = useState(initialSettings.advisor_include_descriptions);
   const [storeAdvisorHistory, setStoreAdvisorHistory] = useState(initialSettings.advisor_store_history);
   const [advisorMessage, setAdvisorMessage] = useState<string | null>(null);
@@ -142,7 +145,7 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, advis
     saveSettings.mutate({
       currency, timezone, theme, annual_gross_income: annualIncome || null, pay_frequency: payFrequency || null,
       advisor_enabled: advisorEnabled, advisor_share_merchants: shareMerchants,
-      advisor_include_descriptions: includeDescriptions, advisor_store_history: storeAdvisorHistory,
+      advisor_share_planning_names: sharePlanningNames, advisor_include_descriptions: includeDescriptions, advisor_store_history: storeAdvisorHistory,
     });
   };
   const submitCategories = (event: FormEvent) => {
@@ -175,6 +178,7 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, advis
         <div className="advisor-setting-list">
           <label><span><strong>Enable Ask Budget</strong><small>Allow the read-only AI Advisor to answer financial questions.</small></span><input type="checkbox" checked={advisorEnabled} onChange={(event) => setAdvisorEnabled(event.target.checked)} /></label>
           <label><span><strong>Share merchant names</strong><small>Off by default. When disabled, merchant-specific insight context is redacted.</small></span><input type="checkbox" checked={shareMerchants} onChange={(event) => { setShareMerchants(event.target.checked); if (!event.target.checked) setIncludeDescriptions(false); }} /></label>
+          <label><span><strong>Share goal and debt names</strong><small>Off by default. Budget can share planning amounts and projections while replacing your custom goal and debt names.</small></span><input type="checkbox" checked={sharePlanningNames} onChange={(event) => setSharePlanningNames(event.target.checked)} /></label>
           <label className={!shareMerchants ? "disabled-setting" : ""}><span><strong>Include transaction descriptions</strong><small>Only used for merchant analysis when merchant sharing is enabled.</small></span><input type="checkbox" disabled={!shareMerchants} checked={includeDescriptions} onChange={(event) => setIncludeDescriptions(event.target.checked)} /></label>
           <label><span><strong>Store Advisor conversations</strong><small>When off, Ask Budget works as a private session and does not keep messages in Budget.</small></span><input type="checkbox" checked={storeAdvisorHistory} onChange={(event) => setStoreAdvisorHistory(event.target.checked)} /></label>
         </div>

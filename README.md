@@ -619,3 +619,9 @@ Stage 6 keeps the private/family deployment bounded without introducing queues, 
 `python -m app.cli run-maintenance` performs conservative database housekeeping. It removes only expired authentication artifacts, old audit events, and reproducible report-export blobs beyond the configured age/count limits. It never automatically deletes transactions, accounts, budgets, goals, financial snapshots, notifications, Advisor history, or Plaid Items. The supplied `budget-maintenance.timer` runs this bounded cleanup daily and records its result in the existing operational heartbeat table.
 
 Admin **System health** now shows the maintenance worker, report-export database storage, active retention policy, and a low-free-space warning using the configured minimum. The defaults keep 7 days of expired auth artifacts, 365 days of audit history, report exports for 90 days with at most 50 per user, and warn when the backup volume falls below 2 GB free.
+
+### Phase 4 Stage 7 — privacy and import
+
+Stage 7 closes Phase 4 with user-controlled data portability. Settings now offers a secret-free JSON export of the user's Budget data, a complete transactions CSV export, a CSV import template, idempotent CSV history import into manual accounts, and the existing self-service account deletion flow in one Data & privacy panel. CSV import is intentionally limited to manual accounts so historical files cannot create duplicate provider-managed Plaid transactions; repeated imports use a deterministic row fingerprint and are skipped safely.
+
+Ask Budget privacy is also more explicit: merchant names, transaction descriptions, custom goal/debt names, conversation retention, and the Advisor itself are independent controls. Goal and debt names are private by default while deterministic planning amounts and projections remain available to the Advisor.

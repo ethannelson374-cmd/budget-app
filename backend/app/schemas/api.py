@@ -105,6 +105,23 @@ class AccountDeleteRequest(StrictModel):
     password: Annotated[str, Field(min_length=1, max_length=128)] | None = None
 
 
+class CsvTransactionImportRequest(StrictModel):
+    account_id: Annotated[int, Field(gt=0)]
+    csv_text: Annotated[str, Field(min_length=1, max_length=2_000_000)]
+
+
+class CsvImportErrorView(ViewModel):
+    row: int
+    message: str
+
+
+class CsvTransactionImportView(ViewModel):
+    total_rows: int
+    imported: int
+    skipped_duplicates: int
+    errors: list[CsvImportErrorView]
+
+
 class SettingsPatch(StrictModel):
     currency: CurrencyCode | None = None
     timezone: Annotated[str, Field(min_length=1, max_length=64)] | None = None
@@ -115,6 +132,7 @@ class SettingsPatch(StrictModel):
     pay_frequency: PayFrequency | None = None
     advisor_enabled: bool | None = None
     advisor_share_merchants: bool | None = None
+    advisor_share_planning_names: bool | None = None
     advisor_include_descriptions: bool | None = None
     advisor_store_history: bool | None = None
 
@@ -247,6 +265,7 @@ class UserSettingsView(ViewModel):
     pay_frequency: str | None
     advisor_enabled: bool
     advisor_share_merchants: bool
+    advisor_share_planning_names: bool
     advisor_include_descriptions: bool
     advisor_store_history: bool
 

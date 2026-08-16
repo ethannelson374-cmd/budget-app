@@ -17,7 +17,7 @@ vi.mock("../api/client", async (importOriginal) => {
   return { ...actual, apiRequest: vi.fn() };
 });
 
-const settings = { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_include_descriptions: false, advisor_store_history: true };
+const settings = { currency: "USD", timezone: "UTC", theme: "system", annual_gross_income: null, pay_frequency: null, advisor_enabled: true, advisor_share_merchants: false, advisor_share_planning_names: false, advisor_include_descriptions: false, advisor_store_history: true };
 const categories = { categories: [
   { id: 1, key: "groceries", name: "Groceries", group: "Everyday", enabled: true },
   { id: 2, key: "other", name: "Other", group: "Other", enabled: true },
@@ -41,6 +41,7 @@ describe("SettingsPage", () => {
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
       if (path === "/advisor/status") return advisorStatus;
+      if (path === "/accounts") return { accounts: [] };
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
       if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };
@@ -73,6 +74,7 @@ describe("SettingsPage", () => {
       if (path === "/setup/options") return options;
       if (path === "/transaction-rules") return { rules: [] };
       if (path === "/advisor/status") return advisorStatus;
+      if (path === "/accounts") return { accounts: [] };
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
       if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };

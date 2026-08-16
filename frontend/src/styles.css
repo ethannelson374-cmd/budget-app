@@ -1152,3 +1152,23 @@ textarea:focus { border-color: var(--brand); outline: 0; box-shadow: 0 0 0 3px c
   .notification-row { padding-right: 14px; }
   .notification-header-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
+
+/* Phase 4 Stage 7 — data portability and privacy */
+.data-privacy-panel { gap: 1.25rem; }
+.privacy-downloads,
+.privacy-import,
+.privacy-danger-zone {
+  border: 1px solid var(--border, #334155);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.privacy-downloads { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.privacy-downloads > div:first-child,
+.privacy-import > div:first-child,
+.privacy-danger-zone > div:first-child { display: grid; gap: 0.25rem; }
+.privacy-downloads small,
+.privacy-import small,
+.privacy-danger-zone small { color: var(--text-muted, #94a3b8); }
+.privacy-danger-zone { border-color: color-mix(in srgb, #ef4444 45%, transparent); }
+.button-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+@media (max-width: 760px) { .privacy-downloads { align-items: stretch; flex-direction: column; } }
