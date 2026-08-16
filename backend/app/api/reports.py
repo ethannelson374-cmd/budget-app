@@ -199,12 +199,16 @@ def post_report_export(
 @router.get("/exports/{export_id}/download")
 def download_report_export(
     export_id: Annotated[int, Path(gt=0)],
+    request: Request,
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
 ) -> RawResponse:
     row = get_report_export(db, principal.user, export_id)
     content = report_export_bytes(row)
     media_type = "text/csv; charset=utf-8" if row.format == "csv" else "application/pdf"
+    _audit(db, settings, request, principal, "reports.export.download", f"{row.id}:{row.format}")
+    db.commit()
     return RawResponse(
         content=content,
         media_type=media_type,

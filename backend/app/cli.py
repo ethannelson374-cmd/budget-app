@@ -63,6 +63,7 @@ from app.services.plaid import production_readiness, sandbox_reset_login
 from app.services.plaid_transactions import sync_all_plaid_items
 from app.services.notifications import scan_all_notifications
 from app.services.reports import capture_all_snapshots
+from app.services.security_audit import security_posture
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -719,6 +720,10 @@ def parser() -> argparse.ArgumentParser:
     subcommands.add_parser(
         "plaid-readiness", help="Check secret-free Plaid Production cutover readiness"
     )
+    subcommands.add_parser(
+        "security-audit",
+        help="Print a secret-free production security posture report and fail on hard findings",
+    )
     plaid_reset = subcommands.add_parser(
         "plaid-sandbox-reset-login",
         help="Force a Sandbox connection into ITEM_LOGIN_REQUIRED for update-mode testing",
@@ -783,7 +788,6 @@ def main(argv: list[str] | None = None) -> int:
             result = _tracked(
                 settings,
                 JOB_NOTIFICATIONS,
-    JOB_MAINTENANCE,
                 lambda: run_notifications(settings, force_summaries=args.force_summaries),
             )
             print(
@@ -807,6 +811,16 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 with database.session_factory() as db:
                     result = production_readiness(db, settings)
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+            if not result["ready"]:
+                return 1
+        elif args.command == "security-audit":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = security_posture(db, settings)
             finally:
                 database.engine.dispose()
             print(json.dumps(result, default=str, indent=2))

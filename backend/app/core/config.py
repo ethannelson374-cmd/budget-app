@@ -6,6 +6,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,12 +29,13 @@ def _strict_bool(value: Any) -> bool:
     raise ValueError("must be the literal value 'true' or 'false'")
 
 
-def bootstrap_token_has_256_bits(value: str) -> bool:
-    """Validate encodings suitable for a generated 256-bit bootstrap token.
+def secret_has_256_bits(value: str) -> bool:
+    """Return whether *value* is a canonical encoding of at least 256 random bits.
 
-    Accepted forms are 64 hexadecimal characters or an unpadded/padded base64url
-    value that decodes to exactly 32 bytes. This validates encoded size; operators
-    must still generate the token with a cryptographically secure generator.
+    Budget's production secrets are operator-generated rather than human passwords.
+    Accept only the two encodings documented by the deployment guide: 32 random
+    bytes encoded as 64 hexadecimal characters or canonical base64url. This keeps
+    weak, memorable, or accidentally truncated secrets from reaching production.
     """
 
     if re.fullmatch(r"[0-9a-fA-F]{64}", value):
@@ -47,6 +49,30 @@ def bootstrap_token_has_256_bits(value: str) -> bool:
         return canonical_length and len(decoded) == 32
     except (ValueError, binascii.Error):
         return False
+
+
+def bootstrap_token_has_256_bits(value: str) -> bool:
+    """Validate the one-time bootstrap credential using the production secret policy."""
+
+    return secret_has_256_bits(value)
+
+
+def _url_host(value: str | None) -> str | None:
+    if value is None:
+        return None
+    parsed = urlsplit(value)
+    return parsed.hostname.casefold().rstrip(".") if parsed.hostname else None
+
+
+def host_matches_allowed(host: str, allowed_hosts: list[str]) -> bool:
+    candidate = host.casefold().rstrip(".")
+    for configured in allowed_hosts:
+        allowed = configured.casefold().rstrip(".")
+        if allowed == "*" or candidate == allowed:
+            return True
+        if allowed.startswith("*.") and candidate.endswith(allowed[1:]):
+            return True
+    return False
 
 
 class Settings(BaseSettings):
@@ -130,6 +156,10 @@ class Settings(BaseSettings):
     maintenance_export_retention_days: Annotated[int, Field(ge=7, le=3650)] = 90
     maintenance_export_max_per_user: Annotated[int, Field(ge=5, le=500)] = 50
     maintenance_min_free_gb: Annotated[int, Field(ge=1, le=100)] = 2
+
+    # Phase 5A defense-in-depth. Nginx enforces the same bound publicly; the
+    # application check also protects accidental direct/proxy exposure.
+    security_max_request_bytes: Annotated[int, Field(ge=65_536, le=10_000_000)] = 4_500_000
 
     @field_validator("demo_mode", "db_ssl_required", "ai_enabled", "smtp_starttls", mode="before")
     @classmethod
@@ -377,6 +407,39 @@ class Settings(BaseSettings):
                     "production application secrets must be non-placeholder values: "
                     + ", ".join(placeholder_secrets)
                 )
+
+            weak_secrets = [
+                name
+                for name, value in required_secrets.items()
+                if value is not None and not secret_has_256_bits(value.get_secret_value())
+            ]
+            if weak_secrets:
+                raise ValueError(
+                    "production application secrets must be independently generated 256-bit "
+                    "values: " + ", ".join(weak_secrets)
+                )
+            secret_material = [
+                value.get_secret_value()
+                for value in required_secrets.values()
+                if value is not None
+            ]
+            if len(set(secret_material)) != len(secret_material):
+                raise ValueError("APP_SECRET, SESSION_SECRET, and ENCRYPTION_KEY must be distinct")
+
+            if any("*" in host for host in self.host_list):
+                raise ValueError("ALLOWED_HOSTS must contain explicit hostnames in production")
+
+            public_host = _url_host(self.public_app_url)
+            if public_host is not None and not host_matches_allowed(public_host, self.host_list):
+                raise ValueError("PUBLIC_APP_URL host must be present in ALLOWED_HOSTS")
+            for name, value in (
+                ("PLAID_REDIRECT_URI", self.plaid_redirect_uri),
+                ("PLAID_WEBHOOK_URI", self.plaid_webhook_uri),
+                ("GOOGLE_REDIRECT_URI", self.google_redirect_uri),
+            ):
+                host = _url_host(value)
+                if host is not None and not host_matches_allowed(host, self.host_list):
+                    raise ValueError(f"{name} host must be present in ALLOWED_HOSTS")
         return self
 
     @property

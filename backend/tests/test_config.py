@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core import database as database_module
-from app.core.config import Settings, bootstrap_token_has_256_bits
+from app.core.config import Settings, bootstrap_token_has_256_bits, secret_has_256_bits
 from app.core.database import (
     build_database_url,
     create_database_engine,
@@ -71,17 +71,39 @@ def test_production_rejects_demo_and_placeholder_secrets() -> None:
         Settings(**values)
 
 
-def test_production_accepts_existing_opaque_secret_values() -> None:
+def test_production_requires_generated_256_bit_distinct_secrets() -> None:
     values = production_values()
     values.update(
         app_secret="existing-app-secret",
         session_secret="existing-session-secret",
         encryption_key="existing-encryption-key",
     )
-    settings = Settings(**values)
-    assert settings.app_secret is not None
-    assert settings.session_secret is not None
-    assert settings.encryption_key is not None
+    with pytest.raises(ValidationError, match="256-bit"):
+        Settings(**values)
+
+    values = production_values()
+    values["session_secret"] = values["app_secret"]
+    with pytest.raises(ValidationError, match="must be distinct"):
+        Settings(**values)
+
+
+def test_production_rejects_wildcard_hosts_and_off_host_redirects() -> None:
+    values = production_values()
+    values["allowed_hosts"] = "budget.example.com,*"
+    with pytest.raises(ValidationError, match="explicit hostnames"):
+        Settings(**values)
+
+    values = production_values()
+    values["public_app_url"] = "https://evil.example.net"
+    with pytest.raises(ValidationError, match="PUBLIC_APP_URL host"):
+        Settings(**values)
+
+    values = production_values()
+    values["plaid_client_id"] = "client"
+    values["plaid_secret"] = "secret"
+    values["plaid_redirect_uri"] = "https://evil.example.net/plaid/oauth"
+    with pytest.raises(ValidationError, match="PLAID_REDIRECT_URI host"):
+        Settings(**values)
 
 
 def test_validation_error_never_contains_secret_input() -> None:
@@ -250,6 +272,7 @@ def test_required_tls_connection_rejects_an_empty_cipher() -> None:
 def test_bootstrap_token_encoding_validation() -> None:
     assert bootstrap_token_has_256_bits("ab" * 32)
     assert bootstrap_token_has_256_bits("A" * 43)
+    assert secret_has_256_bits("cd" * 32)
     assert not bootstrap_token_has_256_bits("ab" * 31)
     assert not bootstrap_token_has_256_bits("not standard/base64+")
 
