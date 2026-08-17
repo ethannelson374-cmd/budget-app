@@ -16,6 +16,7 @@ import type {
   DashboardPreset,
   InsightsResponse,
   MonthlyBudgetView,
+  TrendsView,
 } from "../api/types";
 import { CashFlowSankeyWidget } from "../components/CashFlowSankey";
 import { CategoryBars } from "../components/CategoryBars";
@@ -374,6 +375,29 @@ function WidgetShell({ card, customizing, onDragStart, onDrop, onMove, onResize,
   );
 }
 
+function NetWorthMetricCard({ summary, currency, size, trends }: { summary: DashboardData["summary"]; currency: string; size: DashboardCardSize; trends?: TrendsView }) {
+  const history = trends?.net_worth_history ?? [];
+  const values = history.map((point) => numberFromMoney(point.net_worth));
+  const minimum = values.length ? Math.min(...values) : 0;
+  const maximum = values.length ? Math.max(...values) : 1;
+  const spread = Math.max(maximum - minimum, 1);
+  const points = history.map((point, index) => {
+    const x = history.length <= 1 ? 130 : 8 + (index / (history.length - 1)) * 244;
+    const y = 58 - ((numberFromMoney(point.net_worth) - minimum) / spread) * 46;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const change = trends?.summary.change_amount ?? null;
+  return (
+    <article className="metric-card dashboard-metric-card featured net-worth-dashboard-card">
+      <span>Net worth</span>
+      <strong>{formatMoney(summary.net_worth, currency)}</strong>
+      {change !== null && <small className={numberFromMoney(change) >= 0 ? "positive" : "negative"}>{formatMoney(change, currency, { showSign: true })} · 3M</small>}
+      {size !== "compact" && points && <svg className="net-worth-mini-ridge" viewBox="0 0 260 66" role="img" aria-label="Three month net worth trend"><defs><linearGradient id="dashboard-net-worth-ridge" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#50f3df"/><stop offset="55%" stopColor="#57a8ff"/><stop offset="100%" stopColor="#9b70ff"/></linearGradient></defs><polyline className="net-worth-mini-shadow" points={points}/><polyline className="net-worth-mini-line" points={points} stroke="url(#dashboard-net-worth-ridge)"/></svg>}
+      <Link className="metric-ask net-worth-trends-link" to="/trends">Open trends</Link>
+    </article>
+  );
+}
+
 export function DashboardPage() {
   const [month, setMonth] = useState(currentMonth);
   const dashboard = useQuery({ queryKey: queryKeys.dashboard(month), queryFn: () => apiRequest<DashboardData>(`/dashboard?month=${encodeURIComponent(month)}`) });
@@ -381,23 +405,25 @@ export function DashboardPage() {
   const insights = useQuery({ queryKey: queryKeys.insights("active"), queryFn: () => apiRequest<InsightsResponse>("/insights/refresh", { method: "POST" }), staleTime: 60_000 });
   const preferences = useQuery({ queryKey: queryKeys.dashboardPreferences, queryFn: () => apiRequest<DashboardPreferences>("/dashboard/preferences") });
   const onboarding = useQuery({ queryKey: queryKeys.dashboardOnboarding, queryFn: () => apiRequest<DashboardOnboarding>("/dashboard/onboarding") });
+  const trends = useQuery({ queryKey: queryKeys.trends("3m"), queryFn: () => apiRequest<TrendsView>("/trends?range=3m"), staleTime: 60_000 });
 
   return (
     <div className="page-container dashboard-page">
       <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="dashboard-header-actions"><div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div></div>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
-      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} />}
+      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} trends={trends.data} />}
     </div>
   );
 }
 
-function DashboardContent({ data, budget, insights, preferences, onboarding }: {
+function DashboardContent({ data, budget, insights, preferences, onboarding, trends }: {
   data: DashboardData;
   budget?: MonthlyBudgetView;
   insights?: InsightsResponse;
   preferences?: DashboardPreferences;
   onboarding?: DashboardOnboarding;
+  trends?: TrendsView;
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -484,7 +510,7 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
 
   const renderCard = (card: DashboardCardPreference): ReactNode => {
     const id = card.id;
-    if (id === "net_worth") return <article className="metric-card dashboard-metric-card featured"><span>Net worth</span><strong>{formatMoney(summary.net_worth, data.currency)}</strong><small>Across included accounts</small></article>;
+    if (id === "net_worth") return <NetWorthMetricCard summary={summary} currency={data.currency} size={card.size} trends={trends} />;
     if (id === "cash_available") return <article className="metric-card dashboard-metric-card"><span>Cash available</span><strong>{formatMoney(summary.cash_available, data.currency)}</strong><small>Available in cash accounts</small></article>;
     if (id === "income") return <article className="metric-card dashboard-metric-card"><span>Income</span><strong className="positive">{formatMoney(summary.income, data.currency)}</strong><small>This month</small></article>;
     if (id === "spending") return <article className="metric-card dashboard-metric-card"><span>Spending</span><strong>{formatMoney(summary.spending, data.currency)}</strong><small>Transfers excluded</small><button className="metric-ask" type="button" onClick={() => askAbout("Where has my spending increased the most this month?")}>Ask Budget</button></article>;

@@ -1693,3 +1693,166 @@ input,select,textarea{border-color:var(--border-strong);background:color-mix(in 
 @media(max-width:620px){.cash-flow-widget-heading{display:grid}.cash-flow-range-controls{justify-content:flex-start}.cash-flow-custom-dates{width:100%;flex-wrap:wrap}.cash-flow-custom-dates input{width:128px}.cash-flow-summary-strip{grid-template-columns:1fr 1fr}.sankey-inspector{grid-template-columns:1fr}.sankey-inspector-value{text-align:left}.sankey-inspector-actions{justify-content:flex-start;flex-wrap:wrap}.cash-flow-footnote{display:grid}.cash-flow-sankey svg{min-width:760px}}
 @media(prefers-reduced-motion:reduce){.cash-flow-sankey svg{transform:none}.sankey-flow-group,.sankey-node,.cash-flow-range-tabs button{transition:none!important}}
 @media print{.cash-flow-sankey svg{transform:none;filter:none}.sankey-stage::before,.sankey-flow-shadow,.sankey-floor-glow{display:none}.sankey-inspector{background:#fff;box-shadow:none}}
+
+/* Phase 5D — net worth & financial terrain */
+.trends-page { --trend-cyan:#51f0df; --trend-blue:#58aaff; --trend-violet:#9b70ff; --trend-amber:#ffc66c; }
+.trend-range-tabs {
+  display:flex;
+  gap:4px;
+  padding:4px;
+  border:1px solid color-mix(in srgb,var(--glass-line) 78%,transparent);
+  border-radius:999px;
+  background:linear-gradient(145deg,rgb(255 255 255 / 7%),rgb(14 24 54 / 13%));
+  box-shadow:0 10px 28px rgb(0 4 22 / 18%),inset 0 1px 0 rgb(255 255 255 / 20%);
+  backdrop-filter:blur(28px) saturate(190%);
+  -webkit-backdrop-filter:blur(28px) saturate(190%);
+}
+.trend-range-tabs button {
+  min-width:46px;
+  padding:8px 12px;
+  border:1px solid transparent;
+  border-radius:999px;
+  color:var(--text-soft);
+  background:transparent;
+  font:inherit;
+  font-size:.74rem;
+  font-weight:800;
+  cursor:pointer;
+  transition:transform 150ms ease,background 150ms ease,box-shadow 150ms ease,color 150ms ease;
+}
+.trend-range-tabs button:hover { color:var(--text); transform:translateY(-1px); }
+.trend-range-tabs button.active {
+  border-color:rgb(197 231 255 / 24%);
+  color:#fff;
+  background:radial-gradient(circle at 30% 0,rgb(255 255 255 / 34%),transparent 34%),linear-gradient(145deg,rgb(74 221 219 / 30%),rgb(80 86 255 / 31%));
+  box-shadow:0 8px 20px rgb(22 55 220 / 22%),inset 0 1px 0 rgb(255 255 255 / 44%),inset 0 -3px 8px rgb(39 35 129 / 24%);
+}
+.trends-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.trend-summary-card { min-height:134px; padding:18px 20px; overflow:hidden; }
+.trend-summary-card > span { color:var(--text-muted); font-size:.72rem; font-weight:750; text-transform:uppercase; letter-spacing:.06em; }
+.trend-summary-card > strong { display:block; margin:10px 0 7px; font-size:clamp(1.55rem,2.3vw,2.25rem); letter-spacing:-.045em; text-shadow:0 7px 16px rgb(0 4 18 / 28%),0 0 17px rgb(95 185 255 / 8%); }
+.trend-summary-card > small { color:var(--text-soft); font-size:.72rem; }
+.trend-summary-card.featured {
+  background:radial-gradient(circle at 83% -20%,rgb(101 97 255 / 20%),transparent 50%),radial-gradient(circle at 8% 120%,rgb(59 231 215 / 13%),transparent 45%),var(--glass-surface);
+}
+.trend-summary-card.featured > strong { color:#f4fbff; }
+.trend-hero-panel { min-height:520px; padding:18px 20px 16px; overflow:hidden; perspective:1100px; }
+.trend-panel-heading { position:relative; z-index:4; }
+.trend-panel-heading p { margin-top:3px; }
+.trend-terrain-wrap { position:relative; min-height:400px; margin-top:4px; border-radius:24px; overflow:hidden; background:radial-gradient(circle at 72% 45%,rgb(89 76 255 / 11%),transparent 42%),radial-gradient(circle at 22% 80%,rgb(54 227 211 / 7%),transparent 38%); transform-style:preserve-3d; }
+.trend-terrain-wrap::before {
+  position:absolute;
+  inset:18% 4% 4%;
+  border-radius:50%;
+  background:radial-gradient(ellipse at center,rgb(72 107 255 / 13%),transparent 68%);
+  filter:blur(24px);
+  content:"";
+  transform:translateZ(-25px) rotateX(68deg);
+  pointer-events:none;
+}
+.trend-terrain { display:block; width:100%; min-height:350px; overflow:visible; filter:drop-shadow(0 18px 20px rgb(0 4 25 / 18%)); }
+.trend-grid-line { stroke:rgb(189 221 255 / 8%); stroke-width:1; stroke-dasharray:4 9; }
+.trend-wire { stroke:rgb(117 178 255 / 8%); stroke-width:1; }
+.trend-terrain-shadow { fill:none; stroke:rgb(12 13 48 / 48%); stroke-width:13; stroke-linecap:round; stroke-linejoin:round; filter:blur(7px); }
+.trend-terrain-area { filter:drop-shadow(0 18px 28px rgb(41 68 255 / 14%)); }
+.trend-terrain-ridge { fill:none; stroke-width:8; stroke-linecap:round; stroke-linejoin:round; }
+.trend-terrain-specular { fill:none; stroke:rgb(230 252 255 / 56%); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.trend-point { cursor:pointer; }
+.trend-point-shadow { fill:rgb(0 2 20 / 48%); filter:blur(3px); }
+.trend-point-orb { stroke:rgb(236 255 255 / 74%); stroke-width:1.2; filter:drop-shadow(0 0 8px rgb(78 231 233 / 56%)); transform-box:fill-box; transform-origin:center; transition:transform 150ms ease,filter 150ms ease; }
+.trend-point-orb:hover,.trend-point-orb:focus,.trend-point.active .trend-point-orb { outline:none; transform:translateY(-5px) scale(1.24); filter:drop-shadow(0 8px 10px rgb(0 5 25 / 40%)) drop-shadow(0 0 12px rgb(96 239 237 / 72%)); }
+.trend-axis-label { fill:var(--text-soft); font-size:12px; font-weight:650; }
+.trend-terrain-inspector {
+  position:absolute;
+  right:18px;
+  bottom:16px;
+  left:18px;
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:13px 15px;
+  border:1px solid rgb(201 230 255 / 14%);
+  border-radius:18px;
+  background:linear-gradient(145deg,rgb(36 62 106 / 28%),rgb(8 16 39 / 17%));
+  box-shadow:0 18px 36px rgb(0 3 20 / 22%),inset 0 1px 0 rgb(255 255 255 / 19%);
+  backdrop-filter:blur(34px) saturate(185%);
+  -webkit-backdrop-filter:blur(34px) saturate(185%);
+}
+.trend-terrain-inspector > div { min-width:0; }
+.trend-terrain-inspector span { display:block; color:var(--text-soft); font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; }
+.trend-terrain-inspector strong { display:block; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trends-two-column { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0; }
+.trends-two-column > .panel,.trends-page > .panel { padding:20px; }
+.trend-composition-list,.trend-account-list,.trend-momentum-list { display:grid; gap:10px; }
+.trend-composition-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(140px,1.8fr) auto; align-items:center; gap:14px; padding:12px 13px; border:1px solid rgb(202 230 255 / 9%); border-radius:16px; background:rgb(255 255 255 / 2.5%); }
+.trend-composition-row > div:first-child strong,.trend-composition-row > div:last-child strong { display:block; }
+.trend-composition-row span { color:var(--text-soft); font-size:.68rem; }
+.trend-composition-row > div:last-child { min-width:94px; text-align:right; }
+.trend-composition-track { height:12px; overflow:visible; border-radius:999px; background:rgb(2 8 26 / 32%); box-shadow:inset 0 2px 6px rgb(0 2 15 / 34%),inset 0 1px 0 rgb(255 255 255 / 7%); }
+.trend-composition-track > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#4cf0dc,#58aaff,#8469ff); box-shadow:0 5px 10px rgb(34 89 255 / 20%),inset 0 1px 0 rgb(255 255 255 / 62%),inset 0 -3px 5px rgb(29 63 160 / 26%); }
+.trend-composition-row.liability .trend-composition-track > span { background:linear-gradient(90deg,#ffca78,#ff8d82,#cf6cff); }
+.trend-income-signal { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.trend-income-signal > div { padding:15px; border:1px solid rgb(198 229 255 / 10%); border-radius:17px; background:linear-gradient(145deg,rgb(255 255 255 / 5%),rgb(28 48 90 / 8%)); box-shadow:inset 0 1px 0 rgb(255 255 255 / 12%); }
+.trend-income-signal span,.trend-income-sources span { display:block; color:var(--text-soft); font-size:.69rem; }
+.trend-income-signal strong { display:block; margin-top:7px; font-size:1.25rem; }
+.trend-income-sources { display:grid; gap:8px; }
+.trend-income-sources > div { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; padding:9px 4px; border-bottom:1px solid rgb(190 222 255 / 8%); }
+.trend-income-sources > div:last-child { border-bottom:0; }
+.trend-income-sources small { min-width:50px; color:var(--text-soft); text-align:right; }
+.trend-account-row { display:grid; grid-template-columns:minmax(150px,1.1fr) minmax(160px,1.5fr) minmax(135px,.8fr) auto; align-items:center; gap:14px; padding:13px 14px; border:1px solid rgb(198 230 255 / 9%); border-radius:17px; background:linear-gradient(145deg,rgb(255 255 255 / 4%),rgb(25 44 84 / 7%)); }
+.trend-account-row > div:first-child strong,.trend-account-value strong { display:block; }
+.trend-account-row > div:first-child span,.trend-account-value span { color:var(--text-soft); font-size:.68rem; }
+.trend-account-meter { height:10px; border-radius:999px; background:rgb(0 5 24 / 32%); box-shadow:inset 0 2px 5px rgb(0 0 15 / 38%); }
+.trend-account-meter > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#51efdc,#58a9ff); box-shadow:0 0 12px rgb(69 226 222 / 20%),inset 0 1px 0 rgb(255 255 255 / 52%); }
+.trend-account-meter > span.negative { background:linear-gradient(90deg,#ffca72,#ff777e); }
+.trend-account-value { text-align:right; }
+.trend-history-note { margin-top:12px; padding:11px 13px; border:1px solid rgb(255 203 112 / 18%); border-radius:14px; color:var(--text-soft); background:rgb(255 183 77 / 5%); font-size:.72rem; }
+.trends-lower-grid { align-items:stretch; }
+.trend-cashflow-chart { display:grid; grid-template-columns:repeat(var(--trend-columns),minmax(24px,1fr)); gap:8px; min-height:280px; align-items:end; padding:18px 6px 0; overflow-x:auto; perspective:900px; }
+.trend-cashflow-column { display:grid; grid-template-rows:220px auto; gap:8px; min-width:22px; align-items:end; text-align:center; }
+.trend-cashflow-bars { display:flex; align-items:flex-end; justify-content:center; gap:4px; height:100%; transform:rotateX(2deg); transform-origin:bottom; }
+.trend-bar { display:block; width:min(17px,42%); min-width:6px; border-radius:8px 8px 3px 3px; box-shadow:0 10px 16px rgb(0 3 20 / 28%),inset 1px 0 0 rgb(255 255 255 / 28%),inset -2px -3px 7px rgb(22 36 115 / 30%); transform:translateZ(8px); transition:transform 150ms ease,filter 150ms ease; }
+.trend-bar:hover { transform:translate3d(0,-4px,22px) scaleX(1.08); filter:brightness(1.12); }
+.trend-bar.income { background:linear-gradient(90deg,#2acdc5,#62f5df 44%,#5aa9ff); }
+.trend-bar.spending { background:linear-gradient(90deg,#735fff,#a36fff 48%,#f084dd); }
+.trend-cashflow-column small { color:var(--text-soft); font-size:.58rem; white-space:nowrap; }
+.trend-momentum-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 13px; border:1px solid rgb(199 229 255 / 9%); border-radius:15px; color:inherit; background:rgb(255 255 255 / 2.5%); text-decoration:none; transition:transform 150ms ease,background 150ms ease,border-color 150ms ease; }
+.trend-momentum-row:hover { border-color:rgb(107 226 225 / 20%); background:rgb(255 255 255 / 4.5%); transform:translateY(-2px); }
+.trend-momentum-row strong,.trend-momentum-row span { display:block; }
+.trend-momentum-row span { color:var(--text-soft); font-size:.67rem; }
+.trend-momentum-row > div:last-child { text-align:right; }
+.net-worth-dashboard-card { overflow:hidden; }
+.net-worth-dashboard-card > small { margin-top:0; }
+.net-worth-mini-ridge { width:100%; height:66px; margin:4px 0 0; overflow:visible; }
+.net-worth-mini-shadow,.net-worth-mini-line { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+.net-worth-mini-shadow { stroke:rgb(0 2 18 / 38%); stroke-width:8; transform:translateY(5px); filter:blur(3px); }
+.net-worth-mini-line { stroke-width:4; filter:drop-shadow(0 0 6px rgb(71 232 230 / 30%)); }
+.net-worth-trends-link { margin-top:auto; }
+
+@media (max-width: 1020px) {
+  .trends-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .trends-two-column { grid-template-columns:1fr; }
+  .trend-terrain-inspector { position:relative; right:auto; bottom:auto; left:auto; grid-template-columns:repeat(2,1fr); margin:0 8px 12px; }
+  .trend-terrain-inspector .button { justify-self:start; }
+  .trend-account-row { grid-template-columns:1fr 1fr; }
+  .trend-account-meter { order:3; grid-column:1 / -1; }
+}
+@media (max-width: 640px) {
+  .trends-summary-grid { grid-template-columns:1fr; }
+  .trend-range-tabs { max-width:100%; overflow-x:auto; }
+  .trend-range-tabs button { min-width:42px; padding:7px 9px; }
+  .trend-hero-panel { padding:14px 10px; }
+  .trend-terrain-wrap { min-height:340px; }
+  .trend-terrain { min-width:680px; }
+  .trend-terrain-wrap { overflow-x:auto; }
+  .trend-terrain-inspector { min-width:620px; }
+  .trend-composition-row { grid-template-columns:1fr auto; }
+  .trend-composition-track { grid-column:1 / -1; grid-row:2; }
+  .trend-income-signal { grid-template-columns:1fr; }
+  .trend-account-row { grid-template-columns:1fr auto; }
+  .trend-account-row .text-link { grid-column:1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trend-point-orb,.trend-bar,.trend-momentum-row,.trend-range-tabs button { transition:none!important; transform:none!important; }
+}

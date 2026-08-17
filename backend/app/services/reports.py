@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.security import utc_now
-from app.models import Account, FinancialSnapshot, GoalContribution, RecurringStream, Transaction, User
+from app.models import Account, AccountBalanceSnapshot, FinancialSnapshot, GoalContribution, RecurringStream, Transaction, User
 from app.services.budget_planning import month_budget_view, year_budget_view
 from app.services.finance import dashboard_data
 from app.services.financial_planning import forecast_view, list_debts, list_goals
@@ -263,6 +263,44 @@ def snapshot_values(db: Session, user: User) -> dict[str, object]:
     }
 
 
+def _capture_account_balance_snapshots(db: Session, user: User, snapshot_date: date) -> None:
+    accounts = list(
+        db.scalars(
+            select(Account)
+            .options(joinedload(Account.institution))
+            .where(Account.user_id == user.id)
+            .order_by(Account.id)
+        ).all()
+    )
+    existing = {
+        row.account_id: row
+        for row in db.scalars(
+            select(AccountBalanceSnapshot).where(
+                AccountBalanceSnapshot.user_id == user.id,
+                AccountBalanceSnapshot.snapshot_date == snapshot_date,
+            )
+        ).all()
+    }
+    for account in accounts:
+        row = existing.get(account.id)
+        if row is None:
+            row = AccountBalanceSnapshot(
+                user_id=user.id,
+                account_id=account.id,
+                snapshot_date=snapshot_date,
+            )
+            db.add(row)
+        row.account_name = account.name
+        row.institution_name = account.institution.name if account.institution else None
+        row.account_type = account.account_type
+        row.account_subtype = account.account_subtype
+        row.source_type = account.source_type
+        row.balance = account.current_balance
+        row.available_balance = account.available_balance
+        row.credit_limit = account.credit_limit
+        row.currency = account.currency
+
+
 def capture_snapshot(db: Session, user: User) -> FinancialSnapshot:
     values = snapshot_values(db, user)
     snapshot_date = cast(date, values["snapshot_date"])
@@ -279,6 +317,7 @@ def capture_snapshot(db: Session, user: User) -> FinancialSnapshot:
         if field == "snapshot_date":
             continue
         setattr(row, field, value)
+    _capture_account_balance_snapshots(db, user, snapshot_date)
     db.flush()
     return row
 

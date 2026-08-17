@@ -15,6 +15,7 @@ from app.core.errors import ApiError
 from app.core.security import utc_now
 from app.models import (
     Account,
+    AccountBalanceSnapshot,
     AnnualBudgetCategory,
     AnnualBudgetMonthAllocation,
     AnnualBudgetPlan,
@@ -92,6 +93,7 @@ def export_user_bundle(db: Session, user: User) -> dict[str, object]:
             exclude={"access_token_ciphertext", "access_token_nonce", "transactions_cursor"},
         ),
         "accounts": _rows(db, Account, uid),
+        "account_balance_snapshots": _rows(db, AccountBalanceSnapshot, uid),
         "categories": _rows(db, Category, uid),
         "transactions": _rows(db, Transaction, uid),
         "transaction_rules": _rows(db, TransactionRule, uid),

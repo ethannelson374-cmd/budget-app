@@ -873,6 +873,63 @@ export interface ReportsOverview {
   history: FinancialSnapshot[];
 }
 
+export type TrendRangeKey = "30d" | "3m" | "6m" | "ytd" | "1y" | "all";
+
+export interface TrendsPeriod {
+  range: TrendRangeKey;
+  label: string;
+  start: string;
+  end: string;
+  previous_start: string;
+  previous_end: string;
+  bucket: "day" | "month";
+}
+
+export interface TrendsSummary {
+  net_worth: string;
+  assets: string;
+  liabilities: string;
+  cash_available: string;
+  change_amount: string;
+  change_percent: string | null;
+  ytd_change_amount: string;
+  ytd_change_percent: string | null;
+  average_monthly_income: string;
+  income_variability_percent: string | null;
+}
+
+export interface NetWorthTrendPoint {
+  date: string;
+  net_worth: string;
+  cash_available: string;
+  total_debt: string;
+  assets: string | null;
+  liabilities: string | null;
+}
+
+export interface BalanceTrendPoint { date: string; assets: string; liabilities: string; net_worth: string; }
+export interface TrendComposition { key: string; label: string; kind: "asset" | "liability"; value: string; share_percent: string | null; account_count: number; }
+export interface AccountContribution { account_id: number; name: string; institution: string | null; account_type: string; current_balance: string; start_balance: string | null; change_amount: string | null; change_percent: string | null; history_available: boolean; history_start_date: string | null; }
+export interface TrendCashFlowPoint { period: string; income: string; spending: string; net_cash_flow: string; savings_rate: string | null; }
+export interface TrendSpendingCategory { key: string; label: string; category_id: number | null; current: string; previous: string; change_amount: string; change_percent: string | null; share_percent: string | null; }
+export interface TrendIncomeSource { label: string; current: string; previous: string; change_amount: string; change_percent: string | null; share_percent: string | null; }
+export interface TrendHistoryStatus { financial_snapshot_start: string | null; account_snapshot_start: string | null; account_snapshot_days: number; account_tracking_active: boolean; }
+
+export interface TrendsView {
+  generated_at: string;
+  currency: string;
+  period: TrendsPeriod;
+  summary: TrendsSummary;
+  net_worth_history: NetWorthTrendPoint[];
+  balance_history: BalanceTrendPoint[];
+  composition: TrendComposition[];
+  account_contributions: AccountContribution[];
+  cash_flow: TrendCashFlowPoint[];
+  spending_categories: TrendSpendingCategory[];
+  income_sources: TrendIncomeSource[];
+  history: TrendHistoryStatus;
+}
+
 export type ReportRangeKey = "30d" | "3m" | "6m" | "ytd" | "1y";
 
 export interface ReportRange {

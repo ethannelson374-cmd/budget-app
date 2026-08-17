@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView } from "../api/types";
+import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView, TrendsView } from "../api/types";
 import { ToastProvider } from "../toast/ToastContext";
 import { DashboardPage } from "./DashboardPage";
 
@@ -79,6 +79,22 @@ const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismi
 const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
 const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
 
+
+const trends: TrendsView = {
+  generated_at: "2026-08-16T12:00:00Z",
+  currency: "USD",
+  period: { range: "3m", label: "Last 3 months", start: "2026-06-01", end: "2026-08-16", previous_start: "2026-03-17", previous_end: "2026-05-31", bucket: "month" },
+  summary: { net_worth: "12500.0000", assets: "14000.0000", liabilities: "1500.0000", cash_available: "5000.0000", change_amount: "500.0000", change_percent: "4.1667", ytd_change_amount: "1200.0000", ytd_change_percent: "10.6195", average_monthly_income: "4000.0000", income_variability_percent: "2.0000" },
+  net_worth_history: [
+    { date: "2026-06-01", net_worth: "12000.0000", cash_available: "4500.0000", total_debt: "1800.0000", assets: null, liabilities: null },
+    { date: "2026-07-01", net_worth: "12250.0000", cash_available: "4700.0000", total_debt: "1650.0000", assets: null, liabilities: null },
+    { date: "2026-08-16", net_worth: "12500.0000", cash_available: "5000.0000", total_debt: "1500.0000", assets: "14000.0000", liabilities: "1500.0000" },
+  ],
+  balance_history: [{ date: "2026-08-16", assets: "14000.0000", liabilities: "1500.0000", net_worth: "12500.0000" }],
+  composition: [], account_contributions: [], cash_flow: [], spending_categories: [], income_sources: [],
+  history: { financial_snapshot_start: "2026-06-01", account_snapshot_start: "2026-08-16", account_snapshot_days: 1, account_tracking_active: true },
+};
+
 const cashFlow: CashFlowSankeyData = {
   period: { range: "month", label: "August 2026", start: "2026-08-01", end: "2026-08-31", previous_start: "2026-07-01", previous_end: "2026-07-31" },
   currency: "USD",
@@ -107,6 +123,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
       if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
+      if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       return Promise.resolve(dashboard as never);
     });
   });
@@ -138,6 +155,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
       if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
+      if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       dashboardCalls += 1;
       return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
     });

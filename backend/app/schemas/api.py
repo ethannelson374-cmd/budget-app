@@ -658,6 +658,122 @@ class CashFlowSankeyView(ViewModel):
     links: list[CashFlowLinkView]
 
 
+TrendRange = Literal["30d", "3m", "6m", "ytd", "1y", "all"]
+TrendBucket = Literal["day", "month"]
+TrendCompositionKind = Literal["asset", "liability"]
+
+
+class TrendsPeriodView(ViewModel):
+    range: TrendRange
+    label: str
+    start: date
+    end: date
+    previous_start: date
+    previous_end: date
+    bucket: TrendBucket
+
+
+class TrendsSummaryView(ViewModel):
+    net_worth: str
+    assets: str
+    liabilities: str
+    cash_available: str
+    change_amount: str
+    change_percent: str | None
+    ytd_change_amount: str
+    ytd_change_percent: str | None
+    average_monthly_income: str
+    income_variability_percent: str | None
+
+
+class NetWorthTrendPointView(ViewModel):
+    date: date
+    net_worth: str
+    cash_available: str
+    total_debt: str
+    assets: str | None
+    liabilities: str | None
+
+
+class BalanceTrendPointView(ViewModel):
+    date: date
+    assets: str
+    liabilities: str
+    net_worth: str
+
+
+class TrendCompositionView(ViewModel):
+    key: str
+    label: str
+    kind: TrendCompositionKind
+    value: str
+    share_percent: str | None
+    account_count: int
+
+
+class AccountContributionView(ViewModel):
+    account_id: int
+    name: str
+    institution: str | None
+    account_type: str
+    current_balance: str
+    start_balance: str | None
+    change_amount: str | None
+    change_percent: str | None
+    history_available: bool
+    history_start_date: date | None
+
+
+class TrendCashFlowPointView(ViewModel):
+    period: str
+    income: str
+    spending: str
+    net_cash_flow: str
+    savings_rate: str | None
+
+
+class TrendSpendingCategoryView(ViewModel):
+    key: str
+    label: str
+    category_id: int | None
+    current: str
+    previous: str
+    change_amount: str
+    change_percent: str | None
+    share_percent: str | None
+
+
+class TrendIncomeSourceView(ViewModel):
+    label: str
+    current: str
+    previous: str
+    change_amount: str
+    change_percent: str | None
+    share_percent: str | None
+
+
+class TrendHistoryStatusView(ViewModel):
+    financial_snapshot_start: date | None
+    account_snapshot_start: date | None
+    account_snapshot_days: int
+    account_tracking_active: bool
+
+
+class TrendsView(ViewModel):
+    generated_at: datetime
+    currency: str
+    period: TrendsPeriodView
+    summary: TrendsSummaryView
+    net_worth_history: list[NetWorthTrendPointView]
+    balance_history: list[BalanceTrendPointView]
+    composition: list[TrendCompositionView]
+    account_contributions: list[AccountContributionView]
+    cash_flow: list[TrendCashFlowPointView]
+    spending_categories: list[TrendSpendingCategoryView]
+    income_sources: list[TrendIncomeSourceView]
+    history: TrendHistoryStatusView
+
+
 class TransactionIntelligencePatch(StrictModel):
     category_id: Annotated[int, Field(gt=0)] | None = None
     display_merchant: Annotated[str, Field(max_length=160)] | None = None

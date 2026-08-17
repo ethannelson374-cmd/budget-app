@@ -20,6 +20,7 @@ import { PlanPage } from "../pages/PlanPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { RecurringPage } from "../pages/RecurringPage";
 import { ReportsPage } from "../pages/ReportsPage";
+import { TrendsPage } from "../pages/TrendsPage";
 import { SetupPage } from "../pages/SetupPage";
 import { TransactionsPage } from "../pages/TransactionsPage";
 import { NotificationsPage } from "../pages/NotificationsPage";
@@ -118,6 +119,7 @@ export function App() {
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/advisor" element={<AdvisorPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/trends" element={<TrendsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<NotFoundPage />} />

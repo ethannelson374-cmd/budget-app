@@ -150,10 +150,12 @@ function ReplyCard({ row }: { row: ChatRow }) {
 export function AdvisorPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext; conversationId?: number } | null);
+  const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext; conversationId?: number; prompt?: string } | null);
   const routedInsight = routeState?.insight ?? null;
   const routedReport = routeState?.report ?? null;
-  const initialPrompt = routedInsight
+  const initialPrompt = routeState?.prompt
+    ? routeState.prompt
+    : routedInsight
     ? routeState?.intent === "plan"
       ? `Build a practical action plan to address this insight: ${routedInsight.title}`
       : `Explain this insight and what I should do next: ${routedInsight.title}`

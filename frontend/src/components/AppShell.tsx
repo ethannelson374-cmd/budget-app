@@ -18,6 +18,7 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/insights", label: "Insights", icon: "sparkles" },
   { to: "/advisor", label: "Advisor", icon: "message" },
   { to: "/reports", label: "Reports", icon: "reports" },
+  { to: "/trends", label: "Trends", icon: "trends" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 

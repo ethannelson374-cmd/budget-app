@@ -17,6 +17,7 @@ export type IconName =
   | "sparkles"
   | "message"
   | "reports"
+  | "trends"
   | "bell";
 
 const paths: Record<IconName, React.ReactNode> = {
@@ -36,6 +37,7 @@ const paths: Record<IconName, React.ReactNode> = {
   sparkles: <><path d="m12 3 1.35 3.65L17 8l-3.65 1.35L12 13l-1.35-3.65L7 8l3.65-1.35L12 3Z"/><path d="m18.5 13 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/><path d="m5.5 14 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></>,
   message: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8M8 13h5"/></>,
   reports: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="m4 7 6-4 6 7 5-4"/></>,
+  trends: <><path d="M3 18 8.5 12.5l3.5 3.5L21 6"/><path d="M15 6h6v6"/><path d="M3 21h18"/></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
 };
 
