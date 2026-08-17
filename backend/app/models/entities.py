@@ -73,6 +73,7 @@ class UserSettings(TimestampMixin, Base):
     annual_gross_income: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
     pay_frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    onboarding_step: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     advisor_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     advisor_share_merchants: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     advisor_share_planning_names: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -194,9 +195,12 @@ class UserInvitation(Base):
     invited_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
-    normalized_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    normalized_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     token_digest: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    challenge_digest: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    challenge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

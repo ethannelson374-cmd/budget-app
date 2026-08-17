@@ -78,13 +78,22 @@ class TwoFactorLoginRequest(StrictModel):
 
 
 class InvitationCreateRequest(StrictModel):
-    email: EmailStr
+    label: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+
+
+class InvitationExchangeRequest(StrictModel):
+    token: SecretStr = Field(min_length=20, max_length=256)
 
 
 class InvitationAcceptRequest(StrictModel):
-    token: SecretStr = Field(min_length=20, max_length=256)
+    challenge_token: SecretStr = Field(min_length=20, max_length=256)
+    email: EmailStr
     username: Annotated[str, Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")]
     password: Annotated[str, Field(min_length=12, max_length=128)]
+
+
+class OnboardingProgressRequest(StrictModel):
+    step: Annotated[int, Field(ge=0, le=6)]
 
 
 class PasswordForgotRequest(StrictModel):
@@ -268,6 +277,8 @@ class UserSettingsView(ViewModel):
     advisor_share_planning_names: bool
     advisor_include_descriptions: bool
     advisor_store_history: bool
+    onboarding_complete: bool
+    onboarding_step: int
 
 
 class UserView(ViewModel):
@@ -319,13 +330,12 @@ class SecurityStatusView(ViewModel):
 
 class InvitationView(ViewModel):
     id: int
-    email: str
+    label: str | None
     status: Literal["pending", "accepted", "revoked", "expired"]
     created_at: datetime
     expires_at: datetime
     accepted_at: datetime | None
     revoked_at: datetime | None
-    delivery: Literal["email", "manual"] | None = None
     invite_url: str | None = None
 
 
@@ -334,9 +344,15 @@ class InvitationListView(ViewModel):
 
 
 class InvitationPublicView(ViewModel):
-    email: str
+    label: str | None
     expires_at: datetime
     google_enabled: bool
+    challenge_token: str
+
+
+class OnboardingStatusView(ViewModel):
+    complete: bool
+    step: int
 
 
 class PasswordResetStatusView(ViewModel):

@@ -26,6 +26,7 @@ from app.schemas.api import (
     AuthView,
     InvitationAcceptRequest,
     InvitationCreateRequest,
+    InvitationExchangeRequest,
     InvitationListView,
     InvitationPublicView,
     InvitationView,
@@ -54,8 +55,7 @@ from app.services.identity import (
     consume_two_factor_challenge,
     create_invitation,
     disable_totp,
-    invitation_from_token,
-    invitation_public_view,
+    exchange_invitation_token,
     list_invitations,
     list_sessions,
     oauth_state,
@@ -247,13 +247,15 @@ def remove_totp(
     return {"ok": True}
 
 
-@router.get("/invitations/{token}", response_model=InvitationPublicView)
-def invitation_details(
-    token: str,
+@router.post("/invitations/exchange", response_model=InvitationPublicView)
+def invitation_exchange(
+    payload: InvitationExchangeRequest,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    return invitation_public_view(db, settings, token)
+    result = exchange_invitation_token(db, settings, payload.token.get_secret_value())
+    db.commit()
+    return result
 
 
 @router.post("/invitations/accept", response_model=AuthView)
@@ -267,7 +269,8 @@ def accept_invitation(
     user = accept_password_invitation(
         db,
         settings,
-        token=payload.token.get_secret_value(),
+        challenge=payload.challenge_token.get_secret_value(),
+        email=str(payload.email),
         username=payload.username,
         password=payload.password,
     )
@@ -311,7 +314,7 @@ def admin_create_invitation(
         db,
         settings,
         principal.user,
-        email=str(payload.email),
+        label=payload.label,
         base_url=_base_url(settings, request),
     )
     add_audit_event(
@@ -321,7 +324,7 @@ def admin_create_invitation(
         outcome="success",
         request_id=_request_id(request),
         user_id=principal.user.id,
-        detail=f"invitation:{result['id']};delivery:{result['delivery']}",
+        detail=f"invitation:{result['id']};link",
     )
     db.commit()
     return result
@@ -449,7 +452,7 @@ def post_password_reset(
 @router.get("/google/start")
 def google_start(
     request: Request,
-    invite: str | None = Query(default=None, max_length=256),
+    invite_challenge: str | None = Query(default=None, max_length=256),
     return_to: str | None = Query(default=None, max_length=500),
     principal: Principal | None = Depends(get_optional_principal),
     db: Session = Depends(get_db),
@@ -460,7 +463,7 @@ def google_start(
         settings,
         purpose="login",
         user=None,
-        invitation_token=invite,
+        invitation_challenge=invite_challenge,
         return_to=return_to,
     )
     add_audit_event(
@@ -470,7 +473,7 @@ def google_start(
         outcome="success",
         request_id=_request_id(request),
         user_id=principal.user.id if principal else None,
-        detail="invite" if invite else "login",
+        detail="invite" if invite_challenge else "login",
     )
     db.commit()
     return RedirectResponse(url=url, status_code=302)
@@ -489,7 +492,7 @@ def google_link_start(
         settings,
         purpose="link",
         user=principal.user,
-        invitation_token=None,
+        invitation_challenge=None,
         return_to=return_to,
     )
     add_audit_event(
@@ -558,7 +561,7 @@ def google_callback(
     except (ApiError, GoogleOIDCError) as exc:
         db.rollback()
         code_value = exc.code if isinstance(exc, ApiError) else "google_provider_error"
-        destination = "/settings" if state_row is not None and state_row.purpose == "link" else "/login"
+        destination = "/settings" if state_row is not None and state_row.purpose == "link" else ("/join" if state_row is not None and state_row.invitation_id is not None else "/login")
         return RedirectResponse(url=f"{destination}?auth_error={quote(code_value)}", status_code=302)
 
 

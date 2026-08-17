@@ -31,6 +31,7 @@ export function PlaidOAuthPage() {
       });
     },
     onSuccess: async () => {
+      const returnTo = storedPlaidLinkSession()?.returnTo ?? "/accounts";
       clearPlaidLinkSession();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.plaidConnections }),
@@ -38,7 +39,7 @@ export function PlaidOAuthPage() {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["transactions"] }),
       ]);
-      navigate("/accounts", { replace: true });
+      navigate(returnTo, { replace: true });
     },
     onError: () => clearPlaidLinkSession(),
   });
@@ -59,7 +60,7 @@ export function PlaidOAuthPage() {
         onSuccess: (publicToken, metadata) => completeLink({ publicToken, metadata }),
         onExit: () => {
           clearPlaidLinkSession();
-          navigate("/accounts", { replace: true });
+          navigate(session.returnTo ?? "/accounts", { replace: true });
         },
         onLoad: () => handler?.open(),
       });
