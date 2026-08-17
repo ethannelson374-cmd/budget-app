@@ -65,6 +65,7 @@ from app.services.plaid_transactions import sync_all_plaid_items
 from app.services.notifications import scan_all_notifications
 from app.services.reports import capture_all_snapshots
 from app.services.security_audit import security_posture
+from app.services.release_readiness import release_readiness
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -789,6 +790,20 @@ def parser() -> argparse.ArgumentParser:
         "security-audit",
         help="Print a secret-free production security posture report and fail on hard findings",
     )
+    release = subcommands.add_parser(
+        "release-readiness",
+        help="Run the secret-free Phase 5 release gate across schema, security, Plaid, and workers",
+    )
+    release.add_argument(
+        "--require-production",
+        action="store_true",
+        help="Fail unless the command is running with production safeguards enabled",
+    )
+    release.add_argument(
+        "--strict-operations",
+        action="store_true",
+        help="Treat stale/unverified scheduled jobs as release-blocking findings",
+    )
     plaid_reset = subcommands.add_parser(
         "plaid-sandbox-reset-login",
         help="Force a Sandbox connection into ITEM_LOGIN_REQUIRED for update-mode testing",
@@ -886,6 +901,21 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 with database.session_factory() as db:
                     result = security_posture(db, settings)
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+            if not result["ready"]:
+                return 1
+        elif args.command == "release-readiness":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = release_readiness(
+                        db,
+                        settings,
+                        require_production=args.require_production,
+                        strict_operations=args.strict_operations,
+                    )
             finally:
                 database.engine.dispose()
             print(json.dumps(result, default=str, indent=2))

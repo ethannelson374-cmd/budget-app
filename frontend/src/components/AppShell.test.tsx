@@ -21,7 +21,7 @@ describe("AppShell navigation", () => {
   it("exposes working destinations and the notification inbox", async () => {
     renderShell();
     for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Calendar", "Insights", "Advisor", "Reports", "Trends", "Settings"]) {
-      expect(screen.getAllByRole("link", { name })).toHaveLength(2);
+      expect(screen.getAllByRole("link", { name })).toHaveLength(1);
     }
     expect(await screen.findAllByRole("link", { name: "2 unread notifications" })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Dashboard" })[0]).toHaveClass("active");
@@ -38,4 +38,19 @@ describe("AppShell navigation", () => {
     expect(resizer).toHaveAttribute("aria-valuetext", "Full navigation");
     expect(localStorage.getItem("budget-liquid-nav-width")).toBe("252");
   });
+  it("opens and dismisses the mobile navigation drawer accessibly", () => {
+    renderShell();
+    const menuButton = screen.getByRole("button", { name: "Open navigation" });
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(menuButton);
+    expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("navigation", { name: "Primary navigation" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Transactions" })).toHaveLength(2);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getAllByRole("navigation", { name: "Primary navigation" })).toHaveLength(1);
+  });
+
 });

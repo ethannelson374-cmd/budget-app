@@ -143,7 +143,7 @@ function SankeyGraphic({
   return (
     <div className={`cash-flow-sankey${condensed ? " condensed" : ""}`}>
       <div className="sankey-stage">
-        <svg viewBox={`0 0 ${SVG_WIDTH} ${height}`} role="img" aria-label={`Cash flow map for ${data.period.label}`}>
+        <svg viewBox={`0 0 ${SVG_WIDTH} ${height}`} role="group" aria-label={`Interactive cash flow map for ${data.period.label}`}>
           <defs>
             <linearGradient id="sankey-hub" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="rgba(255,255,255,.7)" />

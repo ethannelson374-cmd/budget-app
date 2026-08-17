@@ -50,7 +50,7 @@ function readNavWidth(): number {
     : NAV_SNAP_WIDTHS[0];
 }
 
-function NavItems() {
+function NavItems({ onNavigate }: { onNavigate?: () => void } = {}) {
   return navigation.map((item) => (
     <NavLink
       key={item.to}
@@ -58,6 +58,7 @@ function NavItems() {
       title={item.label}
       data-label={item.label}
       className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+      onClick={onNavigate}
     >
       <span className="nav-icon" aria-hidden="true"><Icon name={item.icon} /></span>
       <span className="nav-label">{item.label}</span>
@@ -73,6 +74,9 @@ export function AppShell() {
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [navWidth, setNavWidth] = useState(readNavWidth);
   const [resizingNav, setResizingNav] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileDrawerRef = useRef<HTMLElement | null>(null);
   const liveNavWidth = useRef(navWidth);
   const dragStart = useRef<{ x: number; width: number } | null>(null);
   const notificationCount = useQuery({ queryKey: queryKeys.notificationCount, queryFn: () => apiRequest<NotificationCount>("/notifications/unread-count"), refetchInterval: 60_000, enabled: Boolean(user) });
@@ -85,6 +89,35 @@ export function AppShell() {
       document.documentElement.style.removeProperty("--sidebar-width");
     };
   }, [navWidth]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => {
+      mobileDrawerRef.current?.querySelector<HTMLAnchorElement>("a.nav-link")?.focus();
+    }, 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMobileNavOpen(false);
+      window.setTimeout(() => mobileMenuButtonRef.current?.focus(), 0);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  const closeMobileNavigation = (restoreFocus = false) => {
+    setMobileNavOpen(false);
+    if (restoreFocus) window.setTimeout(() => mobileMenuButtonRef.current?.focus(), 0);
+  };
 
   const commitNavWidth = (width: number) => {
     const next = nearestNavWidth(width);
@@ -188,14 +221,37 @@ export function AppShell() {
         ><span aria-hidden="true" /></div>
       </aside>
       <header className="mobile-topbar">
+        <button
+          ref={mobileMenuButtonRef}
+          type="button"
+          className="mobile-menu-button"
+          aria-label="Open navigation"
+          aria-expanded={mobileNavOpen}
+          aria-controls="mobile-navigation-drawer"
+          onClick={() => setMobileNavOpen(true)}
+        ><span className="mobile-menu-glyph" aria-hidden="true"><i /><i /><i /></span></button>
         <Brand />
         <div className="mobile-topbar-actions"><NavLink className="notification-bell" to="/notifications" aria-label={unread ? `${unread} unread notifications` : "Notifications"}><Icon name="bell" />{unread > 0 && <span>{unread > 99 ? "99+" : unread}</span>}</NavLink><button type="button" className="icon-button" disabled={logoutBusy} onClick={() => void signOut()} aria-label="Sign out"><Icon name="logout" /></button></div>
       </header>
+      <div className={`mobile-nav-layer${mobileNavOpen ? " open" : ""}`} aria-hidden={!mobileNavOpen}>
+        <button type="button" className="mobile-nav-scrim" aria-label="Close navigation" onClick={() => closeMobileNavigation(true)} />
+        <aside ref={mobileDrawerRef} id="mobile-navigation-drawer" className="mobile-nav-drawer" aria-label="Mobile navigation menu">
+          <div className="mobile-drawer-header">
+            <Brand />
+            <button type="button" className="mobile-drawer-close" aria-label="Close navigation" onClick={() => closeMobileNavigation(true)}>×</button>
+          </div>
+          <nav className="mobile-drawer-nav primary-nav" aria-label="Primary navigation"><NavItems onNavigate={() => closeMobileNavigation()} /></nav>
+          <div className="mobile-drawer-user">
+            <div className="user-avatar" aria-hidden="true">{user?.username.slice(0, 1).toUpperCase()}</div>
+            <div className="user-summary"><strong>{user?.username}</strong><span>{user?.email}</span></div>
+            <button type="button" className="icon-button" disabled={logoutBusy} onClick={() => void signOut()} aria-label="Sign out"><Icon name="logout" /></button>
+          </div>
+        </aside>
+      </div>
       <main id="main-content" className="main-content" tabIndex={-1}>
         {logoutError && <div className="logout-alert" role="alert"><span>{logoutError}</span><button type="button" onClick={() => void signOut()}>Try again</button></div>}
         <Outlet />
       </main>
-      <nav className="mobile-nav" aria-label="Primary navigation"><NavItems /></nav>
     </div>
   );
 }
