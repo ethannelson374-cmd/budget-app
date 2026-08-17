@@ -1508,7 +1508,7 @@ DashboardCardId = Literal[
     "cash_flow", "top_spending", "ask_budget", "budget", "insights", "recent_transactions",
     "accounts", "data_freshness",
 ]
-DashboardCardSize = Literal["small", "medium", "wide", "large"]
+DashboardCardSize = Literal["compact", "standard", "hero"]
 DashboardPreset = Literal["everyday", "minimal", "planning", "analytics", "custom"]
 
 

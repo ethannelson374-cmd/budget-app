@@ -1046,7 +1046,7 @@ export type DashboardCardId =
   | "net_worth" | "cash_available" | "income" | "spending" | "net_cash_flow" | "savings_rate"
   | "cash_flow" | "top_spending" | "ask_budget" | "budget" | "insights" | "recent_transactions"
   | "accounts" | "data_freshness";
-export type DashboardCardSize = "small" | "medium" | "wide" | "large";
+export type DashboardCardSize = "compact" | "standard" | "hero";
 export type DashboardPreset = "everyday" | "minimal" | "planning" | "analytics" | "custom";
 export interface DashboardCardPreference { id: DashboardCardId; size: DashboardCardSize; visible: boolean; }
 export interface DashboardPreferences { cards: DashboardCardPreference[]; preset: DashboardPreset; onboarding_dismissed_at: string | null; }

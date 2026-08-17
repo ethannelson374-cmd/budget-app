@@ -73,8 +73,8 @@ const budget: MonthlyBudgetView = {
 
 
 const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismissed_at: null, cards: [
-  { id: "net_worth", size: "small", visible: true }, { id: "cash_available", size: "small", visible: true }, { id: "income", size: "small", visible: true }, { id: "spending", size: "small", visible: true }, { id: "net_cash_flow", size: "small", visible: true }, { id: "savings_rate", size: "small", visible: true },
-  { id: "cash_flow", size: "wide", visible: true }, { id: "top_spending", size: "medium", visible: true }, { id: "ask_budget", size: "wide", visible: true }, { id: "budget", size: "large", visible: true }, { id: "insights", size: "large", visible: true }, { id: "recent_transactions", size: "large", visible: true }, { id: "accounts", size: "large", visible: true }, { id: "data_freshness", size: "medium", visible: true }
+  { id: "net_worth", size: "compact", visible: true }, { id: "cash_available", size: "compact", visible: true }, { id: "income", size: "compact", visible: true }, { id: "spending", size: "compact", visible: true }, { id: "net_cash_flow", size: "compact", visible: true }, { id: "savings_rate", size: "compact", visible: true },
+  { id: "cash_flow", size: "hero", visible: true }, { id: "top_spending", size: "standard", visible: true }, { id: "ask_budget", size: "hero", visible: true }, { id: "budget", size: "standard", visible: true }, { id: "insights", size: "hero", visible: true }, { id: "recent_transactions", size: "hero", visible: true }, { id: "accounts", size: "standard", visible: true }, { id: "data_freshness", size: "compact", visible: true }
 ] };
 const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
 const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
@@ -124,4 +124,17 @@ describe("DashboardPage", () => {
     await user.click(retry);
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
   });
+  it("uses three snap sizes with a keyboard-accessible drag-resize grip", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await screen.findByText(/12,500/);
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    const grip = screen.getByRole("slider", { name: "Resize Net worth" });
+    expect(grip).toHaveAttribute("aria-valuetext", "compact");
+    grip.focus();
+    await user.keyboard("{End}");
+    expect(grip).toHaveAttribute("aria-valuetext", "hero");
+    expect(grip.closest('[data-card-id="net_worth"]')).toHaveAttribute("data-card-size", "hero");
+  });
+
 });

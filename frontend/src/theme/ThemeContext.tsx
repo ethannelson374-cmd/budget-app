@@ -41,7 +41,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setResolvedTheme(resolved);
       document.documentElement.dataset.theme = resolved;
       document.documentElement.style.colorScheme = resolved;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved === "dark" ? "#141c28" : "#0f766e");
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved === "dark" ? "#07101f" : "#edf3ff");
     };
     sync();
     query.addEventListener("change", sync);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ApiError, apiEventStream, apiRequest } from "../api/client";
@@ -33,21 +33,23 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 const DEFAULT_CARDS: DashboardCardPreference[] = [
-  { id: "net_worth", size: "small", visible: true },
-  { id: "cash_available", size: "small", visible: true },
-  { id: "income", size: "small", visible: true },
-  { id: "spending", size: "small", visible: true },
-  { id: "net_cash_flow", size: "small", visible: true },
-  { id: "savings_rate", size: "small", visible: true },
-  { id: "cash_flow", size: "wide", visible: true },
-  { id: "top_spending", size: "medium", visible: true },
-  { id: "ask_budget", size: "wide", visible: true },
-  { id: "budget", size: "large", visible: true },
-  { id: "insights", size: "large", visible: true },
-  { id: "recent_transactions", size: "large", visible: true },
-  { id: "accounts", size: "large", visible: true },
-  { id: "data_freshness", size: "medium", visible: true },
+  { id: "net_worth", size: "compact", visible: true },
+  { id: "cash_available", size: "compact", visible: true },
+  { id: "income", size: "compact", visible: true },
+  { id: "spending", size: "compact", visible: true },
+  { id: "net_cash_flow", size: "compact", visible: true },
+  { id: "savings_rate", size: "compact", visible: true },
+  { id: "cash_flow", size: "hero", visible: true },
+  { id: "top_spending", size: "standard", visible: true },
+  { id: "ask_budget", size: "hero", visible: true },
+  { id: "budget", size: "standard", visible: true },
+  { id: "insights", size: "hero", visible: true },
+  { id: "recent_transactions", size: "hero", visible: true },
+  { id: "accounts", size: "standard", visible: true },
+  { id: "data_freshness", size: "compact", visible: true },
 ];
+
+const CARD_SIZES: DashboardCardSize[] = ["compact", "standard", "hero"];
 
 const CARD_LABELS: Record<DashboardCardId, string> = {
   net_worth: "Net worth",
@@ -66,52 +68,35 @@ const CARD_LABELS: Record<DashboardCardId, string> = {
   data_freshness: "Data freshness",
 };
 
-const ALLOWED_SIZES: Record<DashboardCardId, DashboardCardSize[]> = {
-  net_worth: ["small", "medium"],
-  cash_available: ["small", "medium"],
-  income: ["small", "medium"],
-  spending: ["small", "medium"],
-  net_cash_flow: ["small", "medium"],
-  savings_rate: ["small", "medium"],
-  cash_flow: ["medium", "wide", "large"],
-  top_spending: ["medium", "wide"],
-  ask_budget: ["medium", "wide", "large"],
-  budget: ["medium", "wide", "large"],
-  insights: ["medium", "wide", "large"],
-  recent_transactions: ["medium", "wide", "large"],
-  accounts: ["medium", "wide", "large"],
-  data_freshness: ["small", "medium", "wide"],
-};
-
 const PRESETS: Record<Exclude<DashboardPreset, "custom">, Partial<Record<DashboardCardId, DashboardCardSize>>> = {
   everyday: Object.fromEntries(DEFAULT_CARDS.map((card) => [card.id, card.size])) as Record<DashboardCardId, DashboardCardSize>,
   minimal: {
-    net_worth: "small",
-    cash_available: "small",
-    net_cash_flow: "small",
-    ask_budget: "wide",
-    recent_transactions: "large",
-    data_freshness: "medium",
+    net_worth: "compact",
+    cash_available: "compact",
+    net_cash_flow: "compact",
+    ask_budget: "standard",
+    recent_transactions: "hero",
+    data_freshness: "compact",
   },
   planning: {
-    cash_available: "small",
-    net_cash_flow: "small",
-    budget: "large",
-    insights: "wide",
-    ask_budget: "wide",
-    accounts: "medium",
-    data_freshness: "medium",
+    cash_available: "compact",
+    net_cash_flow: "compact",
+    budget: "hero",
+    insights: "standard",
+    ask_budget: "standard",
+    accounts: "standard",
+    data_freshness: "compact",
   },
   analytics: {
-    net_worth: "small",
-    income: "small",
-    spending: "small",
-    savings_rate: "small",
-    cash_flow: "wide",
-    top_spending: "medium",
-    budget: "large",
-    insights: "wide",
-    ask_budget: "medium",
+    net_worth: "compact",
+    income: "compact",
+    spending: "compact",
+    savings_rate: "compact",
+    cash_flow: "hero",
+    top_spending: "standard",
+    budget: "standard",
+    insights: "hero",
+    ask_budget: "standard",
   },
 };
 
@@ -282,14 +267,109 @@ function WidgetShell({ card, customizing, onDragStart, onDrop, onMove, onResize,
   onDragStart: (id: DashboardCardId) => void;
   onDrop: (id: DashboardCardId) => void;
   onMove: (id: DashboardCardId, delta: number) => void;
-  onResize: (id: DashboardCardId) => void;
+  onResize: (id: DashboardCardId, size: DashboardCardSize) => void;
   onHide: (id: DashboardCardId) => void;
   children: ReactNode;
 }) {
+  const [resizing, setResizing] = useState(false);
+  const resizeStart = useRef<{ x: number; index: number } | null>(null);
+  const currentIndex = CARD_SIZES.indexOf(card.size);
+
+  const resizeTo = (index: number) => {
+    const next = CARD_SIZES[Math.max(0, Math.min(CARD_SIZES.length - 1, index))];
+    if (next !== card.size) onResize(card.id, next);
+  };
+
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!customizing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeStart.current = { x: event.clientX, index: currentIndex };
+    setResizing(true);
+  };
+
+  const moveResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!customizing || !resizeStart.current) return;
+    const delta = event.clientX - resizeStart.current.x;
+    const steps = delta >= 150 ? 2 : delta >= 58 ? 1 : delta <= -150 ? -2 : delta <= -58 ? -1 : 0;
+    resizeTo(resizeStart.current.index + steps);
+  };
+
+  const finishResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!resizeStart.current) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    resizeStart.current = null;
+    setResizing(false);
+  };
+
   return (
-    <div className={`dashboard-widget size-${card.size}${customizing ? " customizing" : ""}`} data-card-id={card.id} draggable={customizing} onDragStart={(event: DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = "move"; onDragStart(card.id); }} onDragOver={(event) => { if (customizing) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); onDrop(card.id); }}>
-      {customizing && <div className="dashboard-widget-tools"><span className="drag-handle" title="Drag to move">⋮⋮</span><strong>{CARD_LABELS[card.id]}</strong><div><button type="button" title="Move earlier" aria-label={`Move ${CARD_LABELS[card.id]} earlier`} onClick={() => onMove(card.id, -1)}>↑</button><button type="button" title="Move later" aria-label={`Move ${CARD_LABELS[card.id]} later`} onClick={() => onMove(card.id, 1)}>↓</button><button type="button" title="Resize card" aria-label={`Resize ${CARD_LABELS[card.id]}`} onClick={() => onResize(card.id)}>↔</button><button type="button" title="Hide card" aria-label={`Hide ${CARD_LABELS[card.id]}`} onClick={() => onHide(card.id)}>×</button></div></div>}
+    <div
+      className={`dashboard-widget size-${card.size}${customizing ? " customizing" : ""}${resizing ? " resizing" : ""}`}
+      data-card-id={card.id}
+      data-card-size={card.size}
+      draggable={customizing && !resizing}
+      onDragStart={(event: DragEvent<HTMLDivElement>) => {
+        if (resizing) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart(card.id);
+      }}
+      onDragOver={(event) => { if (customizing) event.preventDefault(); }}
+      onDrop={(event) => { event.preventDefault(); onDrop(card.id); }}
+    >
+      {customizing && (
+        <div className="dashboard-widget-tools">
+          <span className="drag-handle" title="Drag card to reorder" aria-hidden="true">⠿</span>
+          <strong>{CARD_LABELS[card.id]}</strong>
+          <span className="dashboard-size-readout">{card.size}</span>
+          <div>
+            <button type="button" title="Move earlier" aria-label={`Move ${CARD_LABELS[card.id]} earlier`} onClick={() => onMove(card.id, -1)}>↑</button>
+            <button type="button" title="Move later" aria-label={`Move ${CARD_LABELS[card.id]} later`} onClick={() => onMove(card.id, 1)}>↓</button>
+            <button type="button" title="Hide card" aria-label={`Hide ${CARD_LABELS[card.id]}`} onClick={() => onHide(card.id)}>×</button>
+          </div>
+        </div>
+      )}
       <div className="dashboard-widget-body">{children}</div>
+      {customizing && (
+        <div
+          className="dashboard-resize-handle"
+          role="slider"
+          tabIndex={0}
+          aria-label={`Resize ${CARD_LABELS[card.id]}`}
+          aria-valuemin={0}
+          aria-valuemax={2}
+          aria-valuenow={currentIndex}
+          aria-valuetext={card.size}
+          title="Drag horizontally to resize"
+          onPointerDown={startResize}
+          onPointerMove={moveResize}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+              event.preventDefault();
+              resizeTo(currentIndex + 1);
+            }
+            if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+              event.preventDefault();
+              resizeTo(currentIndex - 1);
+            }
+            if (event.key === "Home") {
+              event.preventDefault();
+              resizeTo(0);
+            }
+            if (event.key === "End") {
+              event.preventDefault();
+              resizeTo(CARD_SIZES.length - 1);
+            }
+          }}
+        >
+          <span aria-hidden="true" />
+        </div>
+      )}
     </div>
   );
 }
@@ -385,12 +465,9 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
     setDraggedId(null);
     setDraftPreset("custom");
   };
-  const resizeCard = (id: DashboardCardId) => setDraftCards((cards) => cards.map((card) => {
-    if (card.id !== id) return card;
-    const sizes = ALLOWED_SIZES[id];
-    const index = sizes.indexOf(card.size);
-    return { ...card, size: sizes[(index + 1) % sizes.length] };
-  }));
+  const resizeCard = (id: DashboardCardId, size: DashboardCardSize) => setDraftCards((cards) =>
+    cards.map((card) => card.id === id ? { ...card, size } : card),
+  );
   const setVisibility = (id: DashboardCardId, visible: boolean) => {
     setDraftCards((cards) => cards.map((card) => card.id === id ? { ...card, visible } : card));
     setDraftPreset("custom");
@@ -427,12 +504,12 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
       {data.excluded_currencies.length > 0 && <div className="notice-banner" role="status"><strong>Some balances are shown separately.</strong> Totals include {data.currency} only. Excluded: {data.excluded_currencies.join(", ")}.</div>}
       {onboarding && !onboarding.complete && !onboarding.dismissed && <OnboardingCard onboarding={onboarding} />}
       <div className="dashboard-customize-bar">
-        <div><strong>Your dashboard</strong><span>{customizing ? "Drag, resize, hide, or restore cards. Changes are saved per user." : "Your layout follows you wherever you sign in."}</span></div>
+        <div><strong>Your dashboard</strong><span>{customizing ? "Drag cards to reorder. Grab the lower-right glass edge to snap between Compact, Standard, and Hero." : "Your layout follows you wherever you sign in."}</span></div>
         {customizing ? <div className="dashboard-customize-actions"><button className="button secondary" type="button" onClick={() => setLibraryOpen((value) => !value)}>+ Add card</button><button className="button secondary" type="button" onClick={() => preset("everyday")}>Reset layout</button><button className="button secondary" type="button" onClick={cancelCustomize}>Cancel</button><button className="button primary" type="button" disabled={savePreferences.isPending} onClick={() => savePreferences.mutate({ cards: draftCards, preset: draftPreset })}>{savePreferences.isPending ? "Saving…" : "Done"}</button></div> : <button className="button secondary" type="button" onClick={startCustomize}>Customize</button>}
       </div>
       {customizing && <div className="dashboard-preset-bar"><span>Presets</span>{(["everyday", "minimal", "planning", "analytics"] as const).map((name) => <button key={name} type="button" className={draftPreset === name ? "active" : ""} onClick={() => preset(name)}>{name}</button>)}</div>}
       {customizing && libraryOpen && <section className="panel dashboard-card-library"><div className="panel-heading"><div><span className="eyebrow">Card library</span><h2>Add to Dashboard</h2></div></div>{hiddenCards.length ? <div className="dashboard-library-grid">{hiddenCards.map((card) => <button type="button" key={card.id} onClick={() => setVisibility(card.id, true)}><strong>{CARD_LABELS[card.id]}</strong><span>Add card +</span></button>)}</div> : <p className="muted-copy">Every available card is already on your dashboard.</p>}</section>}
-      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id) => { resizeCard(id); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card.id)}</WidgetShell>)}</div>
+      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id, size) => { resizeCard(id, size); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card.id)}</WidgetShell>)}</div>
     </>
   );
 }
