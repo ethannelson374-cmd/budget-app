@@ -18,6 +18,7 @@ const AdvisorPage = lazy(() => import("../pages/AdvisorPage").then((module) => (
 const BudgetPage = lazy(() => import("../pages/BudgetPage").then((module) => ({ default: module.BudgetPage })));
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const InsightsPage = lazy(() => import("../pages/InsightsPage").then((module) => ({ default: module.InsightsPage })));
+const OnboardingPage = lazy(() => import("../pages/OnboardingPage").then((module) => ({ default: module.OnboardingPage })));
 const NotificationsPage = lazy(() => import("../pages/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
 const PlaidOAuthPage = lazy(() => import("../pages/PlaidOAuthPage").then((module) => ({ default: module.PlaidOAuthPage })));
 const PlanPage = lazy(() => import("../pages/PlanPage").then((module) => ({ default: module.PlanPage })));
@@ -49,44 +50,68 @@ function AuthUnavailable() {
 
 function RootRedirect() {
   const setup = useSetupStatus();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   if (setup.isPending || status === "loading") return <PageLoading />;
   if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
   if (!setup.data.initialized) return <Navigate to="/setup" replace />;
   if (status === "unavailable") return <AuthUnavailable />;
-  return <Navigate to={status === "authenticated" ? "/dashboard" : "/login"} replace />;
+  return <Navigate to={status === "authenticated" ? (user?.settings.onboarding_complete === false ? "/onboarding" : "/dashboard") : "/login"} replace />;
 }
 
 function SetupRoute() {
   const setup = useSetupStatus();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   if (setup.isPending || status === "loading") return <PageLoading label="Checking installation" />;
   if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
-  if (setup.data.initialized) return <Navigate to={status === "authenticated" ? "/dashboard" : "/login"} replace />;
+  if (setup.data.initialized) return <Navigate to={status === "authenticated" ? (user?.settings.onboarding_complete === false ? "/onboarding" : "/dashboard") : "/login"} replace />;
   return <SetupPage status={setup.data} />;
 }
 
 function LoginRoute() {
   const setup = useSetupStatus();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   if (setup.isPending || status === "loading") return <PageLoading label="Checking your session" />;
   if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
   if (!setup.data.initialized) return <Navigate to="/setup" replace />;
   if (status === "unavailable") return <AuthUnavailable />;
-  if (status === "authenticated") return <Navigate to="/dashboard" replace />;
+  if (status === "authenticated") return <Navigate to={user?.settings.onboarding_complete === false ? "/onboarding" : "/dashboard"} replace />;
   return <LoginPage setupStatus={setup.data} />;
 }
 
 function ProtectedRoute() {
   const setup = useSetupStatus();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
   if (setup.isPending || status === "loading") return <PageLoading label="Opening your budget" />;
   if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
   if (!setup.data.initialized) return <Navigate to="/setup" replace />;
   if (status === "unavailable") return <AuthUnavailable />;
   if (status !== "authenticated") return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (user?.settings.onboarding_complete === false) return <Navigate to="/onboarding" replace />;
   return <AppShell />;
+}
+
+function PlaidOAuthRoute() {
+  const setup = useSetupStatus();
+  const { status } = useAuth();
+  if (setup.isPending || status === "loading") return <PageLoading label="Finishing your bank connection" />;
+  if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
+  if (!setup.data.initialized) return <Navigate to="/setup" replace />;
+  if (status === "unavailable") return <AuthUnavailable />;
+  if (status !== "authenticated") return <Navigate to="/login" replace />;
+  return <LazyPage><PlaidOAuthPage /></LazyPage>;
+}
+
+function OnboardingRoute() {
+  const setup = useSetupStatus();
+  const { status, user } = useAuth();
+  if (setup.isPending || status === "loading") return <PageLoading label="Opening first-time setup" />;
+  if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
+  if (!setup.data.initialized) return <Navigate to="/setup" replace />;
+  if (status === "unavailable") return <AuthUnavailable />;
+  if (status !== "authenticated") return <Navigate to="/login" replace />;
+  if (user?.settings.onboarding_complete !== false) return <Navigate to="/dashboard" replace />;
+  return <LazyPage><OnboardingPage /></LazyPage>;
 }
 
 function LazyPage({ children }: { children: ReactNode }) {
@@ -110,14 +135,17 @@ export function App() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/setup" element={<SetupRoute />} />
       <Route path="/login" element={<LoginRoute />} />
+      <Route path="/join/:token" element={<InvitePage />} />
+      <Route path="/join" element={<InvitePage />} />
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/google/complete" element={<GoogleAuthCompletePage />} />
+      <Route path="/onboarding" element={<OnboardingRoute />} />
+      <Route path="/plaid/oauth" element={<PlaidOAuthRoute />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<LazyPage><DashboardPage /></LazyPage>} />
         <Route path="/accounts" element={<LazyPage><AccountsPage /></LazyPage>} />
-        <Route path="/plaid/oauth" element={<LazyPage><PlaidOAuthPage /></LazyPage>} />
         <Route path="/transactions" element={<LazyPage><TransactionsPage /></LazyPage>} />
         <Route path="/budget" element={<LazyPage><BudgetPage /></LazyPage>} />
         <Route path="/plan" element={<LazyPage><PlanPage /></LazyPage>} />

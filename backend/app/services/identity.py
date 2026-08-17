@@ -37,16 +37,12 @@ from app.models import (
 )
 from app.services.auth import revoke_user_sessions
 from app.services.catalog import DEFAULT_CATEGORIES
-from app.services.email_delivery import (
-    EmailDeliveryError,
-    invitation_email,
-    password_reset_email,
-    send_email,
-)
+from app.services.email_delivery import EmailDeliveryError, password_reset_email, send_email
 
 INVITATION_TTL = timedelta(days=7)
 PASSWORD_RESET_TTL = timedelta(minutes=30)
 OAUTH_STATE_TTL = timedelta(minutes=10)
+INVITATION_CHALLENGE_TTL = timedelta(minutes=20)
 TWO_FACTOR_CHALLENGE_TTL = timedelta(minutes=5)
 RECOVERY_CODE_COUNT = 8
 
@@ -77,21 +73,18 @@ def invitation_status(invitation: UserInvitation) -> str:
 def invitation_view(
     invitation: UserInvitation,
     *,
-    delivery: str | None = None,
     invite_url: str | None = None,
 ) -> dict[str, object]:
     return {
         "id": invitation.id,
-        "email": invitation.email,
+        "label": invitation.label or invitation.email,
         "status": invitation_status(invitation),
         "created_at": invitation.created_at,
         "expires_at": invitation.expires_at,
         "accepted_at": invitation.accepted_at,
         "revoked_at": invitation.revoked_at,
-        "delivery": delivery,
         "invite_url": invite_url,
     }
-
 
 def _require_admin(user: User) -> None:
     if not user.is_admin:
@@ -110,6 +103,7 @@ def _new_user_settings(source: User | None = None) -> UserSettings:
         timezone=timezone,
         theme=theme,
         onboarding_complete=False,
+        onboarding_step=0,
     )
 
 
@@ -145,31 +139,20 @@ def create_invitation(
     settings: Settings,
     admin: User,
     *,
-    email: str,
+    label: str | None,
     base_url: str,
 ) -> dict[str, object]:
     _require_admin(admin)
-    normalized = normalize_identity(email)
-    if db.scalar(select(User.id).where(User.normalized_email == normalized)) is not None:
-        raise ApiError(409, "account_exists", "A Budget account already uses that email address")
-
     now = utc_now()
-    existing = db.scalars(
-        select(UserInvitation).where(
-            UserInvitation.normalized_email == normalized,
-            UserInvitation.accepted_at.is_(None),
-            UserInvitation.revoked_at.is_(None),
-        )
-    ).all()
-    for item in existing:
-        item.revoked_at = now
-
     token = secrets.token_urlsafe(32)
     invitation = UserInvitation(
         invited_by_user_id=admin.id,
-        email=email,
-        normalized_email=normalized,
+        email=None,
+        normalized_email=None,
+        label=label.strip() if label else None,
         token_digest=_token_digest(settings, "invitation", token),
+        challenge_digest=None,
+        challenge_expires_at=None,
         created_at=now,
         expires_at=now + INVITATION_TTL,
         accepted_at=None,
@@ -177,21 +160,8 @@ def create_invitation(
     )
     db.add(invitation)
     db.flush()
-    invite_url = f"{base_url.rstrip('/')}/invite?token={token}"
-    delivery = "manual"
-    if settings.email_configured:
-        subject, body = invitation_email(invite_url)
-        try:
-            send_email(settings, to_email=email, subject=subject, text=body)
-            delivery = "email"
-        except EmailDeliveryError:
-            delivery = "manual"
-    return invitation_view(
-        invitation,
-        delivery=delivery,
-        invite_url=invite_url if delivery == "manual" else None,
-    )
-
+    invite_url = f"{base_url.rstrip('/')}/join/{token}"
+    return invitation_view(invitation, invite_url=invite_url)
 
 def list_invitations(db: Session, admin: User) -> list[dict[str, object]]:
     _require_admin(admin)
@@ -229,23 +199,50 @@ def invitation_from_token(db: Session, settings: Settings, token: str) -> UserIn
     return row
 
 
-def invitation_public_view(
+def exchange_invitation_token(
     db: Session, settings: Settings, token: str
 ) -> dict[str, object]:
-    row = invitation_from_token(db, settings, token)
-    return {"email": row.email, "expires_at": row.expires_at, "google_enabled": settings.google_configured}
+    invitation = invitation_from_token(db, settings, token)
+    challenge = secrets.token_urlsafe(32)
+    invitation.challenge_digest = _token_digest(settings, "invitation-challenge", challenge)
+    invitation.challenge_expires_at = utc_now() + INVITATION_CHALLENGE_TTL
+    db.flush()
+    return {
+        "label": invitation.label or invitation.email,
+        "expires_at": invitation.expires_at,
+        "google_enabled": settings.google_configured,
+        "challenge_token": challenge,
+    }
+
+
+def invitation_from_challenge(db: Session, settings: Settings, challenge: str) -> UserInvitation:
+    row = db.scalar(
+        select(UserInvitation).where(
+            UserInvitation.challenge_digest == _token_digest(settings, "invitation-challenge", challenge)
+        )
+    )
+    if (
+        row is None
+        or not _active_invitation(row)
+        or row.challenge_expires_at is None
+        or as_utc(row.challenge_expires_at) <= utc_now()
+    ):
+        raise ApiError(404, "invitation_invalid", "The invitation session is invalid or has expired")
+    return row
 
 
 def accept_password_invitation(
     db: Session,
     settings: Settings,
     *,
-    token: str,
+    challenge: str,
+    email: str,
     username: str,
     password: str,
 ) -> User:
-    invitation = invitation_from_token(db, settings, token)
-    if db.scalar(select(User.id).where(User.normalized_email == invitation.normalized_email)) is not None:
+    invitation = invitation_from_challenge(db, settings, challenge)
+    normalized_email = normalize_identity(email)
+    if db.scalar(select(User.id).where(User.normalized_email == normalized_email)) is not None:
         raise ApiError(409, "account_exists", "A Budget account already uses that email address")
     if db.scalar(
         select(User.id).where(User.normalized_username == normalize_identity(username))
@@ -260,11 +257,11 @@ def accept_password_invitation(
     user = User(
         username=username,
         normalized_username=normalize_identity(username),
-        email=invitation.email,
-        normalized_email=invitation.normalized_email,
+        email=email,
+        normalized_email=normalized_email,
         password_hash=hash_password(password),
         is_admin=False,
-        email_verified_at=now,
+        email_verified_at=None,
         last_login_at=now,
         settings=_new_user_settings(inviter),
     )
@@ -272,9 +269,10 @@ def accept_password_invitation(
     db.flush()
     _add_default_categories(db, user)
     invitation.accepted_at = now
+    invitation.challenge_digest = None
+    invitation.challenge_expires_at = None
     db.flush()
     return user
-
 
 def security_status(db: Session, settings: Settings, user: User) -> dict[str, object]:
     google = db.scalar(
@@ -621,7 +619,7 @@ def begin_google_flow(
     *,
     purpose: str,
     user: User | None,
-    invitation_token: str | None,
+    invitation_challenge: str | None,
     return_to: str | None,
 ) -> str:
     if not settings.google_configured:
@@ -632,8 +630,8 @@ def begin_google_flow(
         raise ApiError(401, "authentication_required", "Authentication is required")
 
     invitation: UserInvitation | None = None
-    if invitation_token:
-        invitation = invitation_from_token(db, settings, invitation_token)
+    if invitation_challenge:
+        invitation = invitation_from_challenge(db, settings, invitation_challenge)
 
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
@@ -651,7 +649,7 @@ def begin_google_flow(
         )
     )
     db.flush()
-    login_hint = invitation.email if invitation is not None else user.email if user is not None else None
+    login_hint = user.email if user is not None else None
     return authorization_url(settings, state=state, nonce=nonce, login_hint=login_hint)
 
 
@@ -739,9 +737,6 @@ def complete_google_flow(
     invitation = db.get(UserInvitation, state_row.invitation_id) if state_row.invitation_id else None
     if invitation is None or not _active_invitation(invitation):
         raise ApiError(403, "invitation_required", "A valid Budget invitation is required to create an account")
-    if invitation.normalized_email != normalized_email:
-        raise ApiError(403, "invitation_email_mismatch", "Use the Google account that received the Budget invitation")
-
     inviter = db.scalar(
         select(User).options(selectinload(User.settings)).where(User.id == invitation.invited_by_user_id)
     )
@@ -774,6 +769,8 @@ def complete_google_flow(
         )
     )
     invitation.accepted_at = now
+    invitation.challenge_digest = None
+    invitation.challenge_expires_at = None
     db.delete(state_row)
     db.flush()
     return user, state_row.return_to

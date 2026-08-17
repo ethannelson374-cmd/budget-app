@@ -47,6 +47,8 @@ export interface UserSettings {
   advisor_share_planning_names: boolean;
   advisor_include_descriptions: boolean;
   advisor_store_history: boolean;
+  onboarding_complete?: boolean;
+  onboarding_step?: number;
 }
 
 export interface AuthUser {
@@ -96,23 +98,25 @@ export interface AuthSessionsResponse { sessions: AuthSessionItem[]; }
 
 export interface UserInvitation {
   id: number;
-  email: string;
+  label: string | null;
   status: "pending" | "accepted" | "revoked" | "expired";
   created_at: string;
   expires_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
-  delivery?: "email" | "manual" | null;
   invite_url?: string | null;
 }
 
 export interface UserInvitationsResponse { invitations: UserInvitation[]; }
 
 export interface InvitationDetails {
-  email: string;
+  label: string | null;
   expires_at: string;
   google_enabled: boolean;
+  challenge_token: string;
 }
+
+export interface OnboardingStatus { complete: boolean; step: number; }
 
 export interface PasswordResetStatus { valid: boolean; email: string | null; }
 

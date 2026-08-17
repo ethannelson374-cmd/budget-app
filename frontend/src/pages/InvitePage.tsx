@@ -1,31 +1,69 @@
-import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, apiRequest } from "../api/client";
 import type { AuthSession, InvitationDetails } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { Brand } from "../components/Brand";
 import { ErrorState, LoadingState } from "../components/States";
 
+const CHALLENGE_KEY = "budget-invite-challenge";
+const DETAILS_KEY = "budget-invite-details";
+
+function storedInvitation(): InvitationDetails | null {
+  try {
+    const raw = sessionStorage.getItem(DETAILS_KEY);
+    const challenge = sessionStorage.getItem(CHALLENGE_KEY);
+    if (!raw || !challenge) return null;
+    const parsed = JSON.parse(raw) as Omit<InvitationDetails, "challenge_token">;
+    return { ...parsed, challenge_token: challenge };
+  } catch {
+    return null;
+  }
+}
+
 export function InvitePage() {
+  const { token: routeToken } = useParams();
   const [params] = useSearchParams();
-  const token = params.get("token") ?? "";
+  const rawToken = routeToken ?? params.get("token") ?? "";
   const navigate = useNavigate();
   const { establishSession } = useAuth();
-  const invitation = useQuery({
-    queryKey: ["invitation", token],
-    queryFn: () => apiRequest<InvitationDetails>(`/auth/invitations/${encodeURIComponent(token)}`),
-    enabled: Boolean(token),
-    retry: false,
-  });
+  const [invitation, setInvitation] = useState<InvitationDetails | null>(() => rawToken ? null : storedInvitation());
+  const [checking, setChecking] = useState(Boolean(rawToken));
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!rawToken) return;
+    let cancelled = false;
+    setChecking(true);
+    setExchangeError(null);
+    void apiRequest<InvitationDetails>("/auth/invitations/exchange", {
+      method: "POST",
+      body: JSON.stringify({ token: rawToken }),
+    }).then((details) => {
+      if (cancelled) return;
+      setInvitation(details);
+      sessionStorage.setItem(CHALLENGE_KEY, details.challenge_token);
+      sessionStorage.setItem(DETAILS_KEY, JSON.stringify({ label: details.label, expires_at: details.expires_at, google_enabled: details.google_enabled }));
+      window.history.replaceState({}, "", "/join");
+    }).catch((caught) => {
+      if (!cancelled) setExchangeError(caught instanceof ApiError ? caught.message : "This invitation could not be opened.");
+    }).finally(() => {
+      if (!cancelled) setChecking(false);
+    });
+    return () => { cancelled = true; };
+  }, [rawToken]);
+
+  const expires = useMemo(() => invitation ? new Date(invitation.expires_at).toLocaleString() : null, [invitation]);
+
   const accept = async (event: FormEvent) => {
     event.preventDefault();
+    if (!invitation) return;
     if (password !== confirm) {
       setError("Passwords do not match.");
       return;
@@ -35,10 +73,12 @@ export function InvitePage() {
     try {
       const session = await apiRequest<AuthSession>("/auth/invitations/accept", {
         method: "POST",
-        body: JSON.stringify({ token, username, password }),
+        body: JSON.stringify({ challenge_token: invitation.challenge_token, email, username, password }),
       });
+      sessionStorage.removeItem(CHALLENGE_KEY);
+      sessionStorage.removeItem(DETAILS_KEY);
       establishSession(session);
-      navigate("/dashboard", { replace: true });
+      navigate("/onboarding", { replace: true });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "The invitation could not be accepted.");
     } finally {
@@ -47,30 +87,33 @@ export function InvitePage() {
   };
 
   const continueWithGoogle = () => {
-    const query = new URLSearchParams({ invite: token, return_to: "/dashboard" });
+    if (!invitation) return;
+    const query = new URLSearchParams({ invite_challenge: invitation.challenge_token, return_to: "/onboarding" });
     window.location.assign(`/api/v1/auth/google/start?${query.toString()}`);
   };
 
   return (
-    <main className="centered-page auth-flow-page">
+    <main className="centered-page auth-flow-page join-page">
       <Brand linked={false} />
-      <section className="auth-card auth-flow-card">
-        <span className="eyebrow">Private invitation</span>
-        <h1>Join Budget</h1>
-        {!token && <ErrorState title="Invitation link missing" message="Ask the Budget administrator for a new invitation." />}
-        {invitation.isPending && <LoadingState label="Checking invitation" />}
-        {invitation.isError && <ErrorState title="Invitation unavailable" message="This invitation is invalid, expired, or has already been used." />}
-        {invitation.data && (
+      <section className="auth-card auth-flow-card join-card">
+        <span className="eyebrow">Private Budget link</span>
+        <h1>Welcome to Budget</h1>
+        <p className="join-lede">You've been invited to a private Budget workspace. Create your account, then we'll walk through your money setup before you reach the dashboard.</p>
+        {checking && <LoadingState label="Opening your invitation" />}
+        {exchangeError && <ErrorState title="Invitation unavailable" message="This invitation is invalid, expired, revoked, or has already been used." />}
+        {!checking && !exchangeError && !invitation && <ErrorState title="Invitation link missing" message="Ask the Budget administrator for a new invite link." />}
+        {invitation && (
           <>
-            <p>You were invited as <strong>{invitation.data.email}</strong>. Your finances stay isolated from every other Budget user.</p>
-            {invitation.data.google_enabled && (
+            <div className="join-invite-meta"><strong>{invitation.label || "Budget invitation"}</strong><small>One-time link · expires {expires}</small></div>
+            {invitation.google_enabled && (
               <>
                 <button className="button secondary wide google-signin" type="button" onClick={continueWithGoogle}><span className="google-g" aria-hidden="true">G</span> Continue with Google</button>
-                <div className="auth-divider"><span>or create a password</span></div>
+                <div className="auth-divider"><span>or create an account</span></div>
               </>
             )}
             {error && <div className="inline-alert" role="alert">{error}</div>}
             <form className="form-stack" onSubmit={accept}>
+              <label>Email<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
               <label>Username<input required minLength={3} maxLength={80} pattern="[A-Za-z0-9._-]+" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
               <label>Password<input required minLength={12} maxLength={128} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               <label>Confirm password<input required minLength={12} maxLength={128} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /></label>
@@ -78,7 +121,7 @@ export function InvitePage() {
             </form>
           </>
         )}
-        <Link to="/login">Back to sign in</Link>
+        <Link to="/login">Already have an account? Sign in</Link>
       </section>
     </main>
   );

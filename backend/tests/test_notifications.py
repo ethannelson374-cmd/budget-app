@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import Settings
 from app.core.database import Database
 from app.models import FinancialGoal, InsightRecord, Notification, User
-from app.services.notifications import scan_user_notifications
+from app.services.notifications import get_preferences, scan_user_notifications
 from tests.conftest import csrf_headers
 
 
@@ -105,6 +105,11 @@ def test_notification_scan_dedupes_insight_and_highest_goal_milestone(
                 active=True,
             )
         )
+        db.commit()
+
+        prefs = get_preferences(db, user, persist=True)
+        prefs.weekly_summary = False
+        prefs.monthly_summary = False
         db.commit()
 
         monkeypatch.setattr("app.services.notifications.refresh_insights", lambda _db, _user: None)

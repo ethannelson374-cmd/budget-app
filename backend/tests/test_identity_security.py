@@ -27,26 +27,28 @@ def test_invite_only_local_account_creation_and_admin_scope(
     created = client.post(
         "/api/v1/auth/admin/invitations",
         headers=csrf_headers(csrf),
-        json={"email": "family@example.com"},
+        json={"label": "Family test"},
     )
     assert created.status_code == 201, created.text
     body = created.json()
-    assert body["delivery"] == "manual"
+    assert body["label"] == "Family test"
     invite_url = body["invite_url"]
     assert isinstance(invite_url, str)
-    token = parse_qs(urlparse(invite_url).query)["token"][0]
+    token = urlparse(invite_url).path.rsplit("/", 1)[-1]
 
-    detail = client.get(f"/api/v1/auth/invitations/{token}")
+    detail = client.post("/api/v1/auth/invitations/exchange", json={"token": token})
     assert detail.status_code == 200
-    assert detail.json()["email"] == "family@example.com"
+    challenge = detail.json()["challenge_token"]
+    assert detail.json()["label"] == "Family test"
 
     accepted = client.post(
         "/api/v1/auth/invitations/accept",
-        json={"token": token, "username": "family", "password": "Family Password 123!"},
+        json={"challenge_token": challenge, "email": "family@example.com", "username": "family", "password": "Family Password 123!"},
     )
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["user"]["is_admin"] is False
-    assert accepted.json()["user"]["email_verified"] is True
+    assert accepted.json()["user"]["email_verified"] is False
+    assert accepted.json()["user"]["settings"]["onboarding_complete"] is False
 
     # The newly signed-in non-admin cannot manage family invitations.
     denied = client.get("/api/v1/auth/admin/invitations")
@@ -190,16 +192,17 @@ def test_google_invite_creates_account_but_existing_email_requires_explicit_link
             invitation = client.post(
                 "/api/v1/auth/admin/invitations",
                 headers=csrf_headers(csrf),
-                json={"email": "google.family@example.com"},
+                json={"label": "Google family"},
             ).json()
-            invite_token = parse_qs(urlparse(invitation["invite_url"]).query)["token"][0]
+            invite_token = urlparse(invitation["invite_url"]).path.rsplit("/", 1)[-1]
+            exchange = client.post("/api/v1/auth/invitations/exchange", json={"token": invite_token}).json()
 
             monkeypatch.setattr(security_api, "exchange_code", lambda _settings, _code: "id-token")
 
             # Start the invite flow and recover state/nonce from the authorization URL.
             started = client.get(
                 "/api/v1/auth/google/start",
-                params={"invite": invite_token, "return_to": "/dashboard"},
+                params={"invite_challenge": exchange["challenge_token"], "return_to": "/onboarding"},
                 follow_redirects=False,
             )
             auth_query = parse_qs(urlparse(started.headers["location"]).query)

@@ -5,6 +5,7 @@ export type PlaidLinkSession = {
   token: string;
   mode: "connect" | "update";
   connectionId: number | null;
+  returnTo?: string;
 };
 
 export function rememberPlaidLinkSession(session: PlaidLinkSession): void {
@@ -22,7 +23,7 @@ export function storedPlaidLinkSession(): PlaidLinkSession | null {
         && (parsed.mode === "connect" || parsed.mode === "update")
         && (parsed.connectionId === null || typeof parsed.connectionId === "number")
       ) {
-        return { token: parsed.token, mode: parsed.mode, connectionId: parsed.connectionId ?? null };
+        return { token: parsed.token, mode: parsed.mode, connectionId: parsed.connectionId ?? null, returnTo: typeof parsed.returnTo === "string" && parsed.returnTo.startsWith("/") && !parsed.returnTo.startsWith("//") ? parsed.returnTo : undefined };
       }
     } catch {
       // Fall through to the legacy token compatibility path.

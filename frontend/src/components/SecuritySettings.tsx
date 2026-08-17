@@ -39,7 +39,7 @@ export function SecuritySettings() {
 
   return (
     <section className="settings-security" aria-labelledby="security-settings-heading">
-      <div className="settings-section-heading"><div><span className="eyebrow">Identity & security</span><h2 id="security-settings-heading">Sign-in and account access</h2><p>Budget is invite-only. Manage your sign-in methods, sessions, and family access here.</p></div></div>
+      <div className="settings-section-heading"><div><span className="eyebrow">Identity & security</span><h2 id="security-settings-heading">Sign-in and account access</h2><p>Budget uses private invite links. Manage sign-in methods, sessions, and family access here.</p></div></div>
       <div className="security-grid">
         <SignInMethods status={security.data} refreshSecurity={() => void security.refetch()} />
         <TwoFactorCard status={security.data} refreshSecurity={() => void security.refetch()} />
@@ -118,12 +118,12 @@ function SessionCard({ sessions, refreshSessions }: { sessions: AuthSessionsResp
 }
 
 function FamilyAccessCard({ invitations, users, loading, refresh }: { invitations: UserInvitation[]; users: AdminUsersResponse["users"]; loading: boolean; refresh: () => void }) {
-  const [email, setEmail] = useState("");
+  const [label, setLabel] = useState("");
   const [manualLink, setManualLink] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => apiRequest<UserInvitation>("/auth/admin/invitations", { method: "POST", body: JSON.stringify({ email }) }),
-    onSuccess: (data) => { setEmail(""); setManualLink(data.invite_url ?? null); setMessage(data.delivery === "email" ? "Invitation emailed." : "Invitation created. Copy the private link below."); refresh(); },
+    mutationFn: () => apiRequest<UserInvitation>("/auth/admin/invitations", { method: "POST", body: JSON.stringify({ label: label.trim() || null }) }),
+    onSuccess: (data) => { setLabel(""); setManualLink(data.invite_url ?? null); setMessage("Invite link created. Send it privately; it works once and expires in 7 days."); refresh(); },
   });
   const revoke = useMutation({ mutationFn: (id: number) => apiRequest<{ ok: boolean }>(`/auth/admin/invitations/${id}`, { method: "DELETE" }), onSuccess: refresh });
   const reset = useMutation({
@@ -133,15 +133,15 @@ function FamilyAccessCard({ invitations, users, loading, refresh }: { invitation
   const submit = (event: FormEvent) => { event.preventDefault(); setManualLink(null); setMessage(null); invite.mutate(); };
   return (
     <article className="panel security-card family-access-card">
-      <div className="security-card-heading"><div><span className="eyebrow">Family access</span><h3>Invite-only users</h3></div><span className="status-pill success">Admin</span></div>
-      <p>Only people you invite can create accounts. Every user's financial data remains owner-scoped.</p>
-      <form className="invite-form" onSubmit={submit}><label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="family@example.com" /></label><button className="button primary" type="submit" disabled={invite.isPending}>{invite.isPending ? "Inviting…" : "Invite user"}</button></form>
+      <div className="security-card-heading"><div><span className="eyebrow">Family access</span><h3>Private invite links</h3></div><span className="status-pill success">Admin</span></div>
+      <p>Create a one-time link and send it however you want. The person chooses their own email or Google account, then completes first-time setup before entering Budget.</p>
+      <form className="invite-form" onSubmit={submit}><label>Label <small>Optional — only you see this</small><input maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Mom, brother, guest…" /></label><button className="button primary" type="submit" disabled={invite.isPending}>{invite.isPending ? "Creating…" : "Create invite link"}</button></form>
       {invite.error instanceof ApiError && <div className="inline-alert" role="alert">{invite.error.message}</div>}
       {message && <div className="inline-alert success" role="status">{message}</div>}
       {manualLink && <div className="manual-link"><input readOnly value={manualLink} aria-label="Private account link" /><button className="button secondary" type="button" onClick={() => void navigator.clipboard?.writeText(manualLink)}>Copy</button></div>}
       {loading ? <LoadingState label="Loading family access" /> : <>
         <div className="family-users"><strong>Budget users</strong>{users.map((member) => <div className="family-user" key={member.id}><div><b>{member.username}</b><small>{member.email} · {member.google_connected ? "Google" : "Password"}{member.is_admin ? " · Admin" : ""}</small></div>{member.has_password && <button className="button ghost" type="button" disabled={reset.isPending} onClick={() => reset.mutate(member.id)}>Reset password</button>}</div>)}</div>
-        {invitations.length > 0 && <div className="pending-invites"><strong>Invitations</strong>{invitations.slice(0, 6).map((item) => <div className="family-user" key={item.id}><div><b>{item.email}</b><small>{item.status} · expires {dateTime(item.expires_at)}</small></div>{item.status === "pending" && <button className="button ghost" type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(item.id)}>Revoke</button>}</div>)}</div>}
+        {invitations.length > 0 && <div className="pending-invites"><strong>Invite links</strong>{invitations.slice(0, 8).map((item) => <div className="family-user" key={item.id}><div><b>{item.label || `Invite #${item.id}`}</b><small>{item.status} · expires {dateTime(item.expires_at)}</small></div>{item.status === "pending" && <button className="button ghost" type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(item.id)}>Revoke</button>}</div>)}</div>}
       </>}
     </article>
   );

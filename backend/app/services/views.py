@@ -27,6 +27,8 @@ def settings_view(settings: UserSettings) -> dict[str, object]:
         "advisor_share_planning_names": settings.advisor_share_planning_names,
         "advisor_include_descriptions": settings.advisor_include_descriptions,
         "advisor_store_history": settings.advisor_store_history,
+        "onboarding_complete": settings.onboarding_complete,
+        "onboarding_step": settings.onboarding_step,
     }
 
 

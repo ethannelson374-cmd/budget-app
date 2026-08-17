@@ -69,10 +69,12 @@ def test_identity_migration_preserves_existing_sqlite_user_children(tmp_path: Pa
 
         with engine.connect() as connection:
             row = connection.execute(
-                text("SELECT currency, timezone FROM user_settings WHERE user_id = 1")
+                text("SELECT currency, timezone, onboarding_complete, onboarding_step FROM user_settings WHERE user_id = 1")
             ).one()
             assert row.currency == "USD"
             assert row.timezone == "America/Chicago"
+            assert bool(row.onboarding_complete) is True
+            assert row.onboarding_step == 6
             assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
     finally:
         engine.dispose()

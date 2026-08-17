@@ -25,6 +25,8 @@ from app.schemas.api import (
     DashboardPreferencesView,
     DashboardView,
     OkView,
+    OnboardingProgressRequest,
+    OnboardingStatusView,
     SettingsPatch,
     TransactionCreate,
     TransactionIntelligencePatch,
@@ -105,6 +107,50 @@ def update_user_settings(
     )
     db.commit()
     return settings_view(current)
+
+
+@router.get("/onboarding", response_model=OnboardingStatusView)
+def get_onboarding_status(principal: Principal = Depends(require_principal)) -> dict[str, object]:
+    return {"complete": principal.user.settings.onboarding_complete, "step": principal.user.settings.onboarding_step}
+
+
+@router.patch("/onboarding", response_model=OnboardingStatusView)
+def save_onboarding_progress(
+    payload: OnboardingProgressRequest,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    current = principal.user.settings
+    if current.onboarding_complete:
+        return {"complete": True, "step": current.onboarding_step}
+    current.onboarding_step = max(current.onboarding_step, payload.step)
+    add_audit_event(
+        db, settings, action="onboarding.progress", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
+        detail=f"step:{current.onboarding_step}",
+    )
+    db.commit()
+    return {"complete": False, "step": current.onboarding_step}
+
+
+@router.post("/onboarding/complete", response_model=OnboardingStatusView)
+def complete_onboarding(
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    current = principal.user.settings
+    current.onboarding_complete = True
+    current.onboarding_step = 6
+    add_audit_event(
+        db, settings, action="onboarding.complete", outcome="success",
+        request_id=getattr(request.state, "request_id", None), user_id=principal.user.id, detail="first-run",
+    )
+    db.commit()
+    return {"complete": True, "step": 6}
 
 
 def _category_view(category: Category) -> dict[str, object]:

@@ -15,8 +15,7 @@ const googleErrors: Record<string, string> = {
   google_cancelled: "Google sign-in was cancelled.",
   google_provider_error: "Google sign-in could not be completed. Try again.",
   google_link_required: "A Budget account already uses that email. Sign in with your password, then connect Google from Settings.",
-  invitation_required: "Budget is invite-only. Ask the account owner for an invitation.",
-  invitation_email_mismatch: "Use the Google account that received the Budget invitation.",
+  invitation_required: "Budget is private. Ask the account owner for a fresh invite link.",
   google_state_invalid: "That Google sign-in request expired. Start again.",
   google_nonce_invalid: "Budget could not verify that Google sign-in response. Start again.",
 };
@@ -122,7 +121,7 @@ export function LoginPage({ setupStatus }: { setupStatus: SetupStatus }) {
             )}
             <button className="button primary wide" type="submit" disabled={busy || demoBusy}>{busy ? "Signing in…" : <>{challengeToken ? "Verify and sign in" : "Sign in"} <Icon name="arrow-right" /></>}</button>
           </form>
-          {!challengeToken && setupStatus.invite_only && <small className="auth-private-note">Budget is invite-only. New family members need an invitation from an administrator.</small>}
+          {!challengeToken && setupStatus.invite_only && <small className="auth-private-note">Budget is private. New family members need a one-time invite link from an administrator.</small>}
           {!challengeToken && setupStatus.demo_mode && <div className="demo-login"><span>or explore without an account</span><button className="button secondary wide" type="button" disabled={busy || demoBusy} onClick={() => void enterDemo()}>{demoBusy ? "Opening demo…" : "Explore the demo"}</button><small>Demo data resets to a sample household.</small></div>}
         </section>
       </div>

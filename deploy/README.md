@@ -904,3 +904,33 @@ sudo systemd-run --wait --collect --pipe \
 The command never prints secret values or raw MySQL grants. `ready: false` is a release blocker. `warn` findings are operator-visible hardening opportunities; notably, `DB_SSL_MODE=REQUIRED` encrypts HeatWave traffic but does not authenticate the database certificate identity. Do not switch to `VERIFY_CA`/`VERIFY_IDENTITY` until the matching OCI CA material and hostname have been validated on the E2.
 
 The Phase 5A Nginx template also changes the HTTPS `client_max_body_size` from 1 MB to 5 MB so the JSON-wrapped application-level 2 MB Stage 7 CSV limit is actually reachable, while adding short header/body/keepalive timeouts and edge rate limits for sensitive unauthenticated identity endpoints. Validate the updated Nginx configuration with `sudo nginx -t` before reload during the final Phase 5 release.
+
+## Phase 5G invite links and first-run onboarding
+
+Phase 5G adds migration `20260817_0022`. The migration adds resumable onboarding progress and converts invitation records from email-required invitations to generic one-use link invitations. Existing users are explicitly marked `onboarding_complete=true` at the final step so the deployment does not redirect established accounts into first-run setup. No new daemon, timer, provider credential, inbound port, or frontend dependency is introduced.
+
+Before production deployment, create and verify a fresh database backup. Pull the completed Phase 5G release, then migrate through the protected production environment:
+
+```bash
+sudo systemd-run --wait --collect --pipe \
+  --unit=budget-phase5g-migrate-$(date +%s) \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic upgrade head
+
+sudo systemd-run --wait --collect --pipe \
+  --unit=budget-phase5g-schema-$(date +%s) \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic current
+```
+
+Expected head is `20260817_0022`. Restart `budget-api` and verify internal `/api/health` and `/api/ready`. Reinstall the production Nginx site configuration carefully (preserving the real `budget.od3ssa.com` hostname/certificate paths) because Phase 5G adds the invitation-token exchange endpoint to the existing sensitive-auth rate-limit zone; run `sudo nginx -t` before reload.
+
+Build the final frontend off-host on Windows and publish `frontend/dist` through the established verified temp-upload/rollback/`rsync --delete` procedure. Smoke-test: create a generic invite link, revoke an unused link, open a fresh link in an InPrivate/incognito browser, confirm the raw token disappears from the URL after exchange, register locally and with Google, confirm `/dashboard` redirects an incomplete new user back to `/onboarding`, exercise Skip/Continue through Plaid/budget/goal/privacy setup, finish onboarding, then sign out/in and verify the wizard does not return. Confirm an existing pre-5G user still lands normally without onboarding.
