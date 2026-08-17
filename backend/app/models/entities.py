@@ -871,6 +871,40 @@ class FinancialSnapshot(TimestampMixin, Base):
     projected_90_day: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     planned_debt_free_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+class AccountBalanceSnapshot(TimestampMixin, Base):
+    __tablename__ = "account_balance_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "account_id", "snapshot_date",
+            name="uq_account_balance_snapshot_user_account_date",
+        ),
+        Index(
+            "ix_account_balance_snapshots_user_date",
+            "user_id", "snapshot_date",
+        ),
+        Index(
+            "ix_account_balance_snapshots_user_account_date",
+            "user_id", "account_id", "snapshot_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    account_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    institution_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    account_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    account_subtype: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    balance: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    available_balance: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    credit_limit: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+
+
 class SavedReport(TimestampMixin, Base):
     __tablename__ = "saved_reports"
     __table_args__ = (

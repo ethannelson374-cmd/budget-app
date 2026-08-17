@@ -595,6 +595,278 @@ class DashboardView(ViewModel):
     excluded_currencies: list[str]
 
 
+CashFlowRange = Literal["month", "year", "custom"]
+CashFlowNodeKind = Literal["income_source", "refund", "shortfall", "hub", "expense", "debt", "savings"]
+CashFlowLinkKind = Literal["income", "refund", "shortfall", "expense", "debt", "savings"]
+
+
+class CashFlowTransactionFiltersView(ViewModel):
+    kind: TransactionKind | None = None
+    category_id: int | None = None
+    search: str | None = None
+
+
+class CashFlowPeriodView(ViewModel):
+    range: CashFlowRange
+    label: str
+    start: date
+    end: date
+    previous_start: date
+    previous_end: date
+
+
+class CashFlowSummaryView(ViewModel):
+    income: str
+    refunds: str
+    inflow: str
+    spending: str
+    net_cash_flow: str
+    savings_rate: str | None
+    transaction_count: int
+    excluded_transfer_count: int
+
+
+class CashFlowNodeView(ViewModel):
+    id: str
+    label: str
+    kind: CashFlowNodeKind
+    amount: str
+    transaction_count: int
+    previous_amount: str
+    change_percent: str | None
+    category_id: int | None
+    filters: CashFlowTransactionFiltersView | None
+
+
+class CashFlowLinkView(ViewModel):
+    id: str
+    source: str
+    target: str
+    label: str
+    kind: CashFlowLinkKind
+    amount: str
+    transaction_count: int
+    share_percent: str | None
+    filters: CashFlowTransactionFiltersView | None
+
+
+class CashFlowSankeyView(ViewModel):
+    period: CashFlowPeriodView
+    currency: str
+    summary: CashFlowSummaryView
+    nodes: list[CashFlowNodeView]
+    links: list[CashFlowLinkView]
+
+
+TrendRange = Literal["30d", "3m", "6m", "ytd", "1y", "all"]
+TrendBucket = Literal["day", "month"]
+TrendCompositionKind = Literal["asset", "liability"]
+
+
+class TrendsPeriodView(ViewModel):
+    range: TrendRange
+    label: str
+    start: date
+    end: date
+    previous_start: date
+    previous_end: date
+    bucket: TrendBucket
+
+
+class TrendsSummaryView(ViewModel):
+    net_worth: str
+    assets: str
+    liabilities: str
+    cash_available: str
+    change_amount: str
+    change_percent: str | None
+    ytd_change_amount: str
+    ytd_change_percent: str | None
+    average_monthly_income: str
+    income_variability_percent: str | None
+
+
+class NetWorthTrendPointView(ViewModel):
+    date: date
+    net_worth: str
+    cash_available: str
+    total_debt: str
+    assets: str | None
+    liabilities: str | None
+
+
+class BalanceTrendPointView(ViewModel):
+    date: date
+    assets: str
+    liabilities: str
+    net_worth: str
+
+
+class TrendCompositionView(ViewModel):
+    key: str
+    label: str
+    kind: TrendCompositionKind
+    value: str
+    share_percent: str | None
+    account_count: int
+
+
+class AccountContributionView(ViewModel):
+    account_id: int
+    name: str
+    institution: str | None
+    account_type: str
+    current_balance: str
+    start_balance: str | None
+    change_amount: str | None
+    change_percent: str | None
+    history_available: bool
+    history_start_date: date | None
+
+
+class TrendCashFlowPointView(ViewModel):
+    period: str
+    income: str
+    spending: str
+    net_cash_flow: str
+    savings_rate: str | None
+
+
+class TrendSpendingCategoryView(ViewModel):
+    key: str
+    label: str
+    category_id: int | None
+    current: str
+    previous: str
+    change_amount: str
+    change_percent: str | None
+    share_percent: str | None
+
+
+class TrendIncomeSourceView(ViewModel):
+    label: str
+    current: str
+    previous: str
+    change_amount: str
+    change_percent: str | None
+    share_percent: str | None
+
+
+class TrendHistoryStatusView(ViewModel):
+    financial_snapshot_start: date | None
+    account_snapshot_start: date | None
+    account_snapshot_days: int
+    account_tracking_active: bool
+
+
+class TrendsView(ViewModel):
+    generated_at: datetime
+    currency: str
+    period: TrendsPeriodView
+    summary: TrendsSummaryView
+    net_worth_history: list[NetWorthTrendPointView]
+    balance_history: list[BalanceTrendPointView]
+    composition: list[TrendCompositionView]
+    account_contributions: list[AccountContributionView]
+    cash_flow: list[TrendCashFlowPointView]
+    spending_categories: list[TrendSpendingCategoryView]
+    income_sources: list[TrendIncomeSourceView]
+    history: TrendHistoryStatusView
+
+
+CalendarEventKind = Literal["income", "expense", "subscription", "debt", "savings", "refund"]
+CalendarEventStatus = Literal["observed", "pending", "expected", "planned"]
+CalendarProjectionStatus = Literal["healthy", "attention", "low_cash", "historical"]
+
+
+class FinancialCalendarPeriodView(ViewModel):
+    month: str
+    start: date
+    end: date
+    today: date
+    label: str
+    projection_available: bool
+    projection_start: date | None
+
+
+class FinancialCalendarSummaryView(ViewModel):
+    cash_available_now: str
+    projected_month_start: str | None
+    expected_inflow: str
+    expected_outflow: str
+    projected_month_end: str | None
+    lowest_projected_balance: str | None
+    lowest_balance_date: date | None
+    reserve_balance: str
+    status: CalendarProjectionStatus
+    observed_events: int
+    expected_events: int
+
+
+class FinancialCalendarRecurringView(ViewModel):
+    detected_streams: int
+    monthly_inflow_estimate: str
+    monthly_outflow_estimate: str
+
+
+class FinancialCalendarAccountView(ViewModel):
+    id: int
+    name: str
+    currency: str
+
+
+class FinancialCalendarCategoryView(ViewModel):
+    id: int
+    key: str
+    name: str
+
+
+class FinancialCalendarFiltersView(ViewModel):
+    start_date: date | None
+    end_date: date | None
+    account_id: int | None
+    category_id: int | None
+    kind: TransactionKind | None
+    search: str | None
+
+
+class FinancialCalendarEventView(ViewModel):
+    id: str
+    date: date
+    name: str
+    kind: CalendarEventKind
+    status: CalendarEventStatus
+    amount: str
+    impact: str
+    cadence: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"] | None
+    price_change_pct: str | None
+    stream_id: int | None
+    transaction_id: int | None
+    account: FinancialCalendarAccountView | None
+    category: FinancialCalendarCategoryView | None
+    source_detail: str
+    filters: FinancialCalendarFiltersView
+    ask_prompt: str
+
+
+class FinancialCalendarProjectionPointView(ViewModel):
+    date: date
+    balance: str
+    delta: str
+    event_count: int
+    below_reserve: bool
+
+
+class FinancialCalendarView(ViewModel):
+    generated_at: datetime
+    currency: str
+    period: FinancialCalendarPeriodView
+    summary: FinancialCalendarSummaryView
+    recurring: FinancialCalendarRecurringView
+    events: list[FinancialCalendarEventView]
+    projection: list[FinancialCalendarProjectionPointView]
+
+
 class TransactionIntelligencePatch(StrictModel):
     category_id: Annotated[int, Field(gt=0)] | None = None
     display_merchant: Annotated[str, Field(max_length=160)] | None = None
@@ -1508,7 +1780,7 @@ DashboardCardId = Literal[
     "cash_flow", "top_spending", "ask_budget", "budget", "insights", "recent_transactions",
     "accounts", "data_freshness",
 ]
-DashboardCardSize = Literal["small", "medium", "wide", "large"]
+DashboardCardSize = Literal["compact", "standard", "hero"]
 DashboardPreset = Literal["everyday", "minimal", "planning", "analytics", "custom"]
 
 

@@ -1,6 +1,7 @@
 from app.models.base import Base
 from app.models.entities import (
     Account,
+    AccountBalanceSnapshot,
     AnnualBudgetCategory,
     AnnualBudgetMonthAllocation,
     AnnualBudgetPlan,
@@ -46,6 +47,7 @@ from app.models.entities import (
 
 __all__ = [
     "Account",
+    "AccountBalanceSnapshot",
     "AnnualBudgetCategory",
     "AnnualBudgetMonthAllocation",
     "AnnualBudgetPlan",

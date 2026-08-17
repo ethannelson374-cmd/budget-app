@@ -18,21 +18,34 @@ from app.models import (
 from app.models.base import utc_now
 
 CARD_DEFAULTS: tuple[dict[str, object], ...] = (
-    {"id": "net_worth", "size": "small", "visible": True},
-    {"id": "cash_available", "size": "small", "visible": True},
-    {"id": "income", "size": "small", "visible": True},
-    {"id": "spending", "size": "small", "visible": True},
-    {"id": "net_cash_flow", "size": "small", "visible": True},
-    {"id": "savings_rate", "size": "small", "visible": True},
-    {"id": "cash_flow", "size": "wide", "visible": True},
-    {"id": "top_spending", "size": "medium", "visible": True},
-    {"id": "ask_budget", "size": "wide", "visible": True},
-    {"id": "budget", "size": "large", "visible": True},
-    {"id": "insights", "size": "large", "visible": True},
-    {"id": "recent_transactions", "size": "large", "visible": True},
-    {"id": "accounts", "size": "large", "visible": True},
-    {"id": "data_freshness", "size": "medium", "visible": True},
+    {"id": "net_worth", "size": "compact", "visible": True},
+    {"id": "cash_available", "size": "compact", "visible": True},
+    {"id": "income", "size": "compact", "visible": True},
+    {"id": "spending", "size": "compact", "visible": True},
+    {"id": "net_cash_flow", "size": "compact", "visible": True},
+    {"id": "savings_rate", "size": "compact", "visible": True},
+    {"id": "cash_flow", "size": "hero", "visible": True},
+    {"id": "top_spending", "size": "standard", "visible": True},
+    {"id": "ask_budget", "size": "hero", "visible": True},
+    {"id": "budget", "size": "standard", "visible": True},
+    {"id": "insights", "size": "hero", "visible": True},
+    {"id": "recent_transactions", "size": "hero", "visible": True},
+    {"id": "accounts", "size": "standard", "visible": True},
+    {"id": "data_freshness", "size": "compact", "visible": True},
 )
+
+# Phase 5B collapses the old four-width dashboard model into three deliberate
+# snap sizes. Existing Phase 4 preferences are translated on read so this is a
+# presentation upgrade rather than a destructive data migration.
+LEGACY_SIZE_MAP = {
+    "small": "compact",
+    "medium": "standard",
+    "wide": "hero",
+    "large": "hero",
+    "compact": "compact",
+    "standard": "standard",
+    "hero": "hero",
+}
 
 
 def _normalized_cards(raw: object) -> list[dict[str, object]]:
@@ -45,9 +58,8 @@ def _normalized_cards(raw: object) -> list[dict[str, object]]:
             card_id = str(item.get("id") or "")
             if card_id not in defaults or card_id in order:
                 continue
-            size = str(item.get("size") or defaults[card_id]["size"])
-            if size not in {"small", "medium", "wide", "large"}:
-                size = str(defaults[card_id]["size"])
+            requested_size = str(item.get("size") or defaults[card_id]["size"])
+            size = LEGACY_SIZE_MAP.get(requested_size, str(defaults[card_id]["size"]))
             defaults[card_id] = {
                 "id": card_id,
                 "size": size,

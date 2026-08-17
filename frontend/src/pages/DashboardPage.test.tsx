@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { AdvisorStatus, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView } from "../api/types";
+import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView, TrendsView } from "../api/types";
 import { ToastProvider } from "../toast/ToastContext";
 import { DashboardPage } from "./DashboardPage";
 
@@ -73,11 +73,46 @@ const budget: MonthlyBudgetView = {
 
 
 const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismissed_at: null, cards: [
-  { id: "net_worth", size: "small", visible: true }, { id: "cash_available", size: "small", visible: true }, { id: "income", size: "small", visible: true }, { id: "spending", size: "small", visible: true }, { id: "net_cash_flow", size: "small", visible: true }, { id: "savings_rate", size: "small", visible: true },
-  { id: "cash_flow", size: "wide", visible: true }, { id: "top_spending", size: "medium", visible: true }, { id: "ask_budget", size: "wide", visible: true }, { id: "budget", size: "large", visible: true }, { id: "insights", size: "large", visible: true }, { id: "recent_transactions", size: "large", visible: true }, { id: "accounts", size: "large", visible: true }, { id: "data_freshness", size: "medium", visible: true }
+  { id: "net_worth", size: "compact", visible: true }, { id: "cash_available", size: "compact", visible: true }, { id: "income", size: "compact", visible: true }, { id: "spending", size: "compact", visible: true }, { id: "net_cash_flow", size: "compact", visible: true }, { id: "savings_rate", size: "compact", visible: true },
+  { id: "cash_flow", size: "hero", visible: true }, { id: "top_spending", size: "standard", visible: true }, { id: "ask_budget", size: "hero", visible: true }, { id: "budget", size: "standard", visible: true }, { id: "insights", size: "hero", visible: true }, { id: "recent_transactions", size: "hero", visible: true }, { id: "accounts", size: "standard", visible: true }, { id: "data_freshness", size: "compact", visible: true }
 ] };
 const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
 const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
+
+
+const trends: TrendsView = {
+  generated_at: "2026-08-16T12:00:00Z",
+  currency: "USD",
+  period: { range: "3m", label: "Last 3 months", start: "2026-06-01", end: "2026-08-16", previous_start: "2026-03-17", previous_end: "2026-05-31", bucket: "month" },
+  summary: { net_worth: "12500.0000", assets: "14000.0000", liabilities: "1500.0000", cash_available: "5000.0000", change_amount: "500.0000", change_percent: "4.1667", ytd_change_amount: "1200.0000", ytd_change_percent: "10.6195", average_monthly_income: "4000.0000", income_variability_percent: "2.0000" },
+  net_worth_history: [
+    { date: "2026-06-01", net_worth: "12000.0000", cash_available: "4500.0000", total_debt: "1800.0000", assets: null, liabilities: null },
+    { date: "2026-07-01", net_worth: "12250.0000", cash_available: "4700.0000", total_debt: "1650.0000", assets: null, liabilities: null },
+    { date: "2026-08-16", net_worth: "12500.0000", cash_available: "5000.0000", total_debt: "1500.0000", assets: "14000.0000", liabilities: "1500.0000" },
+  ],
+  balance_history: [{ date: "2026-08-16", assets: "14000.0000", liabilities: "1500.0000", net_worth: "12500.0000" }],
+  composition: [], account_contributions: [], cash_flow: [], spending_categories: [], income_sources: [],
+  history: { financial_snapshot_start: "2026-06-01", account_snapshot_start: "2026-08-16", account_snapshot_days: 1, account_tracking_active: true },
+};
+
+const cashFlow: CashFlowSankeyData = {
+  period: { range: "month", label: "August 2026", start: "2026-08-01", end: "2026-08-31", previous_start: "2026-07-01", previous_end: "2026-07-31" },
+  currency: "USD",
+  summary: { income: "4000.0000", refunds: "0.0000", inflow: "4000.0000", spending: "2500.0000", net_cash_flow: "1500.0000", savings_rate: "37.5000", transaction_count: 6, excluded_transfer_count: 1 },
+  nodes: [
+    { id: "income:0", label: "Employer", kind: "income_source", amount: "4000.0000", transaction_count: 2, previous_amount: "3900.0000", change_percent: "2.5641", category_id: null, filters: { kind: "income", category_id: null, search: "Employer" } },
+    { id: "cash-in", label: "Available cash", kind: "hub", amount: "4000.0000", transaction_count: 6, previous_amount: "3900.0000", change_percent: "2.5641", category_id: null, filters: null },
+    { id: "category:housing", label: "Housing", kind: "expense", amount: "2000.0000", transaction_count: 1, previous_amount: "1900.0000", change_percent: "5.2632", category_id: 2, filters: { kind: "expense", category_id: 2, search: null } },
+    { id: "retained-cash", label: "Retained cash", kind: "savings", amount: "1500.0000", transaction_count: 0, previous_amount: "1400.0000", change_percent: "7.1429", category_id: null, filters: null },
+    { id: "category:groceries", label: "Groceries", kind: "expense", amount: "500.0000", transaction_count: 3, previous_amount: "600.0000", change_percent: "-16.6667", category_id: 3, filters: { kind: "expense", category_id: 3, search: null } },
+  ],
+  links: [
+    { id: "income:0->cash-in", source: "income:0", target: "cash-in", label: "Employer", kind: "income", amount: "4000.0000", transaction_count: 2, share_percent: null, filters: { kind: "income", category_id: null, search: "Employer" } },
+    { id: "cash-in->category:housing", source: "cash-in", target: "category:housing", label: "Housing", kind: "expense", amount: "2000.0000", transaction_count: 1, share_percent: "50.0000", filters: { kind: "expense", category_id: 2, search: null } },
+    { id: "cash-in->retained-cash", source: "cash-in", target: "retained-cash", label: "Retained cash", kind: "savings", amount: "1500.0000", transaction_count: 0, share_percent: "37.5000", filters: null },
+    { id: "cash-in->category:groceries", source: "cash-in", target: "category:groceries", label: "Groceries", kind: "expense", amount: "500.0000", transaction_count: 3, share_percent: "12.5000", filters: { kind: "expense", category_id: 3, search: null } },
+  ],
+};
 
 describe("DashboardPage", () => {
   beforeEach(() => {
@@ -87,6 +122,8 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
+      if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       return Promise.resolve(dashboard as never);
     });
   });
@@ -99,9 +136,10 @@ describe("DashboardPage", () => {
     renderDashboard();
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
     expect(screen.getByText(/Excluded: CAD/)).toBeInTheDocument();
-    expect(screen.getByText("No cash flow activity in this period.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Cash flow map" })).toBeInTheDocument();
+    expect(screen.getByText("Available cash")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "No transactions yet" })).toBeInTheDocument();
-    expect(screen.getByText("37.5%")).toBeInTheDocument();
+    expect(screen.getAllByText("37.5%").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Open budget/ })).toBeInTheDocument();
     expect(screen.getByText("$4,400.00")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Restaurants spending is over budget" })).toBeInTheDocument();
@@ -116,6 +154,8 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
+      if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       dashboardCalls += 1;
       return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
     });
@@ -124,4 +164,27 @@ describe("DashboardPage", () => {
     await user.click(retry);
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
   });
+  it("renders the Sankey flow inspector and transaction drill-down", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    const housingFlow = await screen.findByRole("button", { name: /Housing: \$2,000/ });
+    await user.click(housingFlow);
+    const drillDown = await screen.findByRole("link", { name: "View transactions" });
+    expect(drillDown.getAttribute("href")).toContain("category_id=2");
+    expect(drillDown.getAttribute("href")).toContain("start_date=2026-08-01");
+  });
+
+  it("uses three snap sizes with a keyboard-accessible drag-resize grip", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await screen.findByText(/12,500/);
+    await user.click(screen.getByRole("button", { name: "Customize" }));
+    const grip = screen.getByRole("slider", { name: "Resize Net worth" });
+    expect(grip).toHaveAttribute("aria-valuetext", "compact");
+    grip.focus();
+    await user.keyboard("{End}");
+    expect(grip).toHaveAttribute("aria-valuetext", "hero");
+    expect(grip.closest('[data-card-id="net_worth"]')).toHaveAttribute("data-card-size", "hero");
+  });
+
 });

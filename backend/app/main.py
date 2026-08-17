@@ -21,6 +21,7 @@ from app.api.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.database import Database
 from app.core.errors import ApiError
+from app.core.http_security import apply_api_security_headers, validate_request_metadata
 from app.schemas.api import StatusView
 from app.services.operations import schema_versions
 from app.services.setup import ensure_installation_state, installation_initialized
@@ -173,8 +174,22 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
                 content=error_body(request, "invalid_host", "The request host is not allowed"),
             )
         else:
-            response = await call_next(request)
+            try:
+                validate_request_metadata(
+                    request,
+                    max_request_bytes=resolved_settings.security_max_request_bytes,
+                    production=resolved_settings.is_production,
+                )
+                response = await call_next(request)
+            except ApiError as exc:
+                response = JSONResponse(
+                    status_code=exc.status_code,
+                    content=error_body(request, exc.code, exc.message),
+                    headers=exc.headers,
+                )
         response.headers["X-Request-ID"] = request_id
+        if request.url.path.startswith("/api"):
+            apply_api_security_headers(response)
         route_path = getattr(request.scope.get("route"), "path", None)
         if not isinstance(route_path, str):
             route_path = "unmatched"

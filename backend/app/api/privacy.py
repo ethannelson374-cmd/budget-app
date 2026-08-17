@@ -20,10 +20,22 @@ router = APIRouter(prefix="/privacy", tags=["privacy and data portability"])
 
 @router.get("/export")
 def export_data(
+    request: Request,
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
 ) -> Response:
     payload = bundle_json(export_user_bundle(db, principal.user))
+    add_audit_event(
+        db,
+        settings,
+        action="privacy.export.all",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail="json",
+    )
+    db.commit()
     return Response(
         content=payload,
         media_type="application/json",
@@ -33,11 +45,24 @@ def export_data(
 
 @router.get("/transactions.csv")
 def export_csv(
+    request: Request,
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
 ) -> Response:
+    content = export_transactions_csv(db, principal.user)
+    add_audit_event(
+        db,
+        settings,
+        action="privacy.export.transactions",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail="csv",
+    )
+    db.commit()
     return Response(
-        content=export_transactions_csv(db, principal.user),
+        content=content,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="budget-transactions.csv"'},
     )

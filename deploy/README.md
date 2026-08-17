@@ -885,3 +885,22 @@ After deployment, open **Settings → Reliability & backups → System health** 
 Stage 7 adds migration `20260815_0020`, which introduces the `advisor_share_planning_names` user preference. Apply it with the same protected Alembic `systemd-run` workflow used by the earlier Phase 4 migrations, then restart `budget-api` and publish the Windows-built Vite `frontend/dist` through the established Nginx static deployment path.
 
 No new daemon or timer is introduced. Data exports are generated on demand and intentionally omit password hashes, session/CSRF material, TOTP/recovery secrets, OAuth state, Plaid access-token ciphertext/nonces, and transaction cursors. CSV imports are capped at 2 MB / 5,000 rows and are accepted only for manual accounts.
+
+## Phase 5A security gate
+
+Phase 5A is intended to be validated locally with the rest of Phase 5 and deployed only in the final coordinated Phase 5 release unless a material vulnerability is discovered. Before that release, run the security audit through the protected production environment:
+
+```bash
+sudo systemd-run --wait --collect --pipe \
+  --unit=budget-phase5-security-audit \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/python -m app.cli security-audit
+```
+
+The command never prints secret values or raw MySQL grants. `ready: false` is a release blocker. `warn` findings are operator-visible hardening opportunities; notably, `DB_SSL_MODE=REQUIRED` encrypts HeatWave traffic but does not authenticate the database certificate identity. Do not switch to `VERIFY_CA`/`VERIFY_IDENTITY` until the matching OCI CA material and hostname have been validated on the E2.
+
+The Phase 5A Nginx template also changes the HTTPS `client_max_body_size` from 1 MB to 5 MB so the JSON-wrapped application-level 2 MB Stage 7 CSV limit is actually reachable, while adding short header/body/keepalive timeouts and edge rate limits for sensitive unauthenticated identity endpoints. Validate the updated Nginx configuration with `sudo nginx -t` before reload during the final Phase 5 release.

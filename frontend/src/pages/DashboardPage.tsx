@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ApiError, apiEventStream, apiRequest } from "../api/client";
@@ -16,8 +16,9 @@ import type {
   DashboardPreset,
   InsightsResponse,
   MonthlyBudgetView,
+  TrendsView,
 } from "../api/types";
-import { CashFlowChart } from "../components/CashFlowChart";
+import { CashFlowSankeyWidget } from "../components/CashFlowSankey";
 import { CategoryBars } from "../components/CategoryBars";
 import { InsightCard } from "../components/InsightCard";
 import { PageHeader } from "../components/PageHeader";
@@ -33,21 +34,23 @@ function shiftMonth(month: string, delta: number): string {
 }
 
 const DEFAULT_CARDS: DashboardCardPreference[] = [
-  { id: "net_worth", size: "small", visible: true },
-  { id: "cash_available", size: "small", visible: true },
-  { id: "income", size: "small", visible: true },
-  { id: "spending", size: "small", visible: true },
-  { id: "net_cash_flow", size: "small", visible: true },
-  { id: "savings_rate", size: "small", visible: true },
-  { id: "cash_flow", size: "wide", visible: true },
-  { id: "top_spending", size: "medium", visible: true },
-  { id: "ask_budget", size: "wide", visible: true },
-  { id: "budget", size: "large", visible: true },
-  { id: "insights", size: "large", visible: true },
-  { id: "recent_transactions", size: "large", visible: true },
-  { id: "accounts", size: "large", visible: true },
-  { id: "data_freshness", size: "medium", visible: true },
+  { id: "net_worth", size: "compact", visible: true },
+  { id: "cash_available", size: "compact", visible: true },
+  { id: "income", size: "compact", visible: true },
+  { id: "spending", size: "compact", visible: true },
+  { id: "net_cash_flow", size: "compact", visible: true },
+  { id: "savings_rate", size: "compact", visible: true },
+  { id: "cash_flow", size: "hero", visible: true },
+  { id: "top_spending", size: "standard", visible: true },
+  { id: "ask_budget", size: "hero", visible: true },
+  { id: "budget", size: "standard", visible: true },
+  { id: "insights", size: "hero", visible: true },
+  { id: "recent_transactions", size: "hero", visible: true },
+  { id: "accounts", size: "standard", visible: true },
+  { id: "data_freshness", size: "compact", visible: true },
 ];
+
+const CARD_SIZES: DashboardCardSize[] = ["compact", "standard", "hero"];
 
 const CARD_LABELS: Record<DashboardCardId, string> = {
   net_worth: "Net worth",
@@ -66,52 +69,35 @@ const CARD_LABELS: Record<DashboardCardId, string> = {
   data_freshness: "Data freshness",
 };
 
-const ALLOWED_SIZES: Record<DashboardCardId, DashboardCardSize[]> = {
-  net_worth: ["small", "medium"],
-  cash_available: ["small", "medium"],
-  income: ["small", "medium"],
-  spending: ["small", "medium"],
-  net_cash_flow: ["small", "medium"],
-  savings_rate: ["small", "medium"],
-  cash_flow: ["medium", "wide", "large"],
-  top_spending: ["medium", "wide"],
-  ask_budget: ["medium", "wide", "large"],
-  budget: ["medium", "wide", "large"],
-  insights: ["medium", "wide", "large"],
-  recent_transactions: ["medium", "wide", "large"],
-  accounts: ["medium", "wide", "large"],
-  data_freshness: ["small", "medium", "wide"],
-};
-
 const PRESETS: Record<Exclude<DashboardPreset, "custom">, Partial<Record<DashboardCardId, DashboardCardSize>>> = {
   everyday: Object.fromEntries(DEFAULT_CARDS.map((card) => [card.id, card.size])) as Record<DashboardCardId, DashboardCardSize>,
   minimal: {
-    net_worth: "small",
-    cash_available: "small",
-    net_cash_flow: "small",
-    ask_budget: "wide",
-    recent_transactions: "large",
-    data_freshness: "medium",
+    net_worth: "compact",
+    cash_available: "compact",
+    net_cash_flow: "compact",
+    ask_budget: "standard",
+    recent_transactions: "hero",
+    data_freshness: "compact",
   },
   planning: {
-    cash_available: "small",
-    net_cash_flow: "small",
-    budget: "large",
-    insights: "wide",
-    ask_budget: "wide",
-    accounts: "medium",
-    data_freshness: "medium",
+    cash_available: "compact",
+    net_cash_flow: "compact",
+    budget: "hero",
+    insights: "standard",
+    ask_budget: "standard",
+    accounts: "standard",
+    data_freshness: "compact",
   },
   analytics: {
-    net_worth: "small",
-    income: "small",
-    spending: "small",
-    savings_rate: "small",
-    cash_flow: "wide",
-    top_spending: "medium",
-    budget: "large",
-    insights: "wide",
-    ask_budget: "medium",
+    net_worth: "compact",
+    income: "compact",
+    spending: "compact",
+    savings_rate: "compact",
+    cash_flow: "hero",
+    top_spending: "standard",
+    budget: "standard",
+    insights: "hero",
+    ask_budget: "standard",
   },
 };
 
@@ -282,15 +268,133 @@ function WidgetShell({ card, customizing, onDragStart, onDrop, onMove, onResize,
   onDragStart: (id: DashboardCardId) => void;
   onDrop: (id: DashboardCardId) => void;
   onMove: (id: DashboardCardId, delta: number) => void;
-  onResize: (id: DashboardCardId) => void;
+  onResize: (id: DashboardCardId, size: DashboardCardSize) => void;
   onHide: (id: DashboardCardId) => void;
   children: ReactNode;
 }) {
+  const [resizing, setResizing] = useState(false);
+  const resizeStart = useRef<{ x: number; index: number } | null>(null);
+  const currentIndex = CARD_SIZES.indexOf(card.size);
+
+  const resizeTo = (index: number) => {
+    const next = CARD_SIZES[Math.max(0, Math.min(CARD_SIZES.length - 1, index))];
+    if (next !== card.size) onResize(card.id, next);
+  };
+
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!customizing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeStart.current = { x: event.clientX, index: currentIndex };
+    setResizing(true);
+  };
+
+  const moveResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!customizing || !resizeStart.current) return;
+    const delta = event.clientX - resizeStart.current.x;
+    const steps = delta >= 150 ? 2 : delta >= 58 ? 1 : delta <= -150 ? -2 : delta <= -58 ? -1 : 0;
+    resizeTo(resizeStart.current.index + steps);
+  };
+
+  const finishResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!resizeStart.current) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    resizeStart.current = null;
+    setResizing(false);
+  };
+
   return (
-    <div className={`dashboard-widget size-${card.size}${customizing ? " customizing" : ""}`} data-card-id={card.id} draggable={customizing} onDragStart={(event: DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = "move"; onDragStart(card.id); }} onDragOver={(event) => { if (customizing) event.preventDefault(); }} onDrop={(event) => { event.preventDefault(); onDrop(card.id); }}>
-      {customizing && <div className="dashboard-widget-tools"><span className="drag-handle" title="Drag to move">⋮⋮</span><strong>{CARD_LABELS[card.id]}</strong><div><button type="button" title="Move earlier" aria-label={`Move ${CARD_LABELS[card.id]} earlier`} onClick={() => onMove(card.id, -1)}>↑</button><button type="button" title="Move later" aria-label={`Move ${CARD_LABELS[card.id]} later`} onClick={() => onMove(card.id, 1)}>↓</button><button type="button" title="Resize card" aria-label={`Resize ${CARD_LABELS[card.id]}`} onClick={() => onResize(card.id)}>↔</button><button type="button" title="Hide card" aria-label={`Hide ${CARD_LABELS[card.id]}`} onClick={() => onHide(card.id)}>×</button></div></div>}
+    <div
+      className={`dashboard-widget size-${card.size}${customizing ? " customizing" : ""}${resizing ? " resizing" : ""}`}
+      data-card-id={card.id}
+      data-card-size={card.size}
+      draggable={customizing && !resizing}
+      onDragStart={(event: DragEvent<HTMLDivElement>) => {
+        if (resizing) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart(card.id);
+      }}
+      onDragOver={(event) => { if (customizing) event.preventDefault(); }}
+      onDrop={(event) => { event.preventDefault(); onDrop(card.id); }}
+    >
+      {customizing && (
+        <div className="dashboard-widget-tools">
+          <span className="drag-handle" title="Drag card to reorder" aria-hidden="true">⠿</span>
+          <strong>{CARD_LABELS[card.id]}</strong>
+          <span className="dashboard-size-readout">{card.size}</span>
+          <div>
+            <button type="button" title="Move earlier" aria-label={`Move ${CARD_LABELS[card.id]} earlier`} onClick={() => onMove(card.id, -1)}>↑</button>
+            <button type="button" title="Move later" aria-label={`Move ${CARD_LABELS[card.id]} later`} onClick={() => onMove(card.id, 1)}>↓</button>
+            <button type="button" title="Hide card" aria-label={`Hide ${CARD_LABELS[card.id]}`} onClick={() => onHide(card.id)}>×</button>
+          </div>
+        </div>
+      )}
       <div className="dashboard-widget-body">{children}</div>
+      {customizing && (
+        <div
+          className="dashboard-resize-handle"
+          role="slider"
+          tabIndex={0}
+          aria-label={`Resize ${CARD_LABELS[card.id]}`}
+          aria-valuemin={0}
+          aria-valuemax={2}
+          aria-valuenow={currentIndex}
+          aria-valuetext={card.size}
+          title="Drag horizontally to resize"
+          onPointerDown={startResize}
+          onPointerMove={moveResize}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+              event.preventDefault();
+              resizeTo(currentIndex + 1);
+            }
+            if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+              event.preventDefault();
+              resizeTo(currentIndex - 1);
+            }
+            if (event.key === "Home") {
+              event.preventDefault();
+              resizeTo(0);
+            }
+            if (event.key === "End") {
+              event.preventDefault();
+              resizeTo(CARD_SIZES.length - 1);
+            }
+          }}
+        >
+          <span aria-hidden="true" />
+        </div>
+      )}
     </div>
+  );
+}
+
+function NetWorthMetricCard({ summary, currency, size, trends }: { summary: DashboardData["summary"]; currency: string; size: DashboardCardSize; trends?: TrendsView }) {
+  const history = trends?.net_worth_history ?? [];
+  const values = history.map((point) => numberFromMoney(point.net_worth));
+  const minimum = values.length ? Math.min(...values) : 0;
+  const maximum = values.length ? Math.max(...values) : 1;
+  const spread = Math.max(maximum - minimum, 1);
+  const points = history.map((point, index) => {
+    const x = history.length <= 1 ? 130 : 8 + (index / (history.length - 1)) * 244;
+    const y = 58 - ((numberFromMoney(point.net_worth) - minimum) / spread) * 46;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const change = trends?.summary.change_amount ?? null;
+  return (
+    <article className="metric-card dashboard-metric-card featured net-worth-dashboard-card">
+      <span>Net worth</span>
+      <strong>{formatMoney(summary.net_worth, currency)}</strong>
+      {change !== null && <small className={numberFromMoney(change) >= 0 ? "positive" : "negative"}>{formatMoney(change, currency, { showSign: true })} · 3M</small>}
+      {size !== "compact" && points && <svg className="net-worth-mini-ridge" viewBox="0 0 260 66" role="img" aria-label="Three month net worth trend"><defs><linearGradient id="dashboard-net-worth-ridge" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#50f3df"/><stop offset="55%" stopColor="#57a8ff"/><stop offset="100%" stopColor="#9b70ff"/></linearGradient></defs><polyline className="net-worth-mini-shadow" points={points}/><polyline className="net-worth-mini-line" points={points} stroke="url(#dashboard-net-worth-ridge)"/></svg>}
+      <Link className="metric-ask net-worth-trends-link" to="/trends">Open trends</Link>
+    </article>
   );
 }
 
@@ -301,23 +405,25 @@ export function DashboardPage() {
   const insights = useQuery({ queryKey: queryKeys.insights("active"), queryFn: () => apiRequest<InsightsResponse>("/insights/refresh", { method: "POST" }), staleTime: 60_000 });
   const preferences = useQuery({ queryKey: queryKeys.dashboardPreferences, queryFn: () => apiRequest<DashboardPreferences>("/dashboard/preferences") });
   const onboarding = useQuery({ queryKey: queryKeys.dashboardOnboarding, queryFn: () => apiRequest<DashboardOnboarding>("/dashboard/onboarding") });
+  const trends = useQuery({ queryKey: queryKeys.trends("3m"), queryFn: () => apiRequest<TrendsView>("/trends?range=3m"), staleTime: 60_000 });
 
   return (
     <div className="page-container dashboard-page">
       <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="dashboard-header-actions"><div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div></div>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
-      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} />}
+      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} trends={trends.data} />}
     </div>
   );
 }
 
-function DashboardContent({ data, budget, insights, preferences, onboarding }: {
+function DashboardContent({ data, budget, insights, preferences, onboarding, trends }: {
   data: DashboardData;
   budget?: MonthlyBudgetView;
   insights?: InsightsResponse;
   preferences?: DashboardPreferences;
   onboarding?: DashboardOnboarding;
+  trends?: TrendsView;
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -385,12 +491,9 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
     setDraggedId(null);
     setDraftPreset("custom");
   };
-  const resizeCard = (id: DashboardCardId) => setDraftCards((cards) => cards.map((card) => {
-    if (card.id !== id) return card;
-    const sizes = ALLOWED_SIZES[id];
-    const index = sizes.indexOf(card.size);
-    return { ...card, size: sizes[(index + 1) % sizes.length] };
-  }));
+  const resizeCard = (id: DashboardCardId, size: DashboardCardSize) => setDraftCards((cards) =>
+    cards.map((card) => card.id === id ? { ...card, size } : card),
+  );
   const setVisibility = (id: DashboardCardId, visible: boolean) => {
     setDraftCards((cards) => cards.map((card) => card.id === id ? { ...card, visible } : card));
     setDraftPreset("custom");
@@ -405,14 +508,15 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
     requestAnimationFrame(() => document.querySelector('[data-card-id="ask_budget"]')?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
 
-  const renderCard = (id: DashboardCardId): ReactNode => {
-    if (id === "net_worth") return <article className="metric-card dashboard-metric-card featured"><span>Net worth</span><strong>{formatMoney(summary.net_worth, data.currency)}</strong><small>Across included accounts</small></article>;
+  const renderCard = (card: DashboardCardPreference): ReactNode => {
+    const id = card.id;
+    if (id === "net_worth") return <NetWorthMetricCard summary={summary} currency={data.currency} size={card.size} trends={trends} />;
     if (id === "cash_available") return <article className="metric-card dashboard-metric-card"><span>Cash available</span><strong>{formatMoney(summary.cash_available, data.currency)}</strong><small>Available in cash accounts</small></article>;
     if (id === "income") return <article className="metric-card dashboard-metric-card"><span>Income</span><strong className="positive">{formatMoney(summary.income, data.currency)}</strong><small>This month</small></article>;
     if (id === "spending") return <article className="metric-card dashboard-metric-card"><span>Spending</span><strong>{formatMoney(summary.spending, data.currency)}</strong><small>Transfers excluded</small><button className="metric-ask" type="button" onClick={() => askAbout("Where has my spending increased the most this month?")}>Ask Budget</button></article>;
     if (id === "net_cash_flow") return <article className="metric-card dashboard-metric-card"><span>Net cash flow</span><strong className={numberFromMoney(summary.net_cash_flow) >= 0 ? "positive" : "negative"}>{formatMoney(summary.net_cash_flow, data.currency, { showSign: true })}</strong><small>Income less spending</small><button className="metric-ask" type="button" onClick={() => askAbout("Explain my current monthly cash flow and what I should focus on next.")}>Ask why</button></article>;
     if (id === "savings_rate") return <article className="metric-card dashboard-metric-card"><span>Savings rate</span><strong className={savingsTone}>{formatPercent(summary.savings_rate)}</strong><small>{summary.savings_rate === null ? "No income this month" : "Of monthly income"}</small></article>;
-    if (id === "cash_flow") return <section className="panel dashboard-fill-card"><div className="panel-heading"><div><span className="eyebrow">Daily movement</span><h2>Cash flow</h2></div><span className="as-of">As of {formatDateTime(data.as_of)}</span></div><CashFlowChart data={data.daily_cash_flow} currency={data.currency} /></section>;
+    if (id === "cash_flow") return <CashFlowSankeyWidget dashboard={data} size={card.size} onAsk={askAbout} />;
     if (id === "top_spending") return <section className="panel dashboard-fill-card"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Top spending</h2></div>{data.spending_by_category.length > 0 && <button className="text-button" type="button" onClick={() => askAbout("What stands out about my top spending categories this month?")}>Ask Budget</button>}</div><CategoryBars categories={data.spending_by_category} currency={data.currency} /></section>;
     if (id === "ask_budget") return <section className="panel dashboard-fill-card dashboard-advisor-widget"><AskBudgetCard prefill={askPrompt} onPrefillConsumed={() => setAskPrompt("")} /></section>;
     if (id === "budget") return <section className="panel dashboard-fill-card dashboard-budget-panel"><div className="panel-heading"><div><span className="eyebrow">Monthly budget</span><h2>{budget && budget.source !== "unplanned" ? `${formatMoney(budget.spent, budget.currency)} spent of ${formatMoney(budget.available_with_rollover, budget.currency)}` : "No budget plan yet"}</h2></div><Link className="text-link" to="/budget">{budget && budget.source !== "unplanned" ? "Open budget" : "Create budget"} <span aria-hidden="true">→</span></Link></div>{budget && budget.source !== "unplanned" ? <div className="dashboard-budget-summary"><div><strong>{formatMoney(budget.remaining, budget.currency)}</strong><span>Remaining</span></div><div><strong>{formatMoney(budget.safe_to_spend, budget.currency)}</strong><span>Safe to spend</span></div><div><strong>{budget.categories.filter((row) => row.status === "close").length}</strong><span>Getting close</span></div><div><strong>{budget.categories.filter((row) => row.status === "over").length}</strong><span>Over budget</span></div></div> : <p className="muted-copy">Set a yearly budget or customize a month to unlock safe-to-spend guidance.</p>}</section>;
@@ -427,12 +531,12 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
       {data.excluded_currencies.length > 0 && <div className="notice-banner" role="status"><strong>Some balances are shown separately.</strong> Totals include {data.currency} only. Excluded: {data.excluded_currencies.join(", ")}.</div>}
       {onboarding && !onboarding.complete && !onboarding.dismissed && <OnboardingCard onboarding={onboarding} />}
       <div className="dashboard-customize-bar">
-        <div><strong>Your dashboard</strong><span>{customizing ? "Drag, resize, hide, or restore cards. Changes are saved per user." : "Your layout follows you wherever you sign in."}</span></div>
+        <div><strong>Your dashboard</strong><span>{customizing ? "Drag cards to reorder. Grab the lower-right glass edge to snap between Compact, Standard, and Hero." : "Your layout follows you wherever you sign in."}</span></div>
         {customizing ? <div className="dashboard-customize-actions"><button className="button secondary" type="button" onClick={() => setLibraryOpen((value) => !value)}>+ Add card</button><button className="button secondary" type="button" onClick={() => preset("everyday")}>Reset layout</button><button className="button secondary" type="button" onClick={cancelCustomize}>Cancel</button><button className="button primary" type="button" disabled={savePreferences.isPending} onClick={() => savePreferences.mutate({ cards: draftCards, preset: draftPreset })}>{savePreferences.isPending ? "Saving…" : "Done"}</button></div> : <button className="button secondary" type="button" onClick={startCustomize}>Customize</button>}
       </div>
       {customizing && <div className="dashboard-preset-bar"><span>Presets</span>{(["everyday", "minimal", "planning", "analytics"] as const).map((name) => <button key={name} type="button" className={draftPreset === name ? "active" : ""} onClick={() => preset(name)}>{name}</button>)}</div>}
       {customizing && libraryOpen && <section className="panel dashboard-card-library"><div className="panel-heading"><div><span className="eyebrow">Card library</span><h2>Add to Dashboard</h2></div></div>{hiddenCards.length ? <div className="dashboard-library-grid">{hiddenCards.map((card) => <button type="button" key={card.id} onClick={() => setVisibility(card.id, true)}><strong>{CARD_LABELS[card.id]}</strong><span>Add card +</span></button>)}</div> : <p className="muted-copy">Every available card is already on your dashboard.</p>}</section>}
-      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id) => { resizeCard(id); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card.id)}</WidgetShell>)}</div>
+      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id, size) => { resizeCard(id, size); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card)}</WidgetShell>)}</div>
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { useSetupStatus } from "../api/queries";
@@ -5,24 +6,26 @@ import { useAuth } from "../auth/AuthContext";
 import { AppShell } from "../components/AppShell";
 import { Brand } from "../components/Brand";
 import { ErrorState, PageLoading } from "../components/States";
-import { AccountsPage } from "../pages/AccountsPage";
-import { DashboardPage } from "../pages/DashboardPage";
-import { BudgetPage } from "../pages/BudgetPage";
 import { LoginPage } from "../pages/LoginPage";
 import { InvitePage } from "../pages/InvitePage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { GoogleAuthCompletePage } from "../pages/GoogleAuthCompletePage";
-import { InsightsPage } from "../pages/InsightsPage";
-import { AdvisorPage } from "../pages/AdvisorPage";
-import { PlaidOAuthPage } from "../pages/PlaidOAuthPage";
-import { PlanPage } from "../pages/PlanPage";
-import { SettingsPage } from "../pages/SettingsPage";
-import { RecurringPage } from "../pages/RecurringPage";
-import { ReportsPage } from "../pages/ReportsPage";
 import { SetupPage } from "../pages/SetupPage";
-import { TransactionsPage } from "../pages/TransactionsPage";
-import { NotificationsPage } from "../pages/NotificationsPage";
+
+const AccountsPage = lazy(() => import("../pages/AccountsPage").then((module) => ({ default: module.AccountsPage })));
+const AdvisorPage = lazy(() => import("../pages/AdvisorPage").then((module) => ({ default: module.AdvisorPage })));
+const BudgetPage = lazy(() => import("../pages/BudgetPage").then((module) => ({ default: module.BudgetPage })));
+const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const InsightsPage = lazy(() => import("../pages/InsightsPage").then((module) => ({ default: module.InsightsPage })));
+const NotificationsPage = lazy(() => import("../pages/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
+const PlaidOAuthPage = lazy(() => import("../pages/PlaidOAuthPage").then((module) => ({ default: module.PlaidOAuthPage })));
+const PlanPage = lazy(() => import("../pages/PlanPage").then((module) => ({ default: module.PlanPage })));
+const RecurringPage = lazy(() => import("../pages/RecurringPage").then((module) => ({ default: module.RecurringPage })));
+const ReportsPage = lazy(() => import("../pages/ReportsPage").then((module) => ({ default: module.ReportsPage })));
+const SettingsPage = lazy(() => import("../pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const TransactionsPage = lazy(() => import("../pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
+const TrendsPage = lazy(() => import("../pages/TrendsPage").then((module) => ({ default: module.TrendsPage })));
 
 function SetupError({ error, retry }: { error: Error; retry: () => void }) {
   const apiError = error instanceof ApiError ? error : null;
@@ -86,6 +89,10 @@ function ProtectedRoute() {
   return <AppShell />;
 }
 
+function LazyPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<PageLoading label="Loading this workspace" />}>{children}</Suspense>;
+}
+
 function NotFoundPage() {
   return (
     <div className="page-container not-found">
@@ -108,18 +115,20 @@ export function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/google/complete" element={<GoogleAuthCompletePage />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/accounts" element={<AccountsPage />} />
-        <Route path="/plaid/oauth" element={<PlaidOAuthPage />} />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
-        <Route path="/plan" element={<PlanPage />} />
-        <Route path="/recurring" element={<RecurringPage />} />
-        <Route path="/insights" element={<InsightsPage />} />
-        <Route path="/advisor" element={<AdvisorPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/dashboard" element={<LazyPage><DashboardPage /></LazyPage>} />
+        <Route path="/accounts" element={<LazyPage><AccountsPage /></LazyPage>} />
+        <Route path="/plaid/oauth" element={<LazyPage><PlaidOAuthPage /></LazyPage>} />
+        <Route path="/transactions" element={<LazyPage><TransactionsPage /></LazyPage>} />
+        <Route path="/budget" element={<LazyPage><BudgetPage /></LazyPage>} />
+        <Route path="/plan" element={<LazyPage><PlanPage /></LazyPage>} />
+        <Route path="/calendar" element={<LazyPage><RecurringPage /></LazyPage>} />
+        <Route path="/recurring" element={<LazyPage><RecurringPage /></LazyPage>} />
+        <Route path="/insights" element={<LazyPage><InsightsPage /></LazyPage>} />
+        <Route path="/advisor" element={<LazyPage><AdvisorPage /></LazyPage>} />
+        <Route path="/reports" element={<LazyPage><ReportsPage /></LazyPage>} />
+        <Route path="/trends" element={<LazyPage><TrendsPage /></LazyPage>} />
+        <Route path="/settings" element={<LazyPage><SettingsPage /></LazyPage>} />
+        <Route path="/notifications" element={<LazyPage><NotificationsPage /></LazyPage>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -21,6 +21,7 @@ from app.core.errors import ApiError
 from app.core.security import hash_password, normalize_identity, utc_now
 from app.models import (
     Account,
+    AccountBalanceSnapshot,
     AnnualBudgetCategory,
     AnnualBudgetMonthAllocation,
     AnnualBudgetPlan,
@@ -63,6 +64,8 @@ from app.services.plaid import production_readiness, sandbox_reset_login
 from app.services.plaid_transactions import sync_all_plaid_items
 from app.services.notifications import scan_all_notifications
 from app.services.reports import capture_all_snapshots
+from app.services.security_audit import security_posture
+from app.services.release_readiness import release_readiness
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -111,6 +114,7 @@ def reset_demo(settings: Settings) -> None:
         with database.session_factory() as db:
             for model in (
                 GoalContribution,
+                AccountBalanceSnapshot,
                 FinancialSnapshot,
                 Debt,
                 DebtStrategySettings,
@@ -522,6 +526,69 @@ def reset_demo(settings: Settings) -> None:
                 pending=True,
             )
 
+            demo_balance_history = [
+                (-5, Decimal("2800.0000"), Decimal("11500.0000"), Decimal("-1100.0000"), Decimal("-8700.0000")),
+                (-4, Decimal("2900.0000"), Decimal("11700.0000"), Decimal("-1020.0000"), Decimal("-8600.0000")),
+                (-3, Decimal("3000.0000"), Decimal("12000.0000"), Decimal("-950.0000"), Decimal("-8500.0000")),
+                (-2, Decimal("3100.0000"), Decimal("12300.0000"), Decimal("-850.0000"), Decimal("-8400.0000")),
+                (-1, Decimal("3180.0000"), Decimal("12600.0000"), Decimal("-760.0000"), Decimal("-8300.0000")),
+                (0, Decimal("3240.5200"), Decimal("12850.0000"), Decimal("-680.2400"), Decimal("-8200.0000")),
+            ]
+            for offset, checking_balance, savings_balance, credit_balance, loan_balance in demo_balance_history:
+                snapshot_date = _month_date(today, offset, 1)
+                balances = {
+                    "checking": checking_balance,
+                    "savings": savings_balance,
+                    "credit": credit_balance,
+                    "loan": loan_balance,
+                }
+                net_worth = sum(balances.values(), Decimal("0"))
+                cash_available = checking_balance + savings_balance
+                db.add(
+                    FinancialSnapshot(
+                        user_id=user.id,
+                        snapshot_date=snapshot_date,
+                        currency="USD",
+                        net_worth=net_worth,
+                        cash_available=cash_available,
+                        planned_income=Decimal("4500.0000"),
+                        actual_income=Decimal("4500.0000"),
+                        budgeted=Decimal("3300.0000"),
+                        spent=Decimal("2950.0000") - Decimal(abs(offset) * 35),
+                        safe_to_spend=Decimal("1200.0000"),
+                        planning_commitments=Decimal("500.0000"),
+                        goal_reserves=Decimal("650.0000"),
+                        total_goal_target=Decimal("43000.0000"),
+                        total_goal_current=Decimal("17050.0000") - Decimal(abs(offset) * 500),
+                        monthly_goal_contributions=Decimal("1150.0000"),
+                        total_debt=(-credit_balance) + (-loan_balance),
+                        planned_monthly_debt_payment=Decimal("570.0000"),
+                        reserve_balance=Decimal("1500.0000"),
+                        projected_30_day=cash_available + Decimal("500.0000"),
+                        projected_60_day=cash_available + Decimal("850.0000"),
+                        projected_90_day=cash_available + Decimal("1200.0000"),
+                        planned_debt_free_date=date(today.year + 2, 1, 1),
+                    )
+                )
+                for key, balance in balances.items():
+                    account = accounts[key]
+                    db.add(
+                        AccountBalanceSnapshot(
+                            user_id=user.id,
+                            account_id=account.id,
+                            snapshot_date=snapshot_date,
+                            account_name=account.name,
+                            institution_name=institution.name,
+                            account_type=account.account_type,
+                            account_subtype=account.account_subtype,
+                            source_type=account.source_type,
+                            balance=balance,
+                            available_balance=balance if account.account_type == "depository" else None,
+                            credit_limit=account.credit_limit,
+                            currency=account.currency,
+                        )
+                    )
+
             state.initialized_at = now
             add_audit_event(
                 db,
@@ -719,6 +786,24 @@ def parser() -> argparse.ArgumentParser:
     subcommands.add_parser(
         "plaid-readiness", help="Check secret-free Plaid Production cutover readiness"
     )
+    subcommands.add_parser(
+        "security-audit",
+        help="Print a secret-free production security posture report and fail on hard findings",
+    )
+    release = subcommands.add_parser(
+        "release-readiness",
+        help="Run the secret-free Phase 5 release gate across schema, security, Plaid, and workers",
+    )
+    release.add_argument(
+        "--require-production",
+        action="store_true",
+        help="Fail unless the command is running with production safeguards enabled",
+    )
+    release.add_argument(
+        "--strict-operations",
+        action="store_true",
+        help="Treat stale/unverified scheduled jobs as release-blocking findings",
+    )
     plaid_reset = subcommands.add_parser(
         "plaid-sandbox-reset-login",
         help="Force a Sandbox connection into ITEM_LOGIN_REQUIRED for update-mode testing",
@@ -783,7 +868,6 @@ def main(argv: list[str] | None = None) -> int:
             result = _tracked(
                 settings,
                 JOB_NOTIFICATIONS,
-    JOB_MAINTENANCE,
                 lambda: run_notifications(settings, force_summaries=args.force_summaries),
             )
             print(
@@ -807,6 +891,31 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 with database.session_factory() as db:
                     result = production_readiness(db, settings)
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+            if not result["ready"]:
+                return 1
+        elif args.command == "security-audit":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = security_posture(db, settings)
+            finally:
+                database.engine.dispose()
+            print(json.dumps(result, default=str, indent=2))
+            if not result["ready"]:
+                return 1
+        elif args.command == "release-readiness":
+            database = Database.from_settings(settings)
+            try:
+                with database.session_factory() as db:
+                    result = release_readiness(
+                        db,
+                        settings,
+                        require_production=args.require_production,
+                        strict_operations=args.strict_operations,
+                    )
             finally:
                 database.engine.dispose()
             print(json.dumps(result, default=str, indent=2))

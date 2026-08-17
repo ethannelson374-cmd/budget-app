@@ -249,6 +249,64 @@ export interface DashboardData {
   excluded_currencies: string[];
 }
 
+export type CashFlowRange = "month" | "year" | "custom";
+export type CashFlowNodeKind = "income_source" | "refund" | "shortfall" | "hub" | "expense" | "debt" | "savings";
+export type CashFlowLinkKind = "income" | "refund" | "shortfall" | "expense" | "debt" | "savings";
+
+export interface CashFlowTransactionFilters {
+  kind: TransactionKind | null;
+  category_id: number | null;
+  search: string | null;
+}
+
+export interface CashFlowNode {
+  id: string;
+  label: string;
+  kind: CashFlowNodeKind;
+  amount: string;
+  transaction_count: number;
+  previous_amount: string;
+  change_percent: string | null;
+  category_id: number | null;
+  filters: CashFlowTransactionFilters | null;
+}
+
+export interface CashFlowLink {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  kind: CashFlowLinkKind;
+  amount: string;
+  transaction_count: number;
+  share_percent: string | null;
+  filters: CashFlowTransactionFilters | null;
+}
+
+export interface CashFlowSankeyData {
+  period: {
+    range: CashFlowRange;
+    label: string;
+    start: string;
+    end: string;
+    previous_start: string;
+    previous_end: string;
+  };
+  currency: string;
+  summary: {
+    income: string;
+    refunds: string;
+    inflow: string;
+    spending: string;
+    net_cash_flow: string;
+    savings_rate: string | null;
+    transaction_count: number;
+    excluded_transfer_count: number;
+  };
+  nodes: CashFlowNode[];
+  links: CashFlowLink[];
+}
+
 export interface AccountsResponse {
   accounts: AccountSummary[];
 }
@@ -416,6 +474,80 @@ export interface RecurringStreamsResponse {
   streams: RecurringStream[];
   monthly_outflow_estimate: string;
   monthly_inflow_estimate: string;
+}
+
+export type FinancialCalendarEventKind = "income" | "expense" | "subscription" | "debt" | "savings" | "refund";
+export type FinancialCalendarEventStatus = "observed" | "pending" | "expected" | "planned";
+export type FinancialCalendarProjectionStatus = "healthy" | "attention" | "low_cash" | "historical";
+
+export interface FinancialCalendarFilters {
+  start_date: string | null;
+  end_date: string | null;
+  account_id: number | null;
+  category_id: number | null;
+  kind: TransactionKind | null;
+  search: string | null;
+}
+
+export interface FinancialCalendarEvent {
+  id: string;
+  date: string;
+  name: string;
+  kind: FinancialCalendarEventKind;
+  status: FinancialCalendarEventStatus;
+  amount: string;
+  impact: string;
+  cadence: "weekly" | "biweekly" | "monthly" | "quarterly" | "annual" | null;
+  price_change_pct: string | null;
+  stream_id: number | null;
+  transaction_id: number | null;
+  account: { id: number; name: string; currency: string } | null;
+  category: { id: number; key: string; name: string } | null;
+  source_detail: string;
+  filters: FinancialCalendarFilters;
+  ask_prompt: string;
+}
+
+export interface FinancialCalendarProjectionPoint {
+  date: string;
+  balance: string;
+  delta: string;
+  event_count: number;
+  below_reserve: boolean;
+}
+
+export interface FinancialCalendarView {
+  generated_at: string;
+  currency: string;
+  period: {
+    month: string;
+    start: string;
+    end: string;
+    today: string;
+    label: string;
+    projection_available: boolean;
+    projection_start: string | null;
+  };
+  summary: {
+    cash_available_now: string;
+    projected_month_start: string | null;
+    expected_inflow: string;
+    expected_outflow: string;
+    projected_month_end: string | null;
+    lowest_projected_balance: string | null;
+    lowest_balance_date: string | null;
+    reserve_balance: string;
+    status: FinancialCalendarProjectionStatus;
+    observed_events: number;
+    expected_events: number;
+  };
+  recurring: {
+    detected_streams: number;
+    monthly_inflow_estimate: string;
+    monthly_outflow_estimate: string;
+  };
+  events: FinancialCalendarEvent[];
+  projection: FinancialCalendarProjectionPoint[];
 }
 
 export type RolloverMode = "off" | "surplus" | "surplus_and_deficit";
@@ -815,6 +947,63 @@ export interface ReportsOverview {
   history: FinancialSnapshot[];
 }
 
+export type TrendRangeKey = "30d" | "3m" | "6m" | "ytd" | "1y" | "all";
+
+export interface TrendsPeriod {
+  range: TrendRangeKey;
+  label: string;
+  start: string;
+  end: string;
+  previous_start: string;
+  previous_end: string;
+  bucket: "day" | "month";
+}
+
+export interface TrendsSummary {
+  net_worth: string;
+  assets: string;
+  liabilities: string;
+  cash_available: string;
+  change_amount: string;
+  change_percent: string | null;
+  ytd_change_amount: string;
+  ytd_change_percent: string | null;
+  average_monthly_income: string;
+  income_variability_percent: string | null;
+}
+
+export interface NetWorthTrendPoint {
+  date: string;
+  net_worth: string;
+  cash_available: string;
+  total_debt: string;
+  assets: string | null;
+  liabilities: string | null;
+}
+
+export interface BalanceTrendPoint { date: string; assets: string; liabilities: string; net_worth: string; }
+export interface TrendComposition { key: string; label: string; kind: "asset" | "liability"; value: string; share_percent: string | null; account_count: number; }
+export interface AccountContribution { account_id: number; name: string; institution: string | null; account_type: string; current_balance: string; start_balance: string | null; change_amount: string | null; change_percent: string | null; history_available: boolean; history_start_date: string | null; }
+export interface TrendCashFlowPoint { period: string; income: string; spending: string; net_cash_flow: string; savings_rate: string | null; }
+export interface TrendSpendingCategory { key: string; label: string; category_id: number | null; current: string; previous: string; change_amount: string; change_percent: string | null; share_percent: string | null; }
+export interface TrendIncomeSource { label: string; current: string; previous: string; change_amount: string; change_percent: string | null; share_percent: string | null; }
+export interface TrendHistoryStatus { financial_snapshot_start: string | null; account_snapshot_start: string | null; account_snapshot_days: number; account_tracking_active: boolean; }
+
+export interface TrendsView {
+  generated_at: string;
+  currency: string;
+  period: TrendsPeriod;
+  summary: TrendsSummary;
+  net_worth_history: NetWorthTrendPoint[];
+  balance_history: BalanceTrendPoint[];
+  composition: TrendComposition[];
+  account_contributions: AccountContribution[];
+  cash_flow: TrendCashFlowPoint[];
+  spending_categories: TrendSpendingCategory[];
+  income_sources: TrendIncomeSource[];
+  history: TrendHistoryStatus;
+}
+
 export type ReportRangeKey = "30d" | "3m" | "6m" | "ytd" | "1y";
 
 export interface ReportRange {
@@ -1046,7 +1235,7 @@ export type DashboardCardId =
   | "net_worth" | "cash_available" | "income" | "spending" | "net_cash_flow" | "savings_rate"
   | "cash_flow" | "top_spending" | "ask_budget" | "budget" | "insights" | "recent_transactions"
   | "accounts" | "data_freshness";
-export type DashboardCardSize = "small" | "medium" | "wide" | "large";
+export type DashboardCardSize = "compact" | "standard" | "hero";
 export type DashboardPreset = "everyday" | "minimal" | "planning" | "analytics" | "custom";
 export interface DashboardCardPreference { id: DashboardCardId; size: DashboardCardSize; visible: boolean; }
 export interface DashboardPreferences { cards: DashboardCardPreference[]; preset: DashboardPreset; onboarding_dismissed_at: string | null; }
