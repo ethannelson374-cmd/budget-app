@@ -34,6 +34,7 @@ def test_phase_one_success_routes_declare_response_models(client: TestClient) ->
         "/api/v1/categories/selection",
         "/api/v1/dashboard",
         "/api/v1/cash-flow",
+        "/api/v1/financial-calendar",
         "/api/v1/accounts",
         "/api/v1/accounts/{account_id}",
         "/api/v1/transactions",

@@ -115,6 +115,7 @@ export function App() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/plan" element={<PlanPage />} />
+        <Route path="/calendar" element={<RecurringPage />} />
         <Route path="/recurring" element={<RecurringPage />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/advisor" element={<AdvisorPage />} />

@@ -14,7 +14,7 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/transactions", label: "Transactions", icon: "transactions" },
   { to: "/budget", label: "Budget", icon: "wallet" },
   { to: "/plan", label: "Plan", icon: "target" },
-  { to: "/recurring", label: "Recurring", icon: "repeat" },
+  { to: "/calendar", label: "Calendar", icon: "calendar" },
   { to: "/insights", label: "Insights", icon: "sparkles" },
   { to: "/advisor", label: "Advisor", icon: "message" },
   { to: "/reports", label: "Reports", icon: "reports" },

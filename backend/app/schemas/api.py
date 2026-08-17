@@ -774,6 +774,99 @@ class TrendsView(ViewModel):
     history: TrendHistoryStatusView
 
 
+CalendarEventKind = Literal["income", "expense", "subscription", "debt", "savings", "refund"]
+CalendarEventStatus = Literal["observed", "pending", "expected", "planned"]
+CalendarProjectionStatus = Literal["healthy", "attention", "low_cash", "historical"]
+
+
+class FinancialCalendarPeriodView(ViewModel):
+    month: str
+    start: date
+    end: date
+    today: date
+    label: str
+    projection_available: bool
+    projection_start: date | None
+
+
+class FinancialCalendarSummaryView(ViewModel):
+    cash_available_now: str
+    projected_month_start: str | None
+    expected_inflow: str
+    expected_outflow: str
+    projected_month_end: str | None
+    lowest_projected_balance: str | None
+    lowest_balance_date: date | None
+    reserve_balance: str
+    status: CalendarProjectionStatus
+    observed_events: int
+    expected_events: int
+
+
+class FinancialCalendarRecurringView(ViewModel):
+    detected_streams: int
+    monthly_inflow_estimate: str
+    monthly_outflow_estimate: str
+
+
+class FinancialCalendarAccountView(ViewModel):
+    id: int
+    name: str
+    currency: str
+
+
+class FinancialCalendarCategoryView(ViewModel):
+    id: int
+    key: str
+    name: str
+
+
+class FinancialCalendarFiltersView(ViewModel):
+    start_date: date | None
+    end_date: date | None
+    account_id: int | None
+    category_id: int | None
+    kind: TransactionKind | None
+    search: str | None
+
+
+class FinancialCalendarEventView(ViewModel):
+    id: str
+    date: date
+    name: str
+    kind: CalendarEventKind
+    status: CalendarEventStatus
+    amount: str
+    impact: str
+    cadence: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"] | None
+    price_change_pct: str | None
+    stream_id: int | None
+    transaction_id: int | None
+    account: FinancialCalendarAccountView | None
+    category: FinancialCalendarCategoryView | None
+    source_detail: str
+    filters: FinancialCalendarFiltersView
+    ask_prompt: str
+
+
+class FinancialCalendarProjectionPointView(ViewModel):
+    date: date
+    balance: str
+    delta: str
+    event_count: int
+    below_reserve: bool
+
+
+class FinancialCalendarView(ViewModel):
+    generated_at: datetime
+    currency: str
+    period: FinancialCalendarPeriodView
+    summary: FinancialCalendarSummaryView
+    recurring: FinancialCalendarRecurringView
+    events: list[FinancialCalendarEventView]
+    projection: list[FinancialCalendarProjectionPointView]
+
+
 class TransactionIntelligencePatch(StrictModel):
     category_id: Annotated[int, Field(gt=0)] | None = None
     display_merchant: Annotated[str, Field(max_length=160)] | None = None

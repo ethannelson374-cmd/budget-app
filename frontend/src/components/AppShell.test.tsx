@@ -20,7 +20,7 @@ describe("AppShell navigation", () => {
 
   it("exposes working destinations and the notification inbox", async () => {
     renderShell();
-    for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Recurring", "Insights", "Advisor", "Reports", "Trends", "Settings"]) {
+    for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Calendar", "Insights", "Advisor", "Reports", "Trends", "Settings"]) {
       expect(screen.getAllByRole("link", { name })).toHaveLength(2);
     }
     expect(await screen.findAllByRole("link", { name: "2 unread notifications" })).toHaveLength(2);

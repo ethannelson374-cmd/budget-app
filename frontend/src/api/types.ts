@@ -476,6 +476,80 @@ export interface RecurringStreamsResponse {
   monthly_inflow_estimate: string;
 }
 
+export type FinancialCalendarEventKind = "income" | "expense" | "subscription" | "debt" | "savings" | "refund";
+export type FinancialCalendarEventStatus = "observed" | "pending" | "expected" | "planned";
+export type FinancialCalendarProjectionStatus = "healthy" | "attention" | "low_cash" | "historical";
+
+export interface FinancialCalendarFilters {
+  start_date: string | null;
+  end_date: string | null;
+  account_id: number | null;
+  category_id: number | null;
+  kind: TransactionKind | null;
+  search: string | null;
+}
+
+export interface FinancialCalendarEvent {
+  id: string;
+  date: string;
+  name: string;
+  kind: FinancialCalendarEventKind;
+  status: FinancialCalendarEventStatus;
+  amount: string;
+  impact: string;
+  cadence: "weekly" | "biweekly" | "monthly" | "quarterly" | "annual" | null;
+  price_change_pct: string | null;
+  stream_id: number | null;
+  transaction_id: number | null;
+  account: { id: number; name: string; currency: string } | null;
+  category: { id: number; key: string; name: string } | null;
+  source_detail: string;
+  filters: FinancialCalendarFilters;
+  ask_prompt: string;
+}
+
+export interface FinancialCalendarProjectionPoint {
+  date: string;
+  balance: string;
+  delta: string;
+  event_count: number;
+  below_reserve: boolean;
+}
+
+export interface FinancialCalendarView {
+  generated_at: string;
+  currency: string;
+  period: {
+    month: string;
+    start: string;
+    end: string;
+    today: string;
+    label: string;
+    projection_available: boolean;
+    projection_start: string | null;
+  };
+  summary: {
+    cash_available_now: string;
+    projected_month_start: string | null;
+    expected_inflow: string;
+    expected_outflow: string;
+    projected_month_end: string | null;
+    lowest_projected_balance: string | null;
+    lowest_balance_date: string | null;
+    reserve_balance: string;
+    status: FinancialCalendarProjectionStatus;
+    observed_events: number;
+    expected_events: number;
+  };
+  recurring: {
+    detected_streams: number;
+    monthly_inflow_estimate: string;
+    monthly_outflow_estimate: string;
+  };
+  events: FinancialCalendarEvent[];
+  projection: FinancialCalendarProjectionPoint[];
+}
+
 export type RolloverMode = "off" | "surplus" | "surplus_and_deficit";
 export type BudgetDistribution = "even" | "monthly" | "custom";
 export type MonthlyBudgetMode = "standalone" | "override";
