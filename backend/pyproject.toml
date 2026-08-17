@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==80.9.0"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,27 +8,27 @@ version = "0.1.0"
 description = "Backend for the Budget personal finance application"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "alembic==1.16.4",
+  "alembic==1.19.1",
   "argon2-cffi==25.1.0",
   "cryptography==50.0.0",
-  "email-validator==2.2.0",
-  "fastapi==0.116.1",
-  "pydantic==2.11.7",
-  "pydantic-settings==2.10.1",
+  "email-validator==2.3.0",
+  "fastapi==0.141.1",
+  "pydantic==2.13.4",
+  "pydantic-settings==2.15.0",
   "PyJWT==2.13.0",
-  "PyMySQL==1.1.1",
-  "SQLAlchemy==2.0.43",
-  "tzdata==2025.2",
-  "uvicorn[standard]==0.35.0",
+  "PyMySQL==1.2.0",
+  "SQLAlchemy==2.0.52",
+  "tzdata==2026.3",
+  "uvicorn[standard]==0.52.3",
 ]
 
 [project.optional-dependencies]
 dev = [
   "httpx==0.28.1",
-  "mypy==1.17.1",
-  "pytest==8.4.1",
-  "pytest-cov==6.2.1",
-  "ruff==0.12.9",
+  "mypy==2.3.0",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.3",
 ]
 
 [tool.setuptools.packages.find]
