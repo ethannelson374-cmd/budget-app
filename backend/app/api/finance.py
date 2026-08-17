@@ -19,6 +19,7 @@ from app.schemas.api import (
     AccountsView,
     CategorySelectionUpdate,
     CategorySelectionView,
+    CashFlowSankeyView,
     DashboardOnboardingView,
     DashboardPreferencesUpdate,
     DashboardPreferencesView,
@@ -43,6 +44,7 @@ from app.services.dashboard_experience import (
     onboarding_status,
     save_dashboard_preferences,
 )
+from app.services.cash_flow import cash_flow_sankey
 from app.services.finance import dashboard_data, transaction_page
 from app.services.manual_finance import (
     create_manual_account,
@@ -259,6 +261,27 @@ def delete_account(
     )
     db.commit()
     return {"ok": True}
+
+
+@router.get("/cash-flow", response_model=CashFlowSankeyView)
+def get_cash_flow(
+    range_key: Annotated[Literal["month", "year", "custom"], Query(alias="range")] = "month",
+    month: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}$")] = None,
+    year: Annotated[int | None, Query(ge=2000, le=2100)] = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return cash_flow_sankey(
+        db,
+        principal.user,
+        range_key=range_key,
+        month=month,
+        year=year,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get("/dashboard", response_model=DashboardView)

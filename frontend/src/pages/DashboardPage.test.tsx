@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { AdvisorStatus, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView } from "../api/types";
+import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView } from "../api/types";
 import { ToastProvider } from "../toast/ToastContext";
 import { DashboardPage } from "./DashboardPage";
 
@@ -79,6 +79,25 @@ const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismi
 const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
 const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
 
+const cashFlow: CashFlowSankeyData = {
+  period: { range: "month", label: "August 2026", start: "2026-08-01", end: "2026-08-31", previous_start: "2026-07-01", previous_end: "2026-07-31" },
+  currency: "USD",
+  summary: { income: "4000.0000", refunds: "0.0000", inflow: "4000.0000", spending: "2500.0000", net_cash_flow: "1500.0000", savings_rate: "37.5000", transaction_count: 6, excluded_transfer_count: 1 },
+  nodes: [
+    { id: "income:0", label: "Employer", kind: "income_source", amount: "4000.0000", transaction_count: 2, previous_amount: "3900.0000", change_percent: "2.5641", category_id: null, filters: { kind: "income", category_id: null, search: "Employer" } },
+    { id: "cash-in", label: "Available cash", kind: "hub", amount: "4000.0000", transaction_count: 6, previous_amount: "3900.0000", change_percent: "2.5641", category_id: null, filters: null },
+    { id: "category:housing", label: "Housing", kind: "expense", amount: "2000.0000", transaction_count: 1, previous_amount: "1900.0000", change_percent: "5.2632", category_id: 2, filters: { kind: "expense", category_id: 2, search: null } },
+    { id: "retained-cash", label: "Retained cash", kind: "savings", amount: "1500.0000", transaction_count: 0, previous_amount: "1400.0000", change_percent: "7.1429", category_id: null, filters: null },
+    { id: "category:groceries", label: "Groceries", kind: "expense", amount: "500.0000", transaction_count: 3, previous_amount: "600.0000", change_percent: "-16.6667", category_id: 3, filters: { kind: "expense", category_id: 3, search: null } },
+  ],
+  links: [
+    { id: "income:0->cash-in", source: "income:0", target: "cash-in", label: "Employer", kind: "income", amount: "4000.0000", transaction_count: 2, share_percent: null, filters: { kind: "income", category_id: null, search: "Employer" } },
+    { id: "cash-in->category:housing", source: "cash-in", target: "category:housing", label: "Housing", kind: "expense", amount: "2000.0000", transaction_count: 1, share_percent: "50.0000", filters: { kind: "expense", category_id: 2, search: null } },
+    { id: "cash-in->retained-cash", source: "cash-in", target: "retained-cash", label: "Retained cash", kind: "savings", amount: "1500.0000", transaction_count: 0, share_percent: "37.5000", filters: null },
+    { id: "cash-in->category:groceries", source: "cash-in", target: "category:groceries", label: "Groceries", kind: "expense", amount: "500.0000", transaction_count: 3, share_percent: "12.5000", filters: { kind: "expense", category_id: 3, search: null } },
+  ],
+};
+
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.mocked(apiRequest).mockReset().mockImplementation((path) => {
@@ -87,6 +106,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
       return Promise.resolve(dashboard as never);
     });
   });
@@ -99,9 +119,10 @@ describe("DashboardPage", () => {
     renderDashboard();
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
     expect(screen.getByText(/Excluded: CAD/)).toBeInTheDocument();
-    expect(screen.getByText("No cash flow activity in this period.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Cash flow map" })).toBeInTheDocument();
+    expect(screen.getByText("Available cash")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "No transactions yet" })).toBeInTheDocument();
-    expect(screen.getByText("37.5%")).toBeInTheDocument();
+    expect(screen.getAllByText("37.5%").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Open budget/ })).toBeInTheDocument();
     expect(screen.getByText("$4,400.00")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Restaurants spending is over budget" })).toBeInTheDocument();
@@ -116,6 +137,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
       dashboardCalls += 1;
       return dashboardCalls === 1 ? Promise.reject(new Error("offline")) : Promise.resolve(dashboard as never);
     });
@@ -124,6 +146,16 @@ describe("DashboardPage", () => {
     await user.click(retry);
     expect(await screen.findByText(/12,500/)).toBeInTheDocument();
   });
+  it("renders the Sankey flow inspector and transaction drill-down", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    const housingFlow = await screen.findByRole("button", { name: /Housing: \$2,000/ });
+    await user.click(housingFlow);
+    const drillDown = await screen.findByRole("link", { name: "View transactions" });
+    expect(drillDown.getAttribute("href")).toContain("category_id=2");
+    expect(drillDown.getAttribute("href")).toContain("start_date=2026-08-01");
+  });
+
   it("uses three snap sizes with a keyboard-accessible drag-resize grip", async () => {
     const user = userEvent.setup();
     renderDashboard();

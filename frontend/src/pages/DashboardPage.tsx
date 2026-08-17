@@ -17,7 +17,7 @@ import type {
   InsightsResponse,
   MonthlyBudgetView,
 } from "../api/types";
-import { CashFlowChart } from "../components/CashFlowChart";
+import { CashFlowSankeyWidget } from "../components/CashFlowSankey";
 import { CategoryBars } from "../components/CategoryBars";
 import { InsightCard } from "../components/InsightCard";
 import { PageHeader } from "../components/PageHeader";
@@ -482,14 +482,15 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
     requestAnimationFrame(() => document.querySelector('[data-card-id="ask_budget"]')?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
 
-  const renderCard = (id: DashboardCardId): ReactNode => {
+  const renderCard = (card: DashboardCardPreference): ReactNode => {
+    const id = card.id;
     if (id === "net_worth") return <article className="metric-card dashboard-metric-card featured"><span>Net worth</span><strong>{formatMoney(summary.net_worth, data.currency)}</strong><small>Across included accounts</small></article>;
     if (id === "cash_available") return <article className="metric-card dashboard-metric-card"><span>Cash available</span><strong>{formatMoney(summary.cash_available, data.currency)}</strong><small>Available in cash accounts</small></article>;
     if (id === "income") return <article className="metric-card dashboard-metric-card"><span>Income</span><strong className="positive">{formatMoney(summary.income, data.currency)}</strong><small>This month</small></article>;
     if (id === "spending") return <article className="metric-card dashboard-metric-card"><span>Spending</span><strong>{formatMoney(summary.spending, data.currency)}</strong><small>Transfers excluded</small><button className="metric-ask" type="button" onClick={() => askAbout("Where has my spending increased the most this month?")}>Ask Budget</button></article>;
     if (id === "net_cash_flow") return <article className="metric-card dashboard-metric-card"><span>Net cash flow</span><strong className={numberFromMoney(summary.net_cash_flow) >= 0 ? "positive" : "negative"}>{formatMoney(summary.net_cash_flow, data.currency, { showSign: true })}</strong><small>Income less spending</small><button className="metric-ask" type="button" onClick={() => askAbout("Explain my current monthly cash flow and what I should focus on next.")}>Ask why</button></article>;
     if (id === "savings_rate") return <article className="metric-card dashboard-metric-card"><span>Savings rate</span><strong className={savingsTone}>{formatPercent(summary.savings_rate)}</strong><small>{summary.savings_rate === null ? "No income this month" : "Of monthly income"}</small></article>;
-    if (id === "cash_flow") return <section className="panel dashboard-fill-card"><div className="panel-heading"><div><span className="eyebrow">Daily movement</span><h2>Cash flow</h2></div><span className="as-of">As of {formatDateTime(data.as_of)}</span></div><CashFlowChart data={data.daily_cash_flow} currency={data.currency} /></section>;
+    if (id === "cash_flow") return <CashFlowSankeyWidget dashboard={data} size={card.size} onAsk={askAbout} />;
     if (id === "top_spending") return <section className="panel dashboard-fill-card"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Top spending</h2></div>{data.spending_by_category.length > 0 && <button className="text-button" type="button" onClick={() => askAbout("What stands out about my top spending categories this month?")}>Ask Budget</button>}</div><CategoryBars categories={data.spending_by_category} currency={data.currency} /></section>;
     if (id === "ask_budget") return <section className="panel dashboard-fill-card dashboard-advisor-widget"><AskBudgetCard prefill={askPrompt} onPrefillConsumed={() => setAskPrompt("")} /></section>;
     if (id === "budget") return <section className="panel dashboard-fill-card dashboard-budget-panel"><div className="panel-heading"><div><span className="eyebrow">Monthly budget</span><h2>{budget && budget.source !== "unplanned" ? `${formatMoney(budget.spent, budget.currency)} spent of ${formatMoney(budget.available_with_rollover, budget.currency)}` : "No budget plan yet"}</h2></div><Link className="text-link" to="/budget">{budget && budget.source !== "unplanned" ? "Open budget" : "Create budget"} <span aria-hidden="true">→</span></Link></div>{budget && budget.source !== "unplanned" ? <div className="dashboard-budget-summary"><div><strong>{formatMoney(budget.remaining, budget.currency)}</strong><span>Remaining</span></div><div><strong>{formatMoney(budget.safe_to_spend, budget.currency)}</strong><span>Safe to spend</span></div><div><strong>{budget.categories.filter((row) => row.status === "close").length}</strong><span>Getting close</span></div><div><strong>{budget.categories.filter((row) => row.status === "over").length}</strong><span>Over budget</span></div></div> : <p className="muted-copy">Set a yearly budget or customize a month to unlock safe-to-spend guidance.</p>}</section>;
@@ -509,7 +510,7 @@ function DashboardContent({ data, budget, insights, preferences, onboarding }: {
       </div>
       {customizing && <div className="dashboard-preset-bar"><span>Presets</span>{(["everyday", "minimal", "planning", "analytics"] as const).map((name) => <button key={name} type="button" className={draftPreset === name ? "active" : ""} onClick={() => preset(name)}>{name}</button>)}</div>}
       {customizing && libraryOpen && <section className="panel dashboard-card-library"><div className="panel-heading"><div><span className="eyebrow">Card library</span><h2>Add to Dashboard</h2></div></div>{hiddenCards.length ? <div className="dashboard-library-grid">{hiddenCards.map((card) => <button type="button" key={card.id} onClick={() => setVisibility(card.id, true)}><strong>{CARD_LABELS[card.id]}</strong><span>Add card +</span></button>)}</div> : <p className="muted-copy">Every available card is already on your dashboard.</p>}</section>}
-      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id, size) => { resizeCard(id, size); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card.id)}</WidgetShell>)}</div>
+      <div className="dashboard-custom-grid">{activeCards.map((card) => <WidgetShell key={card.id} card={card} customizing={customizing} onDragStart={setDraggedId} onDrop={dropCard} onMove={(id, delta) => { moveCard(id, delta); setDraftPreset("custom"); }} onResize={(id, size) => { resizeCard(id, size); setDraftPreset("custom"); }} onHide={(id) => setVisibility(id, false)}>{renderCard(card)}</WidgetShell>)}</div>
     </>
   );
 }

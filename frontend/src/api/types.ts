@@ -249,6 +249,64 @@ export interface DashboardData {
   excluded_currencies: string[];
 }
 
+export type CashFlowRange = "month" | "year" | "custom";
+export type CashFlowNodeKind = "income_source" | "refund" | "shortfall" | "hub" | "expense" | "debt" | "savings";
+export type CashFlowLinkKind = "income" | "refund" | "shortfall" | "expense" | "debt" | "savings";
+
+export interface CashFlowTransactionFilters {
+  kind: TransactionKind | null;
+  category_id: number | null;
+  search: string | null;
+}
+
+export interface CashFlowNode {
+  id: string;
+  label: string;
+  kind: CashFlowNodeKind;
+  amount: string;
+  transaction_count: number;
+  previous_amount: string;
+  change_percent: string | null;
+  category_id: number | null;
+  filters: CashFlowTransactionFilters | null;
+}
+
+export interface CashFlowLink {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  kind: CashFlowLinkKind;
+  amount: string;
+  transaction_count: number;
+  share_percent: string | null;
+  filters: CashFlowTransactionFilters | null;
+}
+
+export interface CashFlowSankeyData {
+  period: {
+    range: CashFlowRange;
+    label: string;
+    start: string;
+    end: string;
+    previous_start: string;
+    previous_end: string;
+  };
+  currency: string;
+  summary: {
+    income: string;
+    refunds: string;
+    inflow: string;
+    spending: string;
+    net_cash_flow: string;
+    savings_rate: string | null;
+    transaction_count: number;
+    excluded_transfer_count: number;
+  };
+  nodes: CashFlowNode[];
+  links: CashFlowLink[];
+}
+
 export interface AccountsResponse {
   accounts: AccountSummary[];
 }

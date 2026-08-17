@@ -595,6 +595,69 @@ class DashboardView(ViewModel):
     excluded_currencies: list[str]
 
 
+CashFlowRange = Literal["month", "year", "custom"]
+CashFlowNodeKind = Literal["income_source", "refund", "shortfall", "hub", "expense", "debt", "savings"]
+CashFlowLinkKind = Literal["income", "refund", "shortfall", "expense", "debt", "savings"]
+
+
+class CashFlowTransactionFiltersView(ViewModel):
+    kind: TransactionKind | None = None
+    category_id: int | None = None
+    search: str | None = None
+
+
+class CashFlowPeriodView(ViewModel):
+    range: CashFlowRange
+    label: str
+    start: date
+    end: date
+    previous_start: date
+    previous_end: date
+
+
+class CashFlowSummaryView(ViewModel):
+    income: str
+    refunds: str
+    inflow: str
+    spending: str
+    net_cash_flow: str
+    savings_rate: str | None
+    transaction_count: int
+    excluded_transfer_count: int
+
+
+class CashFlowNodeView(ViewModel):
+    id: str
+    label: str
+    kind: CashFlowNodeKind
+    amount: str
+    transaction_count: int
+    previous_amount: str
+    change_percent: str | None
+    category_id: int | None
+    filters: CashFlowTransactionFiltersView | None
+
+
+class CashFlowLinkView(ViewModel):
+    id: str
+    source: str
+    target: str
+    label: str
+    kind: CashFlowLinkKind
+    amount: str
+    transaction_count: int
+    share_percent: str | None
+    filters: CashFlowTransactionFiltersView | None
+
+
+class CashFlowSankeyView(ViewModel):
+    period: CashFlowPeriodView
+    currency: str
+    summary: CashFlowSummaryView
+    nodes: list[CashFlowNodeView]
+    links: list[CashFlowLinkView]
+
+
 class TransactionIntelligencePatch(StrictModel):
     category_id: Annotated[int, Field(gt=0)] | None = None
     display_merchant: Annotated[str, Field(max_length=160)] | None = None
