@@ -12,7 +12,7 @@ from app.cli import parser
 from app.core.config import Settings
 from app.core.database import Database, create_database_engine
 from app.core.security import hash_password, normalize_identity, utc_now
-from app.models import Account, Transaction, User
+from app.models import Account, BudgetMembership, Transaction, User
 from app.services.release_readiness import release_readiness
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -168,7 +168,7 @@ def test_phase5_upgrade_from_phase4_0020_preserves_financial_rows(tmp_path: Path
         assert "account_balance_snapshots" in inspector.get_table_names()
         with engine.connect() as connection:
             version = connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-        assert version == "20260817_0022"
+        assert version == "20260820_0023"
     finally:
         engine.dispose()
 
@@ -185,5 +185,9 @@ def test_phase5_upgrade_from_phase4_0020_preserves_financial_rows(tmp_path: Path
             assert account is not None and account.current_balance == Decimal("4321.1000")
             assert transaction is not None and transaction.description == "Phase 4 preserved transaction"
             assert db.scalar(select(Transaction.id).where(Transaction.id == transaction_id)) == transaction_id
+            membership = db.get(BudgetMembership, user_id)
+            assert membership is not None
+            assert membership.budget_owner_user_id == user_id
+            assert membership.role == "owner"
     finally:
         database.engine.dispose()

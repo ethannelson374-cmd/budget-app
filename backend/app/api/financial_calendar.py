@@ -21,6 +21,6 @@ def get_financial_calendar(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     try:
-        return financial_calendar_view(db, principal.user, month)
+        return financial_calendar_view(db, principal.budget_user, month)
     except ValueError as exc:
         raise ApiError(422, "invalid_calendar_month", str(exc)) from exc

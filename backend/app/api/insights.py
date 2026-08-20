@@ -22,7 +22,7 @@ def get_insights(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return list_insights(db, principal.user, status=status)
+    return list_insights(db, principal.budget_user, status=status)
 
 
 @router.post("/refresh", response_model=InsightsView)
@@ -30,9 +30,9 @@ def post_refresh_insights(
     principal: Principal = Depends(require_csrf),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    refresh_insights(db, principal.user)
+    refresh_insights(db, principal.budget_user)
     db.commit()
-    return list_insights(db, principal.user, status="active")
+    return list_insights(db, principal.budget_user, status="active")
 
 
 @router.patch("/{insight_id}", response_model=InsightView)
@@ -44,7 +44,7 @@ def patch_insight(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    row = set_insight_status(db, principal.user, insight_id, payload.status)
+    row = set_insight_status(db, principal.budget_user, insight_id, payload.status)
     add_audit_event(
         db,
         settings,

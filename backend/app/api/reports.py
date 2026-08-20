@@ -66,7 +66,7 @@ def get_reports_overview(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return reports_overview(db, principal.user, days)
+    return reports_overview(db, principal.budget_user, days)
 
 
 @router.get("/spending", response_model=ReportsSpendingView)
@@ -75,7 +75,7 @@ def get_reports_spending(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return reports_spending(db, principal.user, range_key)
+    return reports_spending(db, principal.budget_user, range_key)
 
 
 @router.get("/budget", response_model=ReportsBudgetView)
@@ -84,7 +84,7 @@ def get_reports_budget(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return reports_budget(db, principal.user, range_key)
+    return reports_budget(db, principal.budget_user, range_key)
 
 
 @router.get("/goals-debt", response_model=ReportsGoalsDebtView)
@@ -93,7 +93,7 @@ def get_reports_goals_debt(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    result = reports_goals_debt(db, principal.user, range_key)
+    result = reports_goals_debt(db, principal.budget_user, range_key)
     db.commit()
     return result
 
@@ -103,7 +103,7 @@ def get_saved_reports(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return list_saved_reports(db, principal.user)
+    return list_saved_reports(db, principal.budget_user)
 
 
 @router.post("/saved", response_model=SavedReportView, status_code=201)
@@ -116,7 +116,7 @@ def post_saved_report(
 ) -> dict[str, object]:
     row = create_saved_report(
         db,
-        principal.user,
+        principal.budget_user,
         name=payload.name,
         range_key=payload.range,
         sections=list(payload.sections),
@@ -138,7 +138,7 @@ def put_saved_report(
 ) -> dict[str, object]:
     row = update_saved_report(
         db,
-        principal.user,
+        principal.budget_user,
         report_id,
         name=payload.name,
         range_key=payload.range,
@@ -158,7 +158,7 @@ def remove_saved_report(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> Response:
-    delete_saved_report(db, principal.user, report_id)
+    delete_saved_report(db, principal.budget_user, report_id)
     _audit(db, settings, request, principal, "reports.saved.delete", str(report_id))
     db.commit()
     return Response(status_code=204)
@@ -170,7 +170,7 @@ def get_report_exports(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return list_report_exports(db, principal.user, limit)
+    return list_report_exports(db, principal.budget_user, limit)
 
 
 @router.post("/exports", response_model=ReportExportView, status_code=201)
@@ -183,7 +183,7 @@ def post_report_export(
 ) -> dict[str, object]:
     row = create_report_export(
         db,
-        principal.user,
+        principal.budget_user,
         name=payload.name,
         format_key=payload.format,
         range_key=payload.range,
@@ -204,7 +204,7 @@ def download_report_export(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> RawResponse:
-    row = get_report_export(db, principal.user, export_id)
+    row = get_report_export(db, principal.budget_user, export_id)
     content = report_export_bytes(row)
     media_type = "text/csv; charset=utf-8" if row.format == "csv" else "application/pdf"
     _audit(db, settings, request, principal, "reports.export.download", f"{row.id}:{row.format}")
@@ -228,7 +228,7 @@ def remove_report_export(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> Response:
-    delete_report_export(db, principal.user, export_id)
+    delete_report_export(db, principal.budget_user, export_id)
     _audit(db, settings, request, principal, "reports.export.delete", str(export_id))
     db.commit()
     return Response(status_code=204)

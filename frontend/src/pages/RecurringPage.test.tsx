@@ -36,6 +36,8 @@ describe("RecurringPage financial calendar", () => {
   beforeEach(() => {
     vi.mocked(apiRequest).mockReset().mockImplementation(async (path: string) => {
       if (path.startsWith("/financial-calendar")) return calendar as never;
+      if (path === "/subscriptions") return { currency: "USD", active_count: 1, monthly_total: "19.9900", annual_total: "239.8800", upcoming_30_days: [{ id: 3, display_name: "StreamBox", cadence: "monthly", average_amount: "19.9900", last_amount: "19.9900", next_expected_date: "2026-08-22", price_change_pct: null, status: "active", detected: true, account: { id: 1, name: "Checking", display_name: "Checking", mask: null, currency: "USD" } }], subscriptions: [{ id: 3, display_name: "StreamBox", cadence: "monthly", average_amount: "19.9900", last_amount: "19.9900", next_expected_date: "2026-08-22", price_change_pct: null, status: "active", detected: true, account: { id: 1, name: "Checking", display_name: "Checking", mask: null, currency: "USD" } }] } as never;
+      if (path === "/recurring") return { currency: "USD", streams: [], monthly_outflow_estimate: "0", monthly_inflow_estimate: "0" } as never;
       return { currency: "USD", streams: [], monthly_outflow_estimate: "0", monthly_inflow_estimate: "0" } as never;
     });
   });
@@ -50,6 +52,8 @@ describe("RecurringPage financial calendar", () => {
     expect(await screen.findByText("Projected month end")).toBeInTheDocument();
     expect(await screen.findByText("Northstar Software")).toBeInTheDocument();
     expect(await screen.findByText("Recurring baseline")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Subscriptions" })).toBeInTheDocument();
+    expect(screen.getByText("$239.88 / year")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask Budget" })).toHaveAttribute("href", "/advisor");
     expect(screen.getByRole("link", { name: "View activity" }).getAttribute("href")).toContain("search=StreamBox");
   });

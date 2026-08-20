@@ -25,6 +25,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import AuditEvent, LoginThrottle, SessionRecord, User
+from app.services.family import budget_user as resolve_budget_user
 
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_BLOCK = timedelta(minutes=15)
@@ -42,6 +43,7 @@ def login_attempt_guard() -> Iterator[None]:
 @dataclass(slots=True)
 class Principal:
     user: User
+    budget_user: User
     session: SessionRecord
     csrf_token: str
 
@@ -188,6 +190,7 @@ def load_principal(
         db.commit()
     return Principal(
         user=record.user,
+        budget_user=resolve_budget_user(db, record.user),
         session=record,
         csrf_token=csrf_token_for_session(settings, token),
     )

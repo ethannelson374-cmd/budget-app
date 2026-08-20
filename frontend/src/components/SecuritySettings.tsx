@@ -5,6 +5,7 @@ import { queryKeys } from "../api/queries";
 import type {
   AdminUsersResponse,
   AuthSessionsResponse,
+  FamilyStatus,
   ResetDelivery,
   SecurityStatus,
   TotpConfirmation,
@@ -31,7 +32,8 @@ export function SecuritySettings() {
   const queryClient = useQueryClient();
   const security = useQuery({ queryKey: queryKeys.securityStatus, queryFn: () => apiRequest<SecurityStatus>("/auth/security") });
   const sessions = useQuery({ queryKey: queryKeys.authSessions, queryFn: () => apiRequest<AuthSessionsResponse>("/auth/sessions") });
-  const invitations = useQuery({ queryKey: queryKeys.userInvitations, queryFn: () => apiRequest<UserInvitationsResponse>("/auth/admin/invitations"), enabled: Boolean(user?.is_admin) });
+  const invitations = useQuery({ queryKey: queryKeys.userInvitations, queryFn: () => apiRequest<UserInvitationsResponse>("/auth/invitations") });
+  const family = useQuery({ queryKey: queryKeys.familyStatus, queryFn: () => apiRequest<FamilyStatus>("/auth/family") });
   const adminUsers = useQuery({ queryKey: queryKeys.adminUsers, queryFn: () => apiRequest<AdminUsersResponse>("/auth/admin/users"), enabled: Boolean(user?.is_admin) });
 
   if (security.isPending || sessions.isPending) return <section className="panel security-panel"><LoadingState label="Loading account security" /></section>;
@@ -44,7 +46,7 @@ export function SecuritySettings() {
         <SignInMethods status={security.data} refreshSecurity={() => void security.refetch()} />
         <TwoFactorCard status={security.data} refreshSecurity={() => void security.refetch()} />
         <SessionCard sessions={sessions.data} refreshSessions={() => void sessions.refetch()} />
-        {user?.is_admin && <FamilyAccessCard invitations={invitations.data?.invitations ?? []} users={adminUsers.data?.users ?? []} loading={invitations.isPending || adminUsers.isPending} refresh={() => { void invitations.refetch(); void adminUsers.refetch(); }} />}
+        <FamilyAccessCard invitations={invitations.data?.invitations ?? []} family={family.data ?? null} users={adminUsers.data?.users ?? []} isAdmin={Boolean(user?.is_admin)} loading={invitations.isPending || family.isPending || (Boolean(user?.is_admin) && adminUsers.isPending)} refresh={() => { void invitations.refetch(); void family.refetch(); if (user?.is_admin) void adminUsers.refetch(); }} />
         <DeleteAccountCard hasPassword={security.data.has_password} onDeleted={async () => { queryClient.clear(); await refresh(); window.location.assign("/"); }} />
       </div>
     </section>
@@ -117,31 +119,50 @@ function SessionCard({ sessions, refreshSessions }: { sessions: AuthSessionsResp
   );
 }
 
-function FamilyAccessCard({ invitations, users, loading, refresh }: { invitations: UserInvitation[]; users: AdminUsersResponse["users"]; loading: boolean; refresh: () => void }) {
+function FamilyAccessCard({ invitations, family, users, isAdmin, loading, refresh }: { invitations: UserInvitation[]; family: FamilyStatus | null; users: AdminUsersResponse["users"]; isAdmin: boolean; loading: boolean; refresh: () => void }) {
   const [label, setLabel] = useState("");
+  const [inviteType, setInviteType] = useState<"shared" | "independent">("shared");
   const [manualLink, setManualLink] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => apiRequest<UserInvitation>("/auth/admin/invitations", { method: "POST", body: JSON.stringify({ label: label.trim() || null }) }),
-    onSuccess: (data) => { setLabel(""); setManualLink(data.invite_url ?? null); setMessage("Invite link created. Send it privately; it works once and expires in 7 days."); refresh(); },
+    mutationFn: () => apiRequest<UserInvitation>("/auth/invitations", { method: "POST", body: JSON.stringify({ label: label.trim() || null, invite_type: inviteType }) }),
+    onSuccess: (data) => {
+      setLabel("");
+      setManualLink(data.invite_url ?? null);
+      setMessage(data.invite_type === "shared" ? "Shared-Budget invite created. This person will join your current financial space after setup." : "App invite created. This person will get their own private Budget after setup.");
+      refresh();
+    },
   });
-  const revoke = useMutation({ mutationFn: (id: number) => apiRequest<{ ok: boolean }>(`/auth/admin/invitations/${id}`, { method: "DELETE" }), onSuccess: refresh });
+  const revoke = useMutation({ mutationFn: (id: number) => apiRequest<{ ok: boolean }>(`/auth/invitations/${id}`, { method: "DELETE" }), onSuccess: refresh });
+  const removeMember = useMutation({ mutationFn: (id: number) => apiRequest<FamilyStatus>(`/auth/family/members/${id}`, { method: "DELETE" }), onSuccess: refresh });
+  const leaveBudget = useMutation({ mutationFn: () => apiRequest<FamilyStatus>("/auth/family/leave", { method: "POST" }), onSuccess: () => { setMessage("You left the shared Budget. Your account now has a new private financial space."); refresh(); } });
   const reset = useMutation({
     mutationFn: (id: number) => apiRequest<ResetDelivery>(`/auth/admin/users/${id}/password-reset`, { method: "POST" }),
     onSuccess: (data) => { setManualLink(data.reset_url ?? null); setMessage(data.delivery === "email" ? "Password reset email sent." : "Password reset link created. Copy it below."); },
   });
   const submit = (event: FormEvent) => { event.preventDefault(); setManualLink(null); setMessage(null); invite.mutate(); };
+  const householdMembers = family?.members ?? [];
   return (
     <article className="panel security-card family-access-card">
-      <div className="security-card-heading"><div><span className="eyebrow">Family access</span><h3>Private invite links</h3></div><span className="status-pill success">Admin</span></div>
-      <p>Create a one-time link and send it however you want. The person chooses their own email or Google account, then completes first-time setup before entering Budget.</p>
-      <form className="invite-form" onSubmit={submit}><label>Label <small>Optional — only you see this</small><input maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Mom, brother, guest…" /></label><button className="button primary" type="submit" disabled={invite.isPending}>{invite.isPending ? "Creating…" : "Create invite link"}</button></form>
+      <div className="security-card-heading"><div><span className="eyebrow">Family access</span><h3>Private invite links</h3></div><span className={`status-pill ${family?.shared ? "success" : ""}`}>{family?.shared ? "Shared Budget" : "Personal Budget"}</span></div>
+      <p>Invite someone into <strong>{family?.budget_owner_username ?? "your"}'s Budget</strong>, or simply give them access to the app with finances that stay completely separate.</p>
+      <form className="invite-form phase6-invite-form" onSubmit={submit}>
+        <fieldset className="invite-type-picker">
+          <legend>Invitation type</legend>
+          <label className={inviteType === "shared" ? "selected" : ""}><input type="radio" name="invite-type" value="shared" checked={inviteType === "shared"} onChange={() => setInviteType("shared")} /><span><strong>Join my Budget</strong><small>Share accounts, transactions, budgets, goals, recurring activity, subscriptions, reports, and planning.</small></span></label>
+          <label className={inviteType === "independent" ? "selected" : ""}><input type="radio" name="invite-type" value="independent" checked={inviteType === "independent"} onChange={() => setInviteType("independent")} /><span><strong>Use Budget independently</strong><small>Give them access to the app, but create a separate private financial space.</small></span></label>
+        </fieldset>
+        <label>Label <small>Optional — only Budget users see this</small><input maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Partner, Mom, brother…" /></label>
+        <button className="button primary" type="submit" disabled={invite.isPending}>{invite.isPending ? "Creating…" : "Create invite link"}</button>
+      </form>
       {invite.error instanceof ApiError && <div className="inline-alert" role="alert">{invite.error.message}</div>}
       {message && <div className="inline-alert success" role="status">{message}</div>}
       {manualLink && <div className="manual-link"><input readOnly value={manualLink} aria-label="Private account link" /><button className="button secondary" type="button" onClick={() => void navigator.clipboard?.writeText(manualLink)}>Copy</button></div>}
       {loading ? <LoadingState label="Loading family access" /> : <>
-        <div className="family-users"><strong>Budget users</strong>{users.map((member) => <div className="family-user" key={member.id}><div><b>{member.username}</b><small>{member.email} · {member.google_connected ? "Google" : "Password"}{member.is_admin ? " · Admin" : ""}</small></div>{member.has_password && <button className="button ghost" type="button" disabled={reset.isPending} onClick={() => reset.mutate(member.id)}>Reset password</button>}</div>)}</div>
-        {invitations.length > 0 && <div className="pending-invites"><strong>Invite links</strong>{invitations.slice(0, 8).map((item) => <div className="family-user" key={item.id}><div><b>{item.label || `Invite #${item.id}`}</b><small>{item.status} · expires {dateTime(item.expires_at)}</small></div>{item.status === "pending" && <button className="button ghost" type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(item.id)}>Revoke</button>}</div>)}</div>}
+        <div className="family-users"><strong>People in this Budget</strong>{householdMembers.map((member) => <div className="family-user" key={member.id}><div><b>{member.username}{member.is_current ? " · You" : ""}</b><small>{member.email} · {member.role === "owner" ? "Budget owner" : "Full member"}</small></div><div className="family-member-actions"><span className={`status-pill ${member.role === "owner" ? "success" : ""}`}>{member.role}</span>{family?.role === "owner" && member.role === "member" && <button className="button ghost" type="button" disabled={removeMember.isPending} onClick={() => { if (window.confirm(`Remove ${member.username} from this shared Budget? They will keep their app account but start with a separate empty Budget.`)) removeMember.mutate(member.id); }}>Remove</button>}</div></div>)}</div>
+        {family?.role === "member" && <div className="shared-budget-leave"><p>You are a full member of <strong>{family.budget_owner_username}'s Budget</strong>. Leaving keeps your app account but starts you with a separate empty Budget.</p><button className="button secondary" type="button" disabled={leaveBudget.isPending} onClick={() => { if (window.confirm("Leave this shared Budget and start a separate private Budget?")) leaveBudget.mutate(); }}>{leaveBudget.isPending ? "Leaving…" : "Leave shared Budget"}</button></div>}
+        {isAdmin && users.length > 0 && <details className="installation-users"><summary>All app users ({users.length})</summary><div className="family-users">{users.map((member) => <div className="family-user" key={member.id}><div><b>{member.username}</b><small>{member.email} · {member.google_connected ? "Google" : "Password"}{member.is_admin ? " · Admin" : ""}</small></div>{member.has_password && <button className="button ghost" type="button" disabled={reset.isPending} onClick={() => reset.mutate(member.id)}>Reset password</button>}</div>)}</div></details>}
+        {invitations.length > 0 && <div className="pending-invites"><strong>Invite links</strong>{invitations.slice(0, 12).map((item) => <div className="family-user" key={item.id}><div><b>{item.label || `Invite #${item.id}`}</b><small>{item.invite_type === "shared" ? "Shared Budget" : "Independent app access"} · {item.status} · expires {dateTime(item.expires_at)}</small></div>{item.status === "pending" && <button className="button ghost" type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(item.id)}>Revoke</button>}</div>)}</div>}
       </>}
     </article>
   );

@@ -79,6 +79,7 @@ class TwoFactorLoginRequest(StrictModel):
 
 class InvitationCreateRequest(StrictModel):
     label: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    invite_type: Literal["independent", "shared"] = "independent"
 
 
 class InvitationExchangeRequest(StrictModel):
@@ -328,9 +329,28 @@ class SecurityStatusView(ViewModel):
     invite_only: bool
 
 
+class FamilyMemberView(ViewModel):
+    id: int
+    username: str
+    email: str
+    role: Literal["owner", "member"]
+    is_current: bool
+
+
+class FamilyStatusView(ViewModel):
+    budget_owner_user_id: int
+    budget_owner_username: str
+    role: Literal["owner", "member"]
+    shared: bool
+    members: list[FamilyMemberView]
+
+
 class InvitationView(ViewModel):
     id: int
     label: str | None
+    invite_type: Literal["independent", "shared"]
+    budget_owner_user_id: int | None
+    accepted_user_id: int | None
     status: Literal["pending", "accepted", "revoked", "expired"]
     created_at: datetime
     expires_at: datetime
@@ -345,6 +365,8 @@ class InvitationListView(ViewModel):
 
 class InvitationPublicView(ViewModel):
     label: str | None
+    invite_type: Literal["independent", "shared"]
+    budget_owner_username: str | None
     expires_at: datetime
     google_enabled: bool
     challenge_token: str
@@ -960,6 +982,10 @@ class RecurringStreamView(ViewModel):
     next_expected_date: date
     occurrence_count: int
     price_change_pct: str | None
+    is_subscription: bool
+    subscription_detected: bool
+    subscription_override: bool | None
+    subscription_status: Literal["active", "paused", "cancelled"]
     account: TransactionAccountView
 
 
@@ -968,6 +994,33 @@ class RecurringStreamsView(ViewModel):
     streams: list[RecurringStreamView]
     monthly_outflow_estimate: str
     monthly_inflow_estimate: str
+
+
+class SubscriptionUpdateRequest(StrictModel):
+    is_subscription: bool | None = None
+    status: Literal["active", "paused", "cancelled"] | None = None
+
+
+class SubscriptionSummaryItemView(ViewModel):
+    id: int
+    display_name: str
+    cadence: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"]
+    average_amount: str
+    last_amount: str
+    next_expected_date: date
+    price_change_pct: str | None
+    status: Literal["active", "paused", "cancelled"]
+    detected: bool
+    account: TransactionAccountView
+
+
+class SubscriptionsView(ViewModel):
+    currency: str
+    active_count: int
+    monthly_total: str
+    annual_total: str
+    upcoming_30_days: list[SubscriptionSummaryItemView]
+    subscriptions: list[SubscriptionSummaryItemView]
 
 
 RolloverMode = Literal["off", "surplus", "surplus_and_deficit"]
@@ -1793,7 +1846,7 @@ class OperationsStatusView(ViewModel):
 # Phase 4 Stage 3 — per-user dashboard experience and guided onboarding
 DashboardCardId = Literal[
     "net_worth", "cash_available", "income", "spending", "net_cash_flow", "savings_rate",
-    "cash_flow", "top_spending", "ask_budget", "budget", "insights", "recent_transactions",
+    "cash_flow", "top_spending", "subscriptions", "ask_budget", "budget", "insights", "recent_transactions",
     "accounts", "data_freshness",
 ]
 DashboardCardSize = Literal["compact", "standard", "hero"]

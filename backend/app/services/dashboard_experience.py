@@ -26,6 +26,7 @@ CARD_DEFAULTS: tuple[dict[str, object], ...] = (
     {"id": "savings_rate", "size": "compact", "visible": True},
     {"id": "cash_flow", "size": "hero", "visible": True},
     {"id": "top_spending", "size": "standard", "visible": True},
+    {"id": "subscriptions", "size": "standard", "visible": True},
     {"id": "ask_budget", "size": "hero", "visible": True},
     {"id": "budget", "size": "standard", "visible": True},
     {"id": "insights", "size": "hero", "visible": True},

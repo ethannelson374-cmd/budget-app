@@ -139,3 +139,35 @@ def test_security_posture_is_secret_free(
     assert settings.secret_value("encryption_key") not in rendered
     assert result["ready"] is True
     assert result["summary"]["fail"] == 0
+
+
+def test_phase6_production_database_tls_requires_hostname_verification(tmp_path) -> None:
+    from app.core.config import Settings
+    from app.services.security_audit import _database_tls
+
+    base = {
+        "_env_file": None,
+        "app_env": "production",
+        "demo_mode": False,
+        "app_secret": "a" * 64,
+        "session_secret": "b" * 64,
+        "encryption_key": "c" * 64,
+        "db_host": "mysql.internal.example",
+        "db_port": 3306,
+        "db_name": "budget",
+        "db_user": "budgetapp",
+        "db_password": "database-secret",
+        "db_ssl_required": True,
+        "allowed_hosts": "budget.example.com",
+        "backup_dir": tmp_path / "backups",
+    }
+    required = Settings(**base, db_ssl_mode="REQUIRED")
+    assert _database_tls(required)["status"] == "fail"
+
+    verify_ca = Settings(**base, db_ssl_mode="VERIFY_CA", db_ssl_ca=tmp_path / "oracle-ca.pem")
+    assert _database_tls(verify_ca)["status"] == "fail"
+
+    verify_identity = Settings(**base, db_ssl_mode="VERIFY_IDENTITY", db_ssl_ca=tmp_path / "oracle-ca.pem")
+    result = _database_tls(verify_identity)
+    assert result["status"] == "pass"
+    assert "server identity" in result["detail"]

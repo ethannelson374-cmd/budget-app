@@ -24,6 +24,7 @@ from app.schemas.api import (
     AccountDeleteRequest,
     AdminUserListView,
     AuthView,
+    FamilyStatusView,
     InvitationAcceptRequest,
     InvitationCreateRequest,
     InvitationExchangeRequest,
@@ -69,6 +70,7 @@ from app.services.identity import (
     unlink_google,
     verify_account_delete_password,
 )
+from app.services.family import detach_family_member, family_status, leave_shared_budget, require_no_budget_dependents
 from app.services.plaid import disconnect
 from app.services.setup import INSTALLATION_ROW_ID
 from app.services.views import user_view
@@ -294,11 +296,78 @@ def accept_invitation(
     return {"user": user_view(user), "csrf_token": csrf_token}
 
 
+@router.get("/invitations", response_model=InvitationListView)
+def user_invitations(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return {"invitations": list_invitations(db, principal.user)}
+
+
+def _create_invitation_response(
+    payload: InvitationCreateRequest,
+    request: Request,
+    principal: Principal,
+    db: Session,
+    settings: Settings,
+) -> dict[str, object]:
+    result = create_invitation(
+        db,
+        settings,
+        principal.user,
+        label=payload.label,
+        invite_type=payload.invite_type,
+        base_url=_base_url(settings, request),
+    )
+    add_audit_event(
+        db,
+        settings,
+        action="auth.invitation.create",
+        outcome="success",
+        request_id=_request_id(request),
+        user_id=principal.user.id,
+        detail=f"invitation:{result['id']};type:{payload.invite_type}",
+    )
+    db.commit()
+    return result
+
+
+@router.post("/invitations", response_model=InvitationView, status_code=201)
+def user_create_invitation(
+    payload: InvitationCreateRequest,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    return _create_invitation_response(payload, request, principal, db, settings)
+
+
+@router.delete("/invitations/{invitation_id}", response_model=OkView)
+def user_revoke_invitation(
+    invitation_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, bool]:
+    revoke_invitation(db, principal.user, invitation_id)
+    add_audit_event(
+        db, settings, action="auth.invitation.revoke", outcome="success",
+        request_id=_request_id(request), user_id=principal.user.id,
+        detail=f"invitation:{invitation_id}",
+    )
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/admin/invitations", response_model=InvitationListView)
 def admin_invitations(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
+    if not principal.user.is_admin:
+        raise ApiError(403, "admin_required", "Administrator access is required")
     return {"invitations": list_invitations(db, principal.user)}
 
 
@@ -310,24 +379,9 @@ def admin_create_invitation(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    result = create_invitation(
-        db,
-        settings,
-        principal.user,
-        label=payload.label,
-        base_url=_base_url(settings, request),
-    )
-    add_audit_event(
-        db,
-        settings,
-        action="auth.invitation.create",
-        outcome="success",
-        request_id=_request_id(request),
-        user_id=principal.user.id,
-        detail=f"invitation:{result['id']};link",
-    )
-    db.commit()
-    return result
+    if not principal.user.is_admin:
+        raise ApiError(403, "admin_required", "Administrator access is required")
+    return _create_invitation_response(payload, request, principal, db, settings)
 
 
 @router.delete("/admin/invitations/{invitation_id}", response_model=OkView)
@@ -338,18 +392,60 @@ def admin_revoke_invitation(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
+    if not principal.user.is_admin:
+        raise ApiError(403, "admin_required", "Administrator access is required")
     revoke_invitation(db, principal.user, invitation_id)
     add_audit_event(
-        db,
-        settings,
-        action="auth.invitation.revoke",
-        outcome="success",
-        request_id=_request_id(request),
-        user_id=principal.user.id,
+        db, settings, action="auth.invitation.revoke", outcome="success",
+        request_id=_request_id(request), user_id=principal.user.id,
         detail=f"invitation:{invitation_id}",
     )
     db.commit()
     return {"ok": True}
+
+
+@router.get("/family", response_model=FamilyStatusView)
+def get_family_status(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return family_status(db, principal.user)
+
+
+@router.delete("/family/members/{member_user_id}", response_model=FamilyStatusView)
+def remove_family_member(
+    member_user_id: int,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    detach_family_member(db, principal.user, member_user_id)
+    add_audit_event(
+        db, settings, action="auth.family.member_remove", outcome="success",
+        request_id=_request_id(request), user_id=principal.user.id,
+        detail=f"member:{member_user_id}",
+    )
+    db.commit()
+    return family_status(db, principal.user)
+
+
+@router.post("/family/leave", response_model=FamilyStatusView)
+def leave_family_budget(
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    previous_owner_id = principal.budget_user.id
+    leave_shared_budget(db, principal.user)
+    add_audit_event(
+        db, settings, action="auth.family.leave", outcome="success",
+        request_id=_request_id(request), user_id=principal.user.id,
+        detail=f"previous_owner:{previous_owner_id}",
+    )
+    db.commit()
+    return family_status(db, principal.user)
 
 
 @router.get("/admin/users", response_model=AdminUserListView)
@@ -597,6 +693,7 @@ def delete_account(
     user = principal.user
     verify_account_delete_password(user, payload.password)
     can_delete_admin(db, user)
+    require_no_budget_dependents(db, user)
 
     if settings.plaid_configured:
         item_ids = list(db.scalars(select(PlaidItem.id).where(PlaidItem.user_id == user.id)).all())

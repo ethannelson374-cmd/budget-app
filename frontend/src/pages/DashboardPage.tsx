@@ -16,6 +16,7 @@ import type {
   DashboardPreset,
   InsightsResponse,
   MonthlyBudgetView,
+  SubscriptionsResponse,
   TrendsView,
 } from "../api/types";
 import { CashFlowSankeyWidget } from "../components/CashFlowSankey";
@@ -42,6 +43,7 @@ const DEFAULT_CARDS: DashboardCardPreference[] = [
   { id: "savings_rate", size: "compact", visible: true },
   { id: "cash_flow", size: "hero", visible: true },
   { id: "top_spending", size: "standard", visible: true },
+  { id: "subscriptions", size: "standard", visible: true },
   { id: "ask_budget", size: "hero", visible: true },
   { id: "budget", size: "standard", visible: true },
   { id: "insights", size: "hero", visible: true },
@@ -61,6 +63,7 @@ const CARD_LABELS: Record<DashboardCardId, string> = {
   savings_rate: "Savings rate",
   cash_flow: "Cash flow",
   top_spending: "Top spending",
+  subscriptions: "Subscriptions",
   ask_budget: "Ask Budget",
   budget: "Budget progress",
   insights: "Financial intelligence",
@@ -95,6 +98,7 @@ const PRESETS: Record<Exclude<DashboardPreset, "custom">, Partial<Record<Dashboa
     savings_rate: "compact",
     cash_flow: "hero",
     top_spending: "standard",
+    subscriptions: "standard",
     budget: "standard",
     insights: "hero",
     ask_budget: "standard",
@@ -398,6 +402,27 @@ function NetWorthMetricCard({ summary, currency, size, trends }: { summary: Dash
   );
 }
 
+function SubscriptionDashboardCard({ data }: { data?: SubscriptionsResponse }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!data) return <section className="panel dashboard-fill-card subscription-dashboard-card"><LoadingState label="Loading subscriptions" /></section>;
+  const visible = expanded ? data.subscriptions : data.upcoming_30_days.slice(0, 4);
+  return (
+    <section className={`panel dashboard-fill-card subscription-dashboard-card${expanded ? " expanded" : ""}`}>
+      <div className="panel-heading subscription-dashboard-heading">
+        <div><span className="eyebrow">Recurring commitments</span><h2>Subscriptions</h2><p>{data.active_count ? `${data.active_count} active · ${formatMoney(data.monthly_total, data.currency)}/month` : "No active subscriptions detected yet."}</p></div>
+        <button className="button secondary subscription-expand-button" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button>
+      </div>
+      <div className="subscription-dashboard-totals">
+        <div><span>Monthly</span><strong>{formatMoney(data.monthly_total, data.currency)}</strong></div>
+        <div><span>Annualized</span><strong>{formatMoney(data.annual_total, data.currency)}</strong></div>
+        <div><span>Active</span><strong>{data.active_count}</strong></div>
+      </div>
+      {visible.length ? <div className="subscription-dashboard-list">{visible.map((item) => <article key={item.id}><div><strong>{item.display_name}</strong><small>{item.status === "active" ? `Next ${formatDateTime(`${item.next_expected_date}T12:00:00`)}` : item.status}</small></div><div className="subscription-dashboard-price"><strong>{formatMoney(item.average_amount, data.currency)}</strong>{item.price_change_pct && Math.abs(numberFromMoney(item.price_change_pct)) >= 5 ? <small className={numberFromMoney(item.price_change_pct) > 0 ? "negative" : "positive"}>{formatPercent(item.price_change_pct)} change</small> : <small>{item.cadence}</small>}</div></article>)}</div> : <p className="muted-copy">Budget will promote recurring services here as it recognizes them. You can also mark a recurring expense as a subscription yourself.</p>}
+      <div className="subscription-dashboard-footer"><Link className="text-link" to="/recurring">Manage subscriptions <span aria-hidden="true">→</span></Link></div>
+    </section>
+  );
+}
+
 export function DashboardPage() {
   const [month, setMonth] = useState(currentMonth);
   const dashboard = useQuery({ queryKey: queryKeys.dashboard(month), queryFn: () => apiRequest<DashboardData>(`/dashboard?month=${encodeURIComponent(month)}`) });
@@ -406,24 +431,26 @@ export function DashboardPage() {
   const preferences = useQuery({ queryKey: queryKeys.dashboardPreferences, queryFn: () => apiRequest<DashboardPreferences>("/dashboard/preferences") });
   const onboarding = useQuery({ queryKey: queryKeys.dashboardOnboarding, queryFn: () => apiRequest<DashboardOnboarding>("/dashboard/onboarding") });
   const trends = useQuery({ queryKey: queryKeys.trends("3m"), queryFn: () => apiRequest<TrendsView>("/trends?range=3m"), staleTime: 60_000 });
+  const subscriptions = useQuery({ queryKey: queryKeys.subscriptions, queryFn: () => apiRequest<SubscriptionsResponse>("/subscriptions"), staleTime: 60_000 });
 
   return (
     <div className="page-container dashboard-page">
       <PageHeader title="Dashboard" description={monthLabel(month)} actions={<div className="dashboard-header-actions"><div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Dashboard month</span><input type="month" value={month} max={currentMonth()} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" disabled={month >= currentMonth()} onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div></div>} />
       {dashboard.isPending && <LoadingState label="Calculating this month" />}
       {dashboard.isError && <ErrorState message="Your dashboard could not be loaded." onRetry={() => void dashboard.refetch()} />}
-      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} trends={trends.data} />}
+      {dashboard.data && <DashboardContent data={dashboard.data} budget={budget.data} insights={insights.data} preferences={preferences.data} onboarding={onboarding.data} trends={trends.data} subscriptions={subscriptions.data} />}
     </div>
   );
 }
 
-function DashboardContent({ data, budget, insights, preferences, onboarding, trends }: {
+function DashboardContent({ data, budget, insights, preferences, onboarding, trends, subscriptions }: {
   data: DashboardData;
   budget?: MonthlyBudgetView;
   insights?: InsightsResponse;
   preferences?: DashboardPreferences;
   onboarding?: DashboardOnboarding;
   trends?: TrendsView;
+  subscriptions?: SubscriptionsResponse;
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -518,6 +545,7 @@ function DashboardContent({ data, budget, insights, preferences, onboarding, tre
     if (id === "savings_rate") return <article className="metric-card dashboard-metric-card"><span>Savings rate</span><strong className={savingsTone}>{formatPercent(summary.savings_rate)}</strong><small>{summary.savings_rate === null ? "No income this month" : "Of monthly income"}</small></article>;
     if (id === "cash_flow") return <CashFlowSankeyWidget dashboard={data} size={card.size} onAsk={askAbout} />;
     if (id === "top_spending") return <section className="panel dashboard-fill-card"><div className="panel-heading"><div><span className="eyebrow">This month</span><h2>Top spending</h2></div>{data.spending_by_category.length > 0 && <button className="text-button" type="button" onClick={() => askAbout("What stands out about my top spending categories this month?")}>Ask Budget</button>}</div><CategoryBars categories={data.spending_by_category} currency={data.currency} /></section>;
+    if (id === "subscriptions") return <SubscriptionDashboardCard data={subscriptions} />;
     if (id === "ask_budget") return <section className="panel dashboard-fill-card dashboard-advisor-widget"><AskBudgetCard prefill={askPrompt} onPrefillConsumed={() => setAskPrompt("")} /></section>;
     if (id === "budget") return <section className="panel dashboard-fill-card dashboard-budget-panel"><div className="panel-heading"><div><span className="eyebrow">Monthly budget</span><h2>{budget && budget.source !== "unplanned" ? `${formatMoney(budget.spent, budget.currency)} spent of ${formatMoney(budget.available_with_rollover, budget.currency)}` : "No budget plan yet"}</h2></div><Link className="text-link" to="/budget">{budget && budget.source !== "unplanned" ? "Open budget" : "Create budget"} <span aria-hidden="true">→</span></Link></div>{budget && budget.source !== "unplanned" ? <div className="dashboard-budget-summary"><div><strong>{formatMoney(budget.remaining, budget.currency)}</strong><span>Remaining</span></div><div><strong>{formatMoney(budget.safe_to_spend, budget.currency)}</strong><span>Safe to spend</span></div><div><strong>{budget.categories.filter((row) => row.status === "close").length}</strong><span>Getting close</span></div><div><strong>{budget.categories.filter((row) => row.status === "over").length}</strong><span>Over budget</span></div></div> : <p className="muted-copy">Set a yearly budget or customize a month to unlock safe-to-spend guidance.</p>}</section>;
     if (id === "insights") return <section className="panel dashboard-fill-card dashboard-insights"><div className="panel-heading"><div><span className="eyebrow">Financial intelligence</span><h2>What needs your attention</h2></div><Link className="text-link" to="/insights">View all {insights?.active_count ?? 0} <span aria-hidden="true">→</span></Link></div>{insights?.insights.length ? <div className="dashboard-insight-list">{insights.insights.slice(0, 3).map((insight) => <InsightCard key={insight.id} insight={insight} compact />)}</div> : <EmptyState title="Nothing urgent right now" message="As your financial history grows, Budget will surface deterministic insights here." action={<Link className="button secondary" to="/insights">Review insights</Link>} />}</section>;

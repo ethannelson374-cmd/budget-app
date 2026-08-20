@@ -44,6 +44,8 @@ describe("SettingsPage", () => {
       if (path === "/accounts") return { accounts: [] };
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
+      if (path === "/auth/invitations") return { invitations: [] };
+      if (path === "/auth/family") return { budget_owner_user_id: 1, budget_owner_username: "owner", role: "owner", shared: false, members: [{ id: 1, username: "owner", email: "owner@example.test", role: "owner", is_current: true }] };
       if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);
@@ -77,6 +79,8 @@ describe("SettingsPage", () => {
       if (path === "/accounts") return { accounts: [] };
       if (path === "/auth/security") return { is_admin: false, email_verified: true, has_password: true, google_enabled: false, google_connected: false, two_factor_enabled: false, email_delivery_configured: false, invite_only: true };
       if (path === "/auth/sessions") return { sessions: [] };
+      if (path === "/auth/invitations") return { invitations: [] };
+      if (path === "/auth/family") return { budget_owner_user_id: 1, budget_owner_username: "owner", role: "owner", shared: false, members: [{ id: 1, username: "owner", email: "owner@example.test", role: "owner", is_current: true }] };
       if (path === "/notifications/preferences") return { in_app_enabled: true, email_enabled: false, email_delivery_available: false, spending_alerts: true, forecast_alerts: true, goal_milestones: true, recurring_changes: true, large_transaction_alerts: false, large_transaction_threshold: "250.0000", weekly_summary: true, monthly_summary: true };
       if (path === "/advisor/conversations" && init?.method === "DELETE") return { ok: true };
       throw new Error(`Unexpected request: ${path}`);

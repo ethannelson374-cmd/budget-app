@@ -143,7 +143,7 @@ def link_token(
     principal: Principal = Depends(require_csrf),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    return create_link_token(settings, principal.user)
+    return create_link_token(settings, principal.budget_user)
 
 
 @router.post("/connections/{item_id}/link-token", response_model=PlaidLinkTokenView)
@@ -153,7 +153,7 @@ def update_link_token(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    return create_update_link_token(db, settings, principal.user, item_id)
+    return create_update_link_token(db, settings, principal.budget_user, item_id)
 
 
 @router.post("/exchange", response_model=PlaidConnectionsView)
@@ -167,7 +167,7 @@ def exchange(
     exchange_and_import(
         db,
         settings,
-        principal.user,
+        principal.budget_user,
         payload.public_token.get_secret_value(),
         institution_external_id=payload.institution_id,
         link_accounts=[account.model_dump() for account in payload.accounts],
@@ -182,7 +182,7 @@ def exchange(
         detail="item_connected",
     )
     db.commit()
-    return list_connections(db, settings, principal.user)
+    return list_connections(db, settings, principal.budget_user)
 
 
 @router.get("/connections", response_model=PlaidConnectionsView)
@@ -191,7 +191,7 @@ def connections(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    return list_connections(db, settings, principal.user)
+    return list_connections(db, settings, principal.budget_user)
 
 
 @router.post("/connections/{item_id}/refresh", response_model=PlaidConnectionsView)
@@ -203,7 +203,7 @@ def refresh_updated_connection(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     try:
-        refresh_connection(db, settings, principal.user, item_id)
+        refresh_connection(db, settings, principal.budget_user, item_id)
     except ApiError:
         # refresh_connection records provider-reported Item health before raising.
         # Commit that state so the Accounts screen can immediately offer repair UI.
@@ -219,7 +219,7 @@ def refresh_updated_connection(
         detail=f"item:{item_id}",
     )
     db.commit()
-    return list_connections(db, settings, principal.user)
+    return list_connections(db, settings, principal.budget_user)
 
 
 @router.post("/connections/{item_id}/sync", response_model=PlaidSyncResultView)
@@ -231,7 +231,7 @@ def sync_connection(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     try:
-        outcome = sync_plaid_item(db, settings, principal.user, item_id)
+        outcome = sync_plaid_item(db, settings, principal.budget_user, item_id)
     except ApiError:
         # sync_plaid_item applies no transaction changes until all Plaid pages are collected.
         # Commit provider error state when present, then preserve the API error.
@@ -261,7 +261,7 @@ def remove_connection(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
-    disconnect(db, settings, principal.user, item_id)
+    disconnect(db, settings, principal.budget_user, item_id)
     add_audit_event(
         db,
         settings,
