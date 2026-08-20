@@ -5,7 +5,7 @@ import { ThemeProvider, useTheme } from "./ThemeContext";
 
 function ThemeProbe() {
   const { preference, resolvedTheme, setPreference } = useTheme();
-  return <><output>{preference}:{resolvedTheme}</output><button onClick={() => setPreference("dark")}>Use dark</button></>;
+  return <><output>{preference}:{resolvedTheme}</output><button onClick={() => setPreference("light")}>Use light</button><button onClick={() => setPreference("dark")}>Use dark</button></>;
 }
 
 describe("ThemeProvider", () => {
@@ -13,6 +13,10 @@ describe("ThemeProvider", () => {
     const user = userEvent.setup();
     render(<ThemeProvider><ThemeProbe /></ThemeProvider>);
     expect(screen.getByText("system:light")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use light" }));
+    expect(screen.getByText("light:light")).toBeInTheDocument();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(localStorage.getItem("budget-theme")).toBe("light");
     await user.click(screen.getByRole("button", { name: "Use dark" }));
     expect(screen.getByText("dark:dark")).toBeInTheDocument();
     expect(document.documentElement.dataset.theme).toBe("dark");
