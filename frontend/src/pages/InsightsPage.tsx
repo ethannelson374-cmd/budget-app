@@ -16,7 +16,7 @@ const filterLabels: Record<InsightFilter, string> = {
   all: "History",
 };
 
-export function InsightsPage() {
+export function InsightsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [filter, setFilter] = useState<InsightFilter>("active");
   const queryClient = useQueryClient();
   const insights = useQuery({
@@ -47,7 +47,7 @@ export function InsightsPage() {
   const counts = data ? { active: data.active_count, dismissed: data.dismissed_count, resolved: data.resolved_count } : null;
 
   return (
-    <div className="page-container insights-page">
+    <div className={`page-container insights-page${embedded ? " embedded-page" : ""}`}>
       <PageHeader
         title="Insights"
         description="Deterministic signals from your spending, budget, recurring activity, goals, debt, and forecast."

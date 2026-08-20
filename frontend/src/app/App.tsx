@@ -14,19 +14,16 @@ import { GoogleAuthCompletePage } from "../pages/GoogleAuthCompletePage";
 import { SetupPage } from "../pages/SetupPage";
 
 const AccountsPage = lazy(() => import("../pages/AccountsPage").then((module) => ({ default: module.AccountsPage })));
-const AdvisorPage = lazy(() => import("../pages/AdvisorPage").then((module) => ({ default: module.AdvisorPage })));
-const BudgetPage = lazy(() => import("../pages/BudgetPage").then((module) => ({ default: module.BudgetPage })));
+const AdvisorWorkspacePage = lazy(() => import("../pages/AdvisorWorkspacePage").then((module) => ({ default: module.AdvisorWorkspacePage })));
+const AnalyticsPage = lazy(() => import("../pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })));
 const DashboardPage = lazy(() => import("../pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
-const InsightsPage = lazy(() => import("../pages/InsightsPage").then((module) => ({ default: module.InsightsPage })));
 const OnboardingPage = lazy(() => import("../pages/OnboardingPage").then((module) => ({ default: module.OnboardingPage })));
 const NotificationsPage = lazy(() => import("../pages/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
 const PlaidOAuthPage = lazy(() => import("../pages/PlaidOAuthPage").then((module) => ({ default: module.PlaidOAuthPage })));
 const PlanPage = lazy(() => import("../pages/PlanPage").then((module) => ({ default: module.PlanPage })));
 const RecurringPage = lazy(() => import("../pages/RecurringPage").then((module) => ({ default: module.RecurringPage })));
-const ReportsPage = lazy(() => import("../pages/ReportsPage").then((module) => ({ default: module.ReportsPage })));
 const SettingsPage = lazy(() => import("../pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const TransactionsPage = lazy(() => import("../pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })));
-const TrendsPage = lazy(() => import("../pages/TrendsPage").then((module) => ({ default: module.TrendsPage })));
 
 function SetupError({ error, retry }: { error: Error; retry: () => void }) {
   const apiError = error instanceof ApiError ? error : null;
@@ -147,14 +144,15 @@ export function App() {
         <Route path="/dashboard" element={<LazyPage><DashboardPage /></LazyPage>} />
         <Route path="/accounts" element={<LazyPage><AccountsPage /></LazyPage>} />
         <Route path="/transactions" element={<LazyPage><TransactionsPage /></LazyPage>} />
-        <Route path="/budget" element={<LazyPage><BudgetPage /></LazyPage>} />
+        <Route path="/budget" element={<Navigate to="/plan?tab=budget" replace />} />
         <Route path="/plan" element={<LazyPage><PlanPage /></LazyPage>} />
         <Route path="/calendar" element={<LazyPage><RecurringPage /></LazyPage>} />
         <Route path="/recurring" element={<LazyPage><RecurringPage /></LazyPage>} />
-        <Route path="/insights" element={<LazyPage><InsightsPage /></LazyPage>} />
-        <Route path="/advisor" element={<LazyPage><AdvisorPage /></LazyPage>} />
-        <Route path="/reports" element={<LazyPage><ReportsPage /></LazyPage>} />
-        <Route path="/trends" element={<LazyPage><TrendsPage /></LazyPage>} />
+        <Route path="/insights" element={<Navigate to="/analytics?tab=insights" replace />} />
+        <Route path="/trends" element={<Navigate to="/analytics?tab=trends" replace />} />
+        <Route path="/analytics" element={<LazyPage><AnalyticsPage /></LazyPage>} />
+        <Route path="/reports" element={<Navigate to="/advisor?tab=reports" replace />} />
+        <Route path="/advisor" element={<LazyPage><AdvisorWorkspacePage /></LazyPage>} />
         <Route path="/settings" element={<LazyPage><SettingsPage /></LazyPage>} />
         <Route path="/notifications" element={<LazyPage><NotificationsPage /></LazyPage>} />
         <Route path="*" element={<NotFoundPage />} />

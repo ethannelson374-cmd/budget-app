@@ -2257,3 +2257,24 @@ input,select,textarea{border-color:var(--border-strong);background:color-mix(in 
     min-block-size: 44px;
   }
 }
+
+/* Navigation consolidation — shared workspaces */
+.workspace-tabs,.plan-tabs{flex-wrap:wrap}
+.consolidated-page>.page-header{margin-bottom:18px}
+.embedded-workspace{min-width:0}
+.embedded-page{width:100%;max-width:none;padding:0}
+.embedded-page>.page-header{min-height:0;margin:0 0 20px;padding:16px 18px;border:1px solid color-mix(in srgb,var(--glass-line) 68%,transparent);border-radius:18px;background:linear-gradient(145deg,rgb(255 255 255 / 5%),color-mix(in srgb,var(--surface-raised) 10%,transparent));box-shadow:inset 0 1px 0 color-mix(in srgb,var(--glass-specular) 52%,transparent);backdrop-filter:blur(24px) saturate(180%)}
+.embedded-page>.page-header h1{font-size:clamp(1.25rem,2.1vw,1.6rem);letter-spacing:-.035em}
+.embedded-page>.page-header p{font-size:.76rem}
+
+/* Cash-flow interaction and spacing pass */
+.dashboard-widget:not(.customizing):hover .dashboard-widget-body>.cash-flow-widget{transform:none}
+.cash-flow-widget-heading{margin-bottom:20px}
+.cash-flow-summary-strip{margin:0 0 20px}
+.sankey-stage{padding:10px 0 14px}
+.cash-flow-range-controls-bottom{position:relative;z-index:30;width:fit-content;max-width:100%;justify-content:center;margin:22px auto;padding:4px;pointer-events:auto;transform:translateZ(0)}
+.cash-flow-range-controls-bottom>*{pointer-events:auto}
+.cash-flow-range-controls-bottom .cash-flow-range-tabs{position:relative;z-index:1}
+.sankey-inspector{margin-top:0}
+.cash-flow-footnote{margin-top:14px;padding-top:2px}
+@media(max-width:620px){.cash-flow-range-controls-bottom{width:100%;justify-content:center;margin:18px auto}.cash-flow-range-controls-bottom .cash-flow-range-tabs{width:100%}.embedded-page>.page-header{padding:14px}.plan-tabs{width:100%}.plan-tabs button{flex:1;min-width:92px}}

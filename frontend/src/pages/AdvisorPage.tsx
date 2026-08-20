@@ -147,7 +147,7 @@ function ReplyCard({ row }: { row: ChatRow }) {
   );
 }
 
-export function AdvisorPage() {
+export function AdvisorPage({ embedded = false }: { embedded?: boolean } = {}) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const routeState = (location.state as { insight?: InsightItem; intent?: "explain" | "plan"; report?: AdvisorReportContext; conversationId?: number; prompt?: string } | null);
@@ -284,14 +284,14 @@ export function AdvisorPage() {
 
   const submit = (event: FormEvent) => { event.preventDefault(); void send(input); };
 
-  if (status.isPending) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" description="Financial answers grounded in Budget's own calculations." /><LoadingState label="Opening Advisor" /></div>;
-  if (status.isError) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" /><ErrorState message="Advisor status could not be loaded." onRetry={() => void status.refetch()} /></div>;
-  if (!status.data.available) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" description="Financial answers grounded in Budget's own calculations." /><section className="panel advisor-unavailable"><h2>AI Advisor is not configured yet</h2><p>The server needs an enabled AI provider before Ask Budget can answer questions.</p><Link className="button secondary" to="/settings">Open Settings</Link></section></div>;
-  if (!status.data.enabled) return <div className="page-container advisor-page"><PageHeader title="Ask Budget" /><section className="panel advisor-unavailable"><h2>Ask Budget is turned off</h2><p>You can enable the Advisor and choose its privacy options in Settings.</p><Link className="button primary" to="/settings">Enable in Settings</Link></section></div>;
+  if (status.isPending) return <div className={`page-container advisor-page${embedded ? " embedded-page" : ""}`}><PageHeader title="Ask Budget" description="Financial answers grounded in Budget's own calculations." /><LoadingState label="Opening Advisor" /></div>;
+  if (status.isError) return <div className={`page-container advisor-page${embedded ? " embedded-page" : ""}`}><PageHeader title="Ask Budget" /><ErrorState message="Advisor status could not be loaded." onRetry={() => void status.refetch()} /></div>;
+  if (!status.data.available) return <div className={`page-container advisor-page${embedded ? " embedded-page" : ""}`}><PageHeader title="Ask Budget" description="Financial answers grounded in Budget's own calculations." /><section className="panel advisor-unavailable"><h2>AI Advisor is not configured yet</h2><p>The server needs an enabled AI provider before Ask Budget can answer questions.</p><Link className="button secondary" to="/settings">Open Settings</Link></section></div>;
+  if (!status.data.enabled) return <div className={`page-container advisor-page${embedded ? " embedded-page" : ""}`}><PageHeader title="Ask Budget" /><section className="panel advisor-unavailable"><h2>Ask Budget is turned off</h2><p>You can enable the Advisor and choose its privacy options in Settings.</p><Link className="button primary" to="/settings">Enable in Settings</Link></section></div>;
 
   const detailLoading = Boolean(selectedId && storeHistory && !busy && messages.length === 0 && detail.isPending);
   return (
-    <div className="page-container advisor-page">
+    <div className={`page-container advisor-page${embedded ? " embedded-page" : ""}`}>
       <PageHeader title="Ask Budget" description="Ask questions, model options, or review a plan before Budget changes anything." actions={<button className="button secondary" type="button" onClick={newConversation}>New conversation</button>} />
       {!storeHistory && <div className="notice-banner"><strong>Private session.</strong> Budget will not keep Advisor messages, and action plans are not created in private sessions.</div>}
       {attachedInsight && <div className="advisor-insight-context"><div><span className="eyebrow">Attached insight</span><strong>{attachedInsight.title}</strong><p>{attachedInsight.summary}</p></div><button type="button" className="button ghost" onClick={() => setAttachedInsight(null)}>Remove</button></div>}

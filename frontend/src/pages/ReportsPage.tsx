@@ -289,7 +289,7 @@ function startDownload(item: ReportExport) {
   link.remove();
 }
 
-export function ReportsPage() {
+export function ReportsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<ReportTab>("overview");
   const [range, setRange] = useState<ReportRangeKey>("6m");
   const [saveOpen, setSaveOpen] = useState(false);
@@ -349,7 +349,7 @@ export function ReportsPage() {
   const submitSave = (event: FormEvent) => { event.preventDefault(); saveReport.mutate(); };
 
   return (
-    <div className="page-container reports-page">
+    <div className={`page-container reports-page${embedded ? " embedded-page" : ""}`}>
       <PageHeader
         title="Reports"
         description="Historical financial analytics built from Budget's deterministic calculations."

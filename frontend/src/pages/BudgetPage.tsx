@@ -231,7 +231,7 @@ function YearBudget({ year, data, plan, categories }: { year: number; data: Year
   );
 }
 
-export function BudgetPage() {
+export function BudgetPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [view, setView] = useState<"month" | "year">("month");
   const [month, setMonth] = useState(currentMonth());
   const year = Number(month.slice(0, 4));
@@ -245,7 +245,7 @@ export function BudgetPage() {
   const selector = useMemo(() => <div className="budget-view-controls"><div className="segmented-control"><button type="button" className={view === "month" ? "active" : ""} onClick={() => setView("month")}>Month</button><button type="button" className={view === "year" ? "active" : ""} onClick={() => setView("year")}>Year</button></div>{view === "month" ? <div className="month-control"><button type="button" aria-label="Previous month" onClick={() => setMonth((value) => shiftMonth(value, -1))}>‹</button><label><span className="sr-only">Budget month</span><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label><button type="button" aria-label="Next month" onClick={() => setMonth((value) => shiftMonth(value, 1))}>›</button></div> : <label className="year-control"><span className="sr-only">Budget year</span><input type="number" min="2000" max="2200" value={year} onChange={(event) => { const next = Math.min(2200, Math.max(2000, Number(event.target.value) || year)); setMonth(`${next}-${month.slice(5, 7)}`); }} /></label>}</div>, [view, month, year]);
 
   return (
-    <div className="page-container budget-page">
+    <div className={`page-container budget-page${embedded ? " embedded-page" : ""}`}>
       <PageHeader title="Budget" description={description} actions={selector} />
       {busy && <LoadingState label="Calculating your budget" />}
       {failed && <ErrorState message="Your budget could not be loaded." onRetry={() => { void categories.refetch(); void monthBudget.refetch(); void yearBudget.refetch(); void annualPlan.refetch(); }} />}

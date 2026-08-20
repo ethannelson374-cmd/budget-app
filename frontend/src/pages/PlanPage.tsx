@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
@@ -19,9 +20,10 @@ import type {
 import { Amount } from "../components/Amount";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { PageHeader } from "../components/PageHeader";
+import { BudgetPage } from "./BudgetPage";
 import { formatDate, formatMoney, formatPercent, numberFromMoney } from "../lib/format";
 
-type Tab = "goals" | "debt" | "forecast" | "scenario";
+type Tab = "goals" | "debt" | "forecast" | "scenario" | "budget";
 
 const GOAL_TYPES: Array<{ value: GoalType; label: string }> = [
   { value: "emergency_fund", label: "Emergency fund" },
@@ -218,14 +220,22 @@ function ScenarioTab({ currency }: { currency: string }) {
 }
 
 export function PlanPage() {
-  const [tab, setTab] = useState<Tab>("goals");
-  const goals = useQuery({ queryKey: queryKeys.goals, queryFn: () => apiRequest<FinancialGoalsResponse>("/planning/goals") });
-  const debts = useQuery({ queryKey: queryKeys.debts, queryFn: () => apiRequest<DebtsResponse>("/planning/debts") });
-  const forecast = useQuery({ queryKey: queryKeys.forecast, queryFn: () => apiRequest<ForecastResponse>("/planning/forecast") });
-  const accounts = useQuery({ queryKey: queryKeys.accounts, queryFn: () => apiRequest<AccountsResponse>("/accounts") });
-  const busy = goals.isPending || debts.isPending || forecast.isPending || accounts.isPending;
-  const failed = goals.isError || debts.isError || forecast.isError || accounts.isError;
-  const actions = useMemo(() => <div className="segmented-control plan-tabs">{(["goals", "debt", "forecast", "scenario"] as Tab[]).map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "debt" ? "Debt" : item[0].toUpperCase() + item.slice(1)}</button>)}</div>, [tab]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: Tab = requestedTab === "budget" || requestedTab === "debt" || requestedTab === "forecast" || requestedTab === "scenario" ? requestedTab : "goals";
+  const planningActive = tab !== "budget";
+  const goals = useQuery({ queryKey: queryKeys.goals, queryFn: () => apiRequest<FinancialGoalsResponse>("/planning/goals"), enabled: planningActive });
+  const debts = useQuery({ queryKey: queryKeys.debts, queryFn: () => apiRequest<DebtsResponse>("/planning/debts"), enabled: planningActive });
+  const forecast = useQuery({ queryKey: queryKeys.forecast, queryFn: () => apiRequest<ForecastResponse>("/planning/forecast"), enabled: planningActive });
+  const accounts = useQuery({ queryKey: queryKeys.accounts, queryFn: () => apiRequest<AccountsResponse>("/accounts"), enabled: planningActive });
+  const busy = planningActive && (goals.isPending || debts.isPending || forecast.isPending || accounts.isPending);
+  const failed = planningActive && (goals.isError || debts.isError || forecast.isError || accounts.isError);
+  const selectTab = (next: Tab) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "goals") params.delete("tab"); else params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  };
+  const actions = <div className="segmented-control plan-tabs" aria-label="Plan view">{(["goals", "debt", "forecast", "scenario", "budget"] as Tab[]).map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => selectTab(item)}>{item === "debt" ? "Debt" : item[0].toUpperCase() + item.slice(1)}</button>)}</div>;
   const currency = goals.data?.currency ?? debts.data?.currency ?? forecast.data?.currency ?? "USD";
-  return <div className="page-container plan-page"><PageHeader title="Plan" description="Goals, debt payoff, and forward-looking cash planning." actions={actions} />{busy && <LoadingState label="Building your financial plan" />}{failed && <ErrorState message="Your planning data could not be loaded." onRetry={() => { void goals.refetch(); void debts.refetch(); void forecast.refetch(); void accounts.refetch(); }} />}{!busy && !failed && accounts.data && goals.data && debts.data && forecast.data && <>{tab === "goals" && <GoalsTab data={goals.data} accounts={accounts.data} />}{tab === "debt" && <DebtsTab data={debts.data} accounts={accounts.data} />}{tab === "forecast" && <ForecastTab data={forecast.data} />}{tab === "scenario" && <ScenarioTab currency={currency} />}</>}</div>;
+  return <div className="page-container plan-page"><PageHeader title="Plan" description="Budget targets, goals, debt payoff, and forward-looking cash planning." actions={actions} />{tab === "budget" && <div className="embedded-workspace"><BudgetPage embedded /></div>}{busy && <LoadingState label="Building your financial plan" />}{failed && <ErrorState message="Your planning data could not be loaded." onRetry={() => { void goals.refetch(); void debts.refetch(); void forecast.refetch(); void accounts.refetch(); }} />}{planningActive && !busy && !failed && accounts.data && goals.data && debts.data && forecast.data && <>{tab === "goals" && <GoalsTab data={goals.data} accounts={accounts.data} />}{tab === "debt" && <DebtsTab data={debts.data} accounts={accounts.data} />}{tab === "forecast" && <ForecastTab data={forecast.data} />}{tab === "scenario" && <ScenarioTab currency={currency} />}</>}</div>;
 }

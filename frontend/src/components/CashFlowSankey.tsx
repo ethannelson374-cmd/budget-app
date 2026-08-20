@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api/client";
@@ -34,8 +34,8 @@ const FLOW_TONES: Record<CashFlowLink["kind"], [string, string]> = {
 
 function evenlySpaced(count: number, height: number): number[] {
   if (count <= 0) return [];
-  const top = 58;
-  const bottom = height - 58;
+  const top = 72;
+  const bottom = height - 72;
   if (count === 1) return [(top + bottom) / 2];
   return Array.from({ length: count }, (_, index) => top + ((bottom - top) * index) / (count - 1));
 }
@@ -68,10 +68,12 @@ function SankeyGraphic({
   data,
   condensed = false,
   onAsk,
+  rangeControls,
 }: {
   data: CashFlowSankeyData;
   condensed?: boolean;
   onAsk: (prompt: string) => void;
+  rangeControls?: ReactNode;
 }) {
   const leftNodes = data.nodes.filter((node) => ["income_source", "refund", "shortfall"].includes(node.kind));
   const rightNodes = data.nodes.filter((node) => ["expense", "debt", "savings"].includes(node.kind));
@@ -83,7 +85,7 @@ function SankeyGraphic({
     outgoing.reduce((sum, link) => sum + moneyNumber(link.amount), 0),
     1,
   );
-  const height = Math.max(condensed ? 330 : 430, Math.max(leftNodes.length, rightNodes.length) * (condensed ? 48 : 58) + 90);
+  const height = Math.max(condensed ? 340 : 470, Math.max(leftNodes.length, rightNodes.length) * (condensed ? 50 : 58) + 120);
   const leftY = evenlySpaced(leftNodes.length, height);
   const rightY = evenlySpaced(rightNodes.length, height);
   const leftPositions = new Map(leftNodes.map((node, index) => [node.id, leftY[index]]));
@@ -236,6 +238,8 @@ function SankeyGraphic({
         <span className="sr-only">{hub.label}</span>
       </div>
 
+      {rangeControls && !condensed && <div className="cash-flow-range-controls cash-flow-range-controls-bottom">{rangeControls}</div>}
+
       {activeLink && !condensed && (
         <div className="sankey-inspector" aria-live="polite">
           <div>
@@ -297,6 +301,7 @@ export function CashFlowSankeyWidget({
     queryKey: queryKeys.cashFlow(search),
     queryFn: () => apiRequest<CashFlowSankeyData>(`/cash-flow?${search}`),
     enabled: size !== "compact" && customValid,
+    placeholderData: (previousData) => previousData,
   });
 
   if (size === "compact") {
@@ -312,24 +317,25 @@ export function CashFlowSankeyWidget({
     );
   }
 
+  const rangeControls = size === "hero" ? (
+    <>
+      <div className="cash-flow-range-tabs" role="group" aria-label="Cash flow range">
+        {(["month", "year", "custom"] as const).map((option) => <button key={option} className={range === option ? "active" : ""} type="button" onClick={() => setRange(option)}>{option}</button>)}
+      </div>
+      {range === "year" && <label><span className="sr-only">Cash flow year</span><input type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || year)} /></label>}
+      {range === "custom" && <div className="cash-flow-custom-dates"><label><span className="sr-only">Cash flow start date</span><input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><span aria-hidden="true">→</span><label><span className="sr-only">Cash flow end date</span><input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
+    </>
+  ) : null;
+
   return (
     <section className="panel dashboard-fill-card cash-flow-widget">
       <div className="panel-heading cash-flow-widget-heading">
         <div><span className="eyebrow">Flow intelligence</span><h2>{size === "hero" ? "Cash flow map" : "Cash flow"}</h2><p>{query.data?.period.label ?? dashboard.period.month}</p></div>
-        {size === "hero" && (
-          <div className="cash-flow-range-controls" aria-label="Cash flow range">
-            <div className="cash-flow-range-tabs">
-              {(["month", "year", "custom"] as const).map((option) => <button key={option} className={range === option ? "active" : ""} type="button" onClick={() => setRange(option)}>{option}</button>)}
-            </div>
-            {range === "year" && <label><span className="sr-only">Cash flow year</span><input type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || year)} /></label>}
-            {range === "custom" && <div className="cash-flow-custom-dates"><label><span className="sr-only">Cash flow start date</span><input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><span aria-hidden="true">→</span><label><span className="sr-only">Cash flow end date</span><input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div>}
-          </div>
-        )}
       </div>
       {!customValid && <div className="inline-alert" role="alert">Choose an end date on or after the start date.</div>}
-      {query.isPending && customValid && <LoadingState label="Mapping cash flow" />}
-      {query.isError && <ErrorState message="Cash flow could not be mapped." onRetry={() => void query.refetch()} />}
-      {query.data && <><CashFlowSummaryStrip data={query.data} /><SankeyGraphic data={query.data} condensed={size === "standard"} onAsk={onAsk} /><div className="cash-flow-footnote"><span>{query.data.summary.transaction_count.toLocaleString()} mapped transactions</span><span>{query.data.summary.excluded_transfer_count.toLocaleString()} transfers/exclusions omitted</span></div></>}
+      {query.isPending && customValid && !query.data && <LoadingState label="Mapping cash flow" />}
+      {query.isError && !query.data && <ErrorState message="Cash flow could not be mapped." onRetry={() => void query.refetch()} />}
+      {query.data && <><CashFlowSummaryStrip data={query.data} /><SankeyGraphic data={query.data} condensed={size === "standard"} onAsk={onAsk} rangeControls={rangeControls} /><div className="cash-flow-footnote"><span>{query.data.summary.transaction_count.toLocaleString()} mapped transactions</span><span>{query.data.summary.excluded_transfer_count.toLocaleString()} transfers/exclusions omitted</span></div></>}
     </section>
   );
 }

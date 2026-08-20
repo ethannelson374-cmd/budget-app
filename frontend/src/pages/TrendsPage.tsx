@@ -216,16 +216,16 @@ function SpendingMomentum({ data }: { data: TrendsView }) {
   );
 }
 
-export function TrendsPage() {
+export function TrendsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [range, setRange] = useState<TrendRangeKey>("6m");
   const query = useQuery({ queryKey: queryKeys.trends(range), queryFn: () => apiRequest<TrendsView>(`/trends?range=${range}`) });
 
-  if (query.isPending) return <div className="page-container"><PageHeader title="Trends" description="Watch the shape of your finances change over time." /><LoadingState label="Building financial terrain" /></div>;
-  if (query.isError || !query.data) return <div className="page-container"><PageHeader title="Trends" description="Watch the shape of your finances change over time." /><ErrorState message="Financial trends could not be loaded." onRetry={() => void query.refetch()} /></div>;
+  if (query.isPending) return <div className={`page-container${embedded ? " embedded-page" : ""}`}><PageHeader title="Trends" description="Watch the shape of your finances change over time." /><LoadingState label="Building financial terrain" /></div>;
+  if (query.isError || !query.data) return <div className={`page-container${embedded ? " embedded-page" : ""}`}><PageHeader title="Trends" description="Watch the shape of your finances change over time." /><ErrorState message="Financial trends could not be loaded." onRetry={() => void query.refetch()} /></div>;
 
   const data = query.data;
   return (
-    <div className="page-container trends-page">
+    <div className={`page-container trends-page${embedded ? " embedded-page" : ""}`}>
       <PageHeader
         title="Trends"
         description="Net worth, account momentum, income, and spending—without flattening the story into a spreadsheet."

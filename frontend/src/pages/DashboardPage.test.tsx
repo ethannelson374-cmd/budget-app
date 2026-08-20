@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -177,6 +177,17 @@ describe("DashboardPage", () => {
     const drillDown = await screen.findByRole("link", { name: "View transactions" });
     expect(drillDown.getAttribute("href")).toContain("category_id=2");
     expect(drillDown.getAttribute("href")).toContain("start_date=2026-08-01");
+  });
+
+  it("keeps Sankey range controls interactive below the visualization", async () => {
+    const user = userEvent.setup();
+    const { container } = renderDashboard();
+    await screen.findByRole("heading", { name: "Cash flow map" });
+    const yearButton = await screen.findByRole("button", { name: "year" });
+    expect(yearButton.closest(".cash-flow-range-controls-bottom")).not.toBeNull();
+    await user.click(yearButton);
+    await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith("/cash-flow?range=year&year=2026"));
+    expect(container.querySelector(".cash-flow-range-controls-bottom")).not.toBeNull();
   });
 
   it("uses three snap sizes with a keyboard-accessible drag-resize grip", async () => {

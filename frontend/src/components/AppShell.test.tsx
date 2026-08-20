@@ -20,8 +20,11 @@ describe("AppShell navigation", () => {
 
   it("exposes working destinations and the notification inbox", async () => {
     renderShell();
-    for (const name of ["Dashboard", "Accounts", "Transactions", "Budget", "Plan", "Calendar", "Insights", "Advisor", "Reports", "Trends", "Settings"]) {
+    for (const name of ["Dashboard", "Accounts", "Transactions", "Plan", "Calendar", "Analytics", "Advisor", "Settings"]) {
       expect(screen.getAllByRole("link", { name })).toHaveLength(1);
+    }
+    for (const oldName of ["Budget", "Insights", "Reports", "Trends"]) {
+      expect(screen.queryByRole("link", { name: oldName })).not.toBeInTheDocument();
     }
     expect(await screen.findAllByRole("link", { name: "2 unread notifications" })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Dashboard" })[0]).toHaveClass("active");

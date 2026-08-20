@@ -12,13 +12,10 @@ const navigation: Array<{ to: string; label: string; icon: IconName }> = [
   { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/accounts", label: "Accounts", icon: "accounts" },
   { to: "/transactions", label: "Transactions", icon: "transactions" },
-  { to: "/budget", label: "Budget", icon: "wallet" },
   { to: "/plan", label: "Plan", icon: "target" },
   { to: "/calendar", label: "Calendar", icon: "calendar" },
-  { to: "/insights", label: "Insights", icon: "sparkles" },
+  { to: "/analytics", label: "Analytics", icon: "trends" },
   { to: "/advisor", label: "Advisor", icon: "message" },
-  { to: "/reports", label: "Reports", icon: "reports" },
-  { to: "/trends", label: "Trends", icon: "trends" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 
