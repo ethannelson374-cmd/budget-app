@@ -141,7 +141,7 @@ def test_security_posture_is_secret_free(
     assert result["summary"]["fail"] == 0
 
 
-def test_phase6_production_database_tls_requires_hostname_verification(tmp_path) -> None:
+def test_phase6_production_database_tls_accepts_pinned_ca_with_hostname_warning(tmp_path) -> None:
     from app.core.config import Settings
     from app.services.security_audit import _database_tls
 
@@ -165,7 +165,10 @@ def test_phase6_production_database_tls_requires_hostname_verification(tmp_path)
     assert _database_tls(required)["status"] == "fail"
 
     verify_ca = Settings(**base, db_ssl_mode="VERIFY_CA", db_ssl_ca=tmp_path / "oracle-ca.pem")
-    assert _database_tls(verify_ca)["status"] == "fail"
+    ca_result = _database_tls(verify_ca)
+    assert ca_result["status"] == "warn"
+    assert "configured CA chain" in ca_result["detail"]
+    assert "not the hostname" in ca_result["detail"]
 
     verify_identity = Settings(**base, db_ssl_mode="VERIFY_IDENTITY", db_ssl_ca=tmp_path / "oracle-ca.pem")
     result = _database_tls(verify_identity)

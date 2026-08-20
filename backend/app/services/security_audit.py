@@ -56,8 +56,9 @@ def _database_tls(settings: Settings) -> dict[str, str]:
     if settings.db_ssl_mode == "VERIFY_CA":
         return _check(
             "database_tls",
-            "fail" if settings.is_production else "warn",
-            "Database TLS verifies the CA chain but not the hostname",
+            "warn",
+            "Database TLS verifies the configured CA chain, but not the hostname; "
+            "accepted for OCI service-defined HeatWave certificates when the endpoint CA is pinned",
         )
     return _check(
         "database_tls",

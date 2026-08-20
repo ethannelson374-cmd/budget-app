@@ -948,18 +948,20 @@ TOTP verification now atomically advances `user_totp.last_used_counter`. A code 
 
 ### Production database identity verification
 
-Phase 6 closes the remaining database TLS hardening finding. In production, `REQUIRED` and `VERIFY_CA` are now release-readiness failures; the production target is `VERIFY_IDENTITY` with a trusted OCI/Oracle CA bundle. Do not store the CA certificate in this repository.
+Phase 6 hardens production database TLS beyond encryption-only `REQUIRED`. `VERIFY_IDENTITY` remains the strongest target when the server certificate identifies `DB_HOST`. OCI service-defined HeatWave certificates can instead present the generic `MySQL Endpoint Server` identity; for that deployment, pin the endpoint CA and use `VERIFY_CA`. The security audit reports that mode as a non-blocking warning because the certificate chain is authenticated but the hostname is not. Do not store the CA certificate in this repository.
 
-1. Obtain the CA bundle appropriate for the running HeatWave/MySQL endpoint from Oracle/OCI documentation or the DB System connection information. Validate that the configured `DB_HOST` is the certificate hostname; do not substitute a bare private IP unless that IP is actually covered by the certificate.
+1. Inspect the certificate chain from the exact private HeatWave endpoint. Prefer an OCI-provided CA bundle when available. If the service-defined endpoint presents its own self-signed `MySQL Endpoint CA`, validate and pin that CA only after confirming the endpoint over the private VCN. Treat this as a deployment-specific trust decision.
 2. Install the validated bundle on the E2, for example `/etc/budget-app/heatwave-ca.pem`, owned by `root:budgetapp` and readable by the service account (`0640` is sufficient).
-3. Update `/etc/budget-app/budget.env` without printing secrets:
+3. Update `/etc/budget-app/budget.env` without printing secrets. For the OCI service-defined certificate used by this deployment:
 
 ```text
-DB_SSL_MODE=VERIFY_IDENTITY
+DB_SSL_MODE=VERIFY_CA
 DB_SSL_CA=/etc/budget-app/heatwave-ca.pem
 ```
 
-4. Before restarting the public API, prove the protected application environment can connect and migrate/read schema with the verified identity:
+If the DB System is later moved to a certificate whose SAN/CN covers `DB_HOST`, change `DB_SSL_MODE` to `VERIFY_IDENTITY`.
+
+4. Before restarting the public API, prove the protected application environment can connect and migrate/read schema with the verified CA:
 
 ```bash
 sudo systemd-run --wait --collect --pipe \
@@ -981,4 +983,4 @@ sudo systemd-run --wait --collect --pipe \
   /opt/budget-app/venv/bin/python -m app.cli security-audit
 ```
 
-The `database_tls` check must report `pass` with the detail that the CA chain and server identity are verified. Then restart `budget-api`, check `/api/health` and `/api/ready`, exercise the scheduled workers, and run strict `release-readiness --require-production --strict-operations`. A Phase 6 production cutover is not complete while the database TLS check is a failure.
+The `database_tls` check must no longer be a failure. With the service-defined HeatWave certificate and pinned endpoint CA it reports `warn`, documenting that the CA chain is verified while hostname verification is unavailable; `VERIFY_IDENTITY` reports `pass` when supported. Then restart `budget-api`, check `/api/health` and `/api/ready`, exercise the scheduled workers, and run strict `release-readiness --require-production --strict-operations`. A Phase 6 production cutover is not complete while the database TLS check is a failure.
