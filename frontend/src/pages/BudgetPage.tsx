@@ -18,7 +18,8 @@ import { useAuth } from "../auth/AuthContext";
 import { Amount } from "../components/Amount";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { PageHeader } from "../components/PageHeader";
-import { currentMonth, formatMoney, monthLabel, numberFromMoney } from "../lib/format";
+import { MoneyInput } from "../components/MoneyInput";
+import { currentMonth, formatMoney, formatMoneyInput, monthLabel, numberFromMoney } from "../lib/format";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ROLLOVER_OPTIONS: Array<{ value: RolloverMode; label: string }> = [
@@ -103,7 +104,7 @@ function AnnualPlanEditor({ year, plan, categories, onClose }: { year: number; p
       <div className="panel-heading"><div><span className="eyebrow">Annual plan</span><h2>{year} budget goals</h2><p>Set the year once, then override only the months that are unusual.</p></div><button className="button ghost" type="button" onClick={onClose}>Close</button></div>
       {error && <div className="inline-alert" role="alert">{error}</div>}
       <div className="form-grid two-columns budget-income-grid">
-        <label>Planned annual take-home income<input inputMode="decimal" value={plannedIncome} onChange={(event) => setPlannedIncome(event.target.value)} placeholder={user?.settings.annual_gross_income ? `Gross income on profile: ${user.settings.annual_gross_income}` : "78000"} /></label>
+        <label>Planned annual take-home income<MoneyInput value={plannedIncome} onValueChange={setPlannedIncome} placeholder={user?.settings.annual_gross_income ? `Gross income on profile: ${formatMoneyInput(user.settings.annual_gross_income)}` : "78,000.00"} /></label>
         <label>Notes <span className="optional">Optional</span><input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Base plan for the year" /></label>
       </div>
       <div className="annual-budget-editor-list">
@@ -113,10 +114,10 @@ function AnnualPlanEditor({ year, plan, categories, onClose }: { year: number; p
             <article className="annual-budget-editor-row" key={category.id}>
               <div className="budget-category-title"><strong>{category.name}</strong><span>{category.group}</span></div>
               <label>Distribution<select value={row.distribution} onChange={(event) => update(category.id, { distribution: event.target.value as BudgetDistribution })}><option value="even">Annual goal ÷ 12</option><option value="monthly">Same monthly amount</option><option value="custom">Custom by month</option></select></label>
-              {row.distribution === "even" && <label>Annual goal<input inputMode="decimal" value={row.annualAmount} onChange={(event) => update(category.id, { annualAmount: event.target.value })} /></label>}
-              {row.distribution === "monthly" && <label>Monthly amount<input inputMode="decimal" value={row.monthlyAmount} onChange={(event) => update(category.id, { monthlyAmount: event.target.value })} /></label>}
+              {row.distribution === "even" && <label>Annual goal<MoneyInput value={row.annualAmount} onValueChange={(annualAmount) => update(category.id, { annualAmount })} /></label>}
+              {row.distribution === "monthly" && <label>Monthly amount<MoneyInput value={row.monthlyAmount} onValueChange={(monthlyAmount) => update(category.id, { monthlyAmount })} /></label>}
               <label>Rollover<select value={row.rolloverMode} onChange={(event) => update(category.id, { rolloverMode: event.target.value as RolloverMode })}>{ROLLOVER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-              {row.distribution === "custom" && <div className="custom-month-grid">{MONTH_NAMES.map((name, index) => <label key={name}>{name}<input inputMode="decimal" value={row.customMonths[index]} onChange={(event) => { const months = [...row.customMonths]; months[index] = event.target.value; update(category.id, { customMonths: months }); }} /></label>)}</div>}
+              {row.distribution === "custom" && <div className="custom-month-grid">{MONTH_NAMES.map((name, index) => <label key={name}>{name}<MoneyInput value={row.customMonths[index]} onValueChange={(amount) => { const months = [...row.customMonths]; months[index] = amount; update(category.id, { customMonths: months }); }} /></label>)}</div>}
             </article>
           );
         })}
@@ -159,11 +160,11 @@ function MonthlyEditor({ month, budget, categories, onClose }: { month: string; 
       {error && <div className="inline-alert" role="alert">{error}</div>}
       <div className="form-grid two-columns">
         {budget.has_annual_plan && <label>Planning mode<select value={mode} onChange={(event) => setMode(event.target.value as MonthlyBudgetMode)}><option value="override">Override annual plan for this month</option><option value="standalone">Standalone monthly budget</option></select></label>}
-        <label>Planned income<input inputMode="decimal" value={plannedIncome} onChange={(event) => setPlannedIncome(event.target.value)} /></label>
+        <label>Planned income<MoneyInput value={plannedIncome} onValueChange={setPlannedIncome} /></label>
         <label className="budget-notes-field">Notes <span className="optional">Optional</span><input value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
       </div>
       <div className="monthly-budget-editor-list">
-        {expenseCategories(categories).map((category) => <div className="monthly-budget-editor-row" key={category.id}><div><strong>{category.name}</strong><span>{category.group}</span></div><label>Planned<input inputMode="decimal" value={amounts[category.id] ?? "0"} onChange={(event) => setAmounts((current) => ({ ...current, [category.id]: event.target.value }))} /></label><label>Rollover<select value={rollovers[category.id] ?? "off"} onChange={(event) => setRollovers((current) => ({ ...current, [category.id]: event.target.value as RolloverMode }))}>{ROLLOVER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>)}
+        {expenseCategories(categories).map((category) => <div className="monthly-budget-editor-row" key={category.id}><div><strong>{category.name}</strong><span>{category.group}</span></div><label>Planned<MoneyInput value={amounts[category.id] ?? "0"} onValueChange={(amount) => setAmounts((current) => ({ ...current, [category.id]: amount }))} /></label><label>Rollover<select value={rollovers[category.id] ?? "off"} onChange={(event) => setRollovers((current) => ({ ...current, [category.id]: event.target.value as RolloverMode }))}>{ROLLOVER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div>)}
       </div>
       <div className="form-actions end"><button className="button primary" type="button" disabled={mutation.isPending} onClick={save}>{mutation.isPending ? "Saving…" : "Save month"}</button></div>
     </section>

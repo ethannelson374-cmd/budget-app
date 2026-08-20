@@ -10,6 +10,7 @@ import { useAuth } from "../auth/AuthContext";
 import { SecuritySettings } from "../components/SecuritySettings";
 import { OperationsStatusCard } from "../components/OperationsStatusCard";
 import { NotificationSettings } from "../components/NotificationSettings";
+import { MoneyInput } from "../components/MoneyInput";
 import { DataPrivacySettings } from "../components/DataPrivacySettings";
 
 function getTimezones(current: string): string[] {
@@ -165,7 +166,7 @@ function SettingsForms({ initialSettings, initialCategories, initialRules, advis
         <div className="form-grid two-columns">
           <label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value)}>{currencies.map((item) => <option value={item.code} key={item.code}>{item.code} — {item.name}</option>)}</select></label>
           <label>Timezone<select value={timezone} onChange={(event) => setTimezone(event.target.value)}>{getTimezones(initialSettings.timezone).map((zone) => <option key={zone}>{zone}</option>)}</select></label>
-          <label>Annual gross income <span className="optional">Optional</span><input inputMode="decimal" value={annualIncome} onChange={(event) => setAnnualIncome(event.target.value)} /></label>
+          <label>Annual gross income <span className="optional">Optional</span><MoneyInput value={annualIncome} onValueChange={setAnnualIncome} /></label>
           <label>Pay frequency <span className="optional">Optional</span><select value={payFrequency} onChange={(event) => setPayFrequency(event.target.value as PayFrequency | "")}><option value="">Not set</option>{payFrequencies.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         </div>
         <fieldset className="theme-picker"><legend>Appearance</legend>{(["system", "light", "dark"] as ThemePreference[]).map((value) => <label key={value} className={theme === value ? "selected" : ""}><input type="radio" name="settings-theme" value={value} checked={theme === value} onChange={() => setTheme(value)} /><span>{value.charAt(0).toUpperCase() + value.slice(1)}</span></label>)}</fieldset>

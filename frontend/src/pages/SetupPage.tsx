@@ -7,6 +7,7 @@ import type { AuthSession, PayFrequency, SetupOptions, SetupRequest, SetupStatus
 import { Brand } from "../components/Brand";
 import { ErrorState, LoadingState } from "../components/States";
 import { Icon } from "../components/Icon";
+import { MoneyInput } from "../components/MoneyInput";
 import { useAuth } from "../auth/AuthContext";
 
 const steps = ["Owner account", "Preferences", "Categories"];
@@ -180,7 +181,7 @@ export function SetupWizard({ options, bootstrapRequired }: { options: SetupOpti
             <label>Timezone<select required value={timezone} onChange={(event) => setTimezone(event.target.value)}>{timezones.map((zone) => <option key={zone}>{zone}</option>)}</select></label>
           </div>
           <div className="form-grid two-columns">
-            <label>Annual gross income <span className="optional">Optional</span><input inputMode="decimal" placeholder="75000" value={annualIncome} onChange={(event) => setAnnualIncome(event.target.value)} /></label>
+            <label>Annual gross income <span className="optional">Optional</span><MoneyInput placeholder="75,000.00" value={annualIncome} onValueChange={setAnnualIncome} /></label>
             <label>Pay frequency <span className="optional">Optional</span><select value={payFrequency} onChange={(event) => setPayFrequency(event.target.value as PayFrequency | "")}><option value="">Not set</option>{options.pay_frequencies.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           </div>
           <fieldset className="theme-picker"><legend>Appearance</legend>{(["system", "light", "dark"] as ThemePreference[]).map((value) => <label key={value} className={theme === value ? "selected" : ""}><input type="radio" name="setup-theme" value={value} checked={theme === value} onChange={() => setTheme(value)} /><span>{value.charAt(0).toUpperCase() + value.slice(1)}</span></label>)}</fieldset>

@@ -22,6 +22,24 @@ export function formatMoney(
   }
 }
 
+
+export function normalizeMoneyInput(value: string): string {
+  return value.replace(/[$,\s]/g, "").trim();
+}
+
+export function formatMoneyInput(value: string | number | null | undefined, locale?: string): string {
+  if (value === null || value === undefined || value === "") return "";
+  const original = String(value);
+  const normalized = normalizeMoneyInput(original);
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return original;
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount)) return original;
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 export function formatPercent(value: string | null): string {
   if (value === null) return "—";
   const amount = numberFromMoney(value);

@@ -5,6 +5,7 @@ import { queryKeys } from "../api/queries";
 import type { NotificationPreferences } from "../api/types";
 import { ErrorState, LoadingState } from "./States";
 import { useToast } from "../toast/ToastContext";
+import { MoneyInput } from "./MoneyInput";
 
 export function NotificationSettings() {
   const queryClient = useQueryClient();
@@ -71,7 +72,7 @@ export function NotificationSettings() {
           <div className="advisor-setting-list compact-settings">
             <label><span><strong>Large transaction alerts</strong><small>Off by default. Alert on newly imported expenses above your threshold.</small></span><input type="checkbox" checked={draft.large_transaction_alerts} onChange={(e) => set("large_transaction_alerts", e.target.checked)} /></label>
           </div>
-          <label className={!draft.large_transaction_alerts ? "disabled-setting" : ""}>Alert threshold<input type="number" min="1" step="1" disabled={!draft.large_transaction_alerts} value={draft.large_transaction_threshold} onChange={(e) => set("large_transaction_threshold", e.target.value)} /></label>
+          <label className={!draft.large_transaction_alerts ? "disabled-setting" : ""}>Alert threshold<MoneyInput min="1" disabled={!draft.large_transaction_alerts} value={draft.large_transaction_threshold} onValueChange={(value) => set("large_transaction_threshold", value)} /></label>
         </article>
         <article className="panel notification-settings-card">
           <div className="security-card-heading"><div><span className="eyebrow">Summaries</span><h3>Financial reviews</h3></div></div>

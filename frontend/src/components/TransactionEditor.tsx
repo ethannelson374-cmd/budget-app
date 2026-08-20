@@ -1,4 +1,6 @@
 import type { AccountSummary, Category, TransactionItem, TransactionKind, TransactionWritePayload } from "../api/types";
+import { normalizeMoneyInput } from "../lib/format";
+import { MoneyInput } from "./MoneyInput";
 
 function optionalValue(data: FormData, key: string): string | null {
   const value = String(data.get(key) ?? "").trim();
@@ -12,7 +14,7 @@ function editableAmount(transaction?: TransactionItem): string {
 }
 
 function signedAmount(raw: string, kind: TransactionKind): string {
-  const trimmed = raw.trim();
+  const trimmed = normalizeMoneyInput(raw);
   const absolute = trimmed.replace(/^[+-]/, "");
   if (kind === "expense") return `-${absolute}`;
   if (kind === "income" || kind === "refund") return absolute;
@@ -77,7 +79,7 @@ export function TransactionEditor({
           <label>Posted date<input required type="date" name="posted_date" defaultValue={transaction?.posted_date ?? localToday()} /></label>
           <label>Authorized date <span className="optional">Optional</span><input type="date" name="authorized_date" defaultValue={transaction?.authorized_date ?? ""} /></label>
           <label>Type<select required name="kind" defaultValue={transaction?.kind ?? "expense"}><option value="expense">Expense</option><option value="income">Income</option><option value="refund">Refund</option><option value="transfer">Transfer</option></select></label>
-          <label>Amount<input required inputMode="decimal" name="amount" defaultValue={editableAmount(transaction)} placeholder="42.50" /><small>For transfers, use a negative amount when money leaves this account.</small></label>
+          <label>Amount<MoneyInput required name="amount" defaultValue={editableAmount(transaction)} placeholder="42.50" /><small>For transfers, use a negative amount when money leaves this account.</small></label>
           <label>Merchant <span className="optional">Optional</span><input maxLength={160} name="merchant" defaultValue={transaction?.merchant ?? ""} placeholder="Corner Market" /></label>
           <label>Description<input required maxLength={255} name="description" defaultValue={transaction?.description ?? ""} placeholder="Groceries" /></label>
         </div>

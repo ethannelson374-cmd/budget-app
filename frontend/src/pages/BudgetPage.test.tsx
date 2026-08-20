@@ -155,6 +155,6 @@ describe("BudgetPage", () => {
     expect(await screen.findByText("Annual planned income")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Edit annual plan" }));
     expect(await screen.findByRole("heading", { name: /budget goals/i })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("60000.0000")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("60,000.00")).toBeInTheDocument();
   });
 });

@@ -1,4 +1,6 @@
 import type { AccountSummary, AccountType, AccountWritePayload } from "../api/types";
+import { normalizeMoneyInput } from "../lib/format";
+import { MoneyInput } from "./MoneyInput";
 
 const accountTypes: Array<{ value: AccountType; label: string }> = [
   { value: "depository", label: "Checking / savings" },
@@ -35,9 +37,9 @@ export function AccountEditor({
       official_name: optionalValue(data, "official_name"),
       account_type: String(data.get("account_type")) as AccountType,
       account_subtype: optionalValue(data, "account_subtype"),
-      current_balance: String(data.get("current_balance") ?? "0").trim(),
-      available_balance: optionalValue(data, "available_balance"),
-      credit_limit: optionalValue(data, "credit_limit"),
+      current_balance: normalizeMoneyInput(String(data.get("current_balance") ?? "0")),
+      available_balance: optionalValue(data, "available_balance") ? normalizeMoneyInput(String(data.get("available_balance"))) : null,
+      credit_limit: optionalValue(data, "credit_limit") ? normalizeMoneyInput(String(data.get("credit_limit"))) : null,
       currency: String(data.get("currency") ?? defaultCurrency).trim().toUpperCase(),
       mask_last4: optionalValue(data, "mask_last4"),
     });
@@ -59,9 +61,9 @@ export function AccountEditor({
           <label>Official name <span className="optional">Optional</span><input maxLength={255} name="official_name" defaultValue={account?.official_name ?? ""} placeholder="Primary Checking Account" /></label>
           <label>Account type<select required name="account_type" defaultValue={account?.account_type ?? "depository"}>{accountTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
           <label>Subtype <span className="optional">Optional</span><input maxLength={40} name="account_subtype" defaultValue={account?.account_subtype ?? ""} placeholder="checking, auto, brokerage…" /></label>
-          <label>Current balance<input required inputMode="decimal" name="current_balance" defaultValue={account?.current_balance ?? "0.00"} /><small>Use a negative balance for debt or other liabilities.</small></label>
-          <label>Available balance <span className="optional">Optional</span><input inputMode="decimal" name="available_balance" defaultValue={account?.available_balance ?? ""} placeholder="Leave blank if unavailable" /></label>
-          <label>Credit limit <span className="optional">Optional</span><input inputMode="decimal" name="credit_limit" defaultValue={account?.credit_limit ?? ""} placeholder="8000.00" /></label>
+          <label>Current balance<MoneyInput required name="current_balance" defaultValue={account?.current_balance ?? "0.00"} /><small>Use a negative balance for debt or other liabilities.</small></label>
+          <label>Available balance <span className="optional">Optional</span><MoneyInput name="available_balance" defaultValue={account?.available_balance ?? ""} placeholder="Leave blank if unavailable" /></label>
+          <label>Credit limit <span className="optional">Optional</span><MoneyInput name="credit_limit" defaultValue={account?.credit_limit ?? ""} placeholder="8,000.00" /></label>
           <label>Currency<input required minLength={3} maxLength={3} pattern="[A-Za-z]{3}" name="currency" defaultValue={account?.currency ?? defaultCurrency} /></label>
           <label>Last four digits <span className="optional">Optional</span><input inputMode="numeric" maxLength={4} pattern="[0-9]{4}" name="mask_last4" defaultValue={account?.mask?.replace(/\D/g, "").slice(-4) ?? ""} placeholder="1234" /></label>
         </div>
