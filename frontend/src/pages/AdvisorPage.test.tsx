@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +33,34 @@ describe("AdvisorPage", () => {
       onEvent({ event: "delta", data: { text: "it fits." } });
       onEvent({ event: "done", data: { mode: "scenario", headline: "It fits your current plan", answer: "Yes, it fits.", confidence: "high", warnings: [], suggested_questions: ["What if it costs more?"], facts: [{ label: "Safe to spend", value: "USD 1200.0000", detail: "Calculated by Budget" }] } });
     });
+  });
+
+  it("uses an in-app confirmation dialog before deleting a saved conversation", async () => {
+    const conversation = { id: 41, title: "Where has my spending increased the most?", created_at: "2026-08-15T12:00:00Z", updated_at: "2026-08-15T12:00:00Z" };
+    vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+      if (path === "/advisor/status") return status as never;
+      if (path === "/advisor/conversations" && !init?.method) return { conversations: [conversation] } as never;
+      if (path === "/advisor/conversations/41" && init?.method === "DELETE") return { ok: true } as never;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const user = userEvent.setup();
+    renderAdvisor();
+
+    const deleteButton = await screen.findByRole("button", { name: `Delete ${conversation.title}` });
+    await user.click(deleteButton);
+
+    const dialog = screen.getByRole("dialog", { name: "Delete conversation?" });
+    expect(within(dialog).getByText(conversation.title, { exact: false })).toBeInTheDocument();
+    expect(within(dialog).getByText("This action can’t be undone.")).toBeInTheDocument();
+    expect(vi.mocked(apiRequest)).not.toHaveBeenCalledWith("/advisor/conversations/41", expect.objectContaining({ method: "DELETE" }));
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Delete conversation?" })).not.toBeInTheDocument();
+
+    await user.click(deleteButton);
+    await user.click(within(screen.getByRole("dialog", { name: "Delete conversation?" })).getByRole("button", { name: "Delete conversation" }));
+    await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith("/advisor/conversations/41", expect.objectContaining({ method: "DELETE" })));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Delete conversation?" })).not.toBeInTheDocument());
   });
 
   it("streams an answer and renders deterministic fact cards", async () => {

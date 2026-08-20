@@ -15,6 +15,7 @@ import type {
   AdvisorStatus,
   InsightItem,
 } from "../api/types";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorState, LoadingState } from "../components/States";
 
@@ -169,6 +170,7 @@ export function AdvisorPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [input, setInput] = useState(initialPrompt);
   const [busy, setBusy] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<AdvisorConversation | null>(null);
 
   const status = useQuery({ queryKey: queryKeys.advisorStatus, queryFn: () => apiRequest<AdvisorStatus>("/advisor/status") });
   const storeHistory = status.data?.store_history ?? true;
@@ -194,6 +196,7 @@ export function AdvisorPage({ embedded = false }: { embedded?: boolean } = {}) {
   const deleteConversation = useMutation({
     mutationFn: (id: number) => apiRequest<{ ok: boolean }>(`/advisor/conversations/${id}`, { method: "DELETE" }),
     onSuccess: (_data, id) => {
+      setConversationToDelete(null);
       if (selectedId === id) newConversation();
       void queryClient.invalidateQueries({ queryKey: queryKeys.advisorConversations });
     },
@@ -297,7 +300,7 @@ export function AdvisorPage({ embedded = false }: { embedded?: boolean } = {}) {
       {attachedInsight && <div className="advisor-insight-context"><div><span className="eyebrow">Attached insight</span><strong>{attachedInsight.title}</strong><p>{attachedInsight.summary}</p></div><button type="button" className="button ghost" onClick={() => setAttachedInsight(null)}>Remove</button></div>}
       {attachedReport && <div className="advisor-insight-context"><div><span className="eyebrow">Attached report</span><strong>{attachedReport.label}</strong><p>Ask Budget will receive this report directly from Budget's deterministic reporting engine.</p></div><button type="button" className="button ghost" onClick={() => setAttachedReport(null)}>Remove</button></div>}
       <div className={`advisor-layout${storeHistory ? "" : " private"}`}>
-        {storeHistory && <aside className="panel advisor-history"><div className="advisor-history-heading"><strong>Conversations</strong><button type="button" className="text-button" onClick={newConversation}>New</button></div>{conversations.isPending && <p className="muted-copy">Loading history…</p>}{conversations.data?.conversations.length ? <div className="advisor-history-list">{conversations.data.conversations.map((item) => <div className={`advisor-history-row${selectedId === item.id ? " active" : ""}`} key={item.id}><button type="button" className="advisor-history-open" onClick={() => openConversation(item.id)}><strong>{item.title}</strong><small>{new Date(item.updated_at).toLocaleDateString()}</small></button><button type="button" className="advisor-history-delete" aria-label={`Delete ${item.title}`} disabled={deleteConversation.isPending || busy} onClick={() => { if (window.confirm(`Delete ${item.title}?`)) deleteConversation.mutate(item.id); }}>×</button></div>)}</div> : <p className="muted-copy">No saved conversations yet.</p>}</aside>}
+        {storeHistory && <aside className="panel advisor-history"><div className="advisor-history-heading"><strong>Conversations</strong><button type="button" className="text-button" onClick={newConversation}>New</button></div>{conversations.isPending && <p className="muted-copy">Loading history…</p>}{conversations.data?.conversations.length ? <div className="advisor-history-list">{conversations.data.conversations.map((item) => <div className={`advisor-history-row${selectedId === item.id ? " active" : ""}`} key={item.id}><button type="button" className="advisor-history-open" onClick={() => openConversation(item.id)}><strong>{item.title}</strong><small>{new Date(item.updated_at).toLocaleDateString()}</small></button><button type="button" className="advisor-history-delete" aria-label={`Delete ${item.title}`} disabled={deleteConversation.isPending || busy} onClick={() => setConversationToDelete(item)}>×</button></div>)}</div> : <p className="muted-copy">No saved conversations yet.</p>}</aside>}
         <section className="panel advisor-chat">
           <div className="advisor-chat-heading"><div><span className="eyebrow">{storeHistory ? "Conversation" : "Not saved"}</span><h2>{currentTitle}</h2></div><span className="advisor-provider">{status.data.provider} · {status.data.model}</span></div>
           <div className="advisor-thread" aria-live="polite">
@@ -307,6 +310,21 @@ export function AdvisorPage({ embedded = false }: { embedded?: boolean } = {}) {
           <form className="advisor-composer" onSubmit={submit}><label className="sr-only" htmlFor="advisor-message">Ask Budget</label><textarea id="advisor-message" rows={3} maxLength={4000} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask Budget anything about your financial plan…" disabled={busy} /><div><span>Phase 3C-3 · AI may propose changes; Budget applies nothing without your approval.</span><button className="button primary" type="submit" disabled={busy || !input.trim()}>{busy ? "Thinking…" : "Ask Budget"}</button></div></form>
         </section>
       </div>
+      <ConfirmDialog
+        open={conversationToDelete !== null}
+        title="Delete conversation?"
+        confirmLabel="Delete conversation"
+        destructive
+        pending={deleteConversation.isPending}
+        error={deleteConversation.error instanceof Error ? deleteConversation.error.message : null}
+        onCancel={() => setConversationToDelete(null)}
+        onConfirm={() => {
+          if (conversationToDelete) deleteConversation.mutate(conversationToDelete.id);
+        }}
+      >
+        <p>This will permanently delete <strong>“{conversationToDelete?.title}”</strong> and all messages saved in this conversation.</p>
+        <small>This action can’t be undone.</small>
+      </ConfirmDialog>
     </div>
   );
 }
