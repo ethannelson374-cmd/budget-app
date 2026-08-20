@@ -49,7 +49,7 @@ export function InvitePage() {
       if (cancelled) return;
       setInvitation(details);
       sessionStorage.setItem(CHALLENGE_KEY, details.challenge_token);
-      sessionStorage.setItem(DETAILS_KEY, JSON.stringify({ label: details.label, expires_at: details.expires_at, google_enabled: details.google_enabled }));
+      sessionStorage.setItem(DETAILS_KEY, JSON.stringify({ label: details.label, invite_type: details.invite_type, budget_owner_username: details.budget_owner_username, expires_at: details.expires_at, google_enabled: details.google_enabled }));
       window.history.replaceState({}, "", "/join");
     }).catch((caught) => {
       if (!cancelled) setExchangeError(caught instanceof ApiError ? caught.message : "This invitation could not be opened.");
@@ -98,13 +98,13 @@ export function InvitePage() {
       <section className="auth-card auth-flow-card join-card">
         <span className="eyebrow">Private Budget link</span>
         <h1>Welcome to Budget</h1>
-        <p className="join-lede">You've been invited to a private Budget workspace. Create your account, then we'll walk through your money setup before you reach the dashboard.</p>
+        <p className="join-lede">{invitation?.invite_type === "shared" ? `You've been invited to join ${invitation.budget_owner_username ?? "a family"}'s shared Budget. After account setup, you'll see the same household accounts, transactions, budgets, goals, subscriptions, and planning.` : "You've been invited to use Budget with your own private finances. Create your account, then we'll walk through first-time setup before you reach the dashboard."}</p>
         {checking && <LoadingState label="Opening your invitation" />}
         {exchangeError && <ErrorState title="Invitation unavailable" message="This invitation is invalid, expired, revoked, or has already been used." />}
         {!checking && !exchangeError && !invitation && <ErrorState title="Invitation link missing" message="Ask the Budget administrator for a new invite link." />}
         {invitation && (
           <>
-            <div className="join-invite-meta"><strong>{invitation.label || "Budget invitation"}</strong><small>One-time link · expires {expires}</small></div>
+            <div className="join-invite-meta"><strong>{invitation.label || "Budget invitation"}</strong><small>{invitation.invite_type === "shared" ? `Shared Budget · ${invitation.budget_owner_username ?? "Family"}` : "Independent Budget"} · one-time link · expires {expires}</small></div>
             {invitation.google_enabled && (
               <>
                 <button className="button secondary wide google-signin" type="button" onClick={continueWithGoogle}><span className="google-g" aria-hidden="true">G</span> Continue with Google</button>

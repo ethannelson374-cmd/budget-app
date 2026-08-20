@@ -20,4 +20,4 @@ def get_trends(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return trends_view(db, principal.user, range_key)
+    return trends_view(db, principal.budget_user, range_key)

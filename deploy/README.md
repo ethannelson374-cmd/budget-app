@@ -934,3 +934,51 @@ sudo systemd-run --wait --collect --pipe \
 Expected head is `20260817_0022`. Restart `budget-api` and verify internal `/api/health` and `/api/ready`. Reinstall the production Nginx site configuration carefully (preserving the real `budget.od3ssa.com` hostname/certificate paths) because Phase 5G adds the invitation-token exchange endpoint to the existing sensitive-auth rate-limit zone; run `sudo nginx -t` before reload.
 
 Build the final frontend off-host on Windows and publish `frontend/dist` through the established verified temp-upload/rollback/`rsync --delete` procedure. Smoke-test: create a generic invite link, revoke an unused link, open a fresh link in an InPrivate/incognito browser, confirm the raw token disappears from the URL after exchange, register locally and with Google, confirm `/dashboard` redirects an incomplete new user back to `/onboarding`, exercise Skip/Continue through Plaid/budget/goal/privacy setup, finish onboarding, then sign out/in and verify the wizard does not return. Confirm an existing pre-5G user still lands normally without onboarding.
+
+
+## Phase 6 family budgets, subscriptions, and final TLS/TOTP hardening
+
+Phase 6 adds migration `20260820_0023`. The migration creates the budget-membership boundary used by shared family invitations, records shared-vs-independent invitation intent, persists the last accepted TOTP counter, and adds subscription metadata to recurring streams. Every established pre-Phase-6 user is migrated as the owner of their existing private financial graph, so existing production data remains private and no user is silently joined to another Budget.
+
+An invitation now has two server-bound modes. `independent` behaves like Phase 5G and creates a new private Budget. `shared` joins the new user to the inviter's current Budget after the ordinary invite/onboarding flow. The invitation record, not a browser parameter, decides the mode. Shared members read and mutate the budget owner's financial graph while identity settings, sessions, onboarding, invitation ownership, and authentication remain tied to the signed-in user. Owners cannot delete a Budget while dependent shared members remain.
+
+Subscription intelligence reuses recurring streams. Budget can auto-detect likely subscriptions from the stable Subscriptions category and known service merchant names; users can explicitly mark/unmark a recurring expense and pause/reactivate it. Manual subscription choices survive recurring-stream rebuilds. The Dashboard and Financial Calendar/Recurring workspace read the same `/subscriptions` model, including monthly/annualized commitment, upcoming charges, and material price changes.
+
+TOTP verification now atomically advances `user_totp.last_used_counter`. A code whose counter was already accepted is rejected even if it is still inside the normal clock-skew window, and the conditional database update closes concurrent replay races.
+
+### Production database identity verification
+
+Phase 6 closes the remaining database TLS hardening finding. In production, `REQUIRED` and `VERIFY_CA` are now release-readiness failures; the production target is `VERIFY_IDENTITY` with a trusted OCI/Oracle CA bundle. Do not store the CA certificate in this repository.
+
+1. Obtain the CA bundle appropriate for the running HeatWave/MySQL endpoint from Oracle/OCI documentation or the DB System connection information. Validate that the configured `DB_HOST` is the certificate hostname; do not substitute a bare private IP unless that IP is actually covered by the certificate.
+2. Install the validated bundle on the E2, for example `/etc/budget-app/heatwave-ca.pem`, owned by `root:budgetapp` and readable by the service account (`0640` is sufficient).
+3. Update `/etc/budget-app/budget.env` without printing secrets:
+
+```text
+DB_SSL_MODE=VERIFY_IDENTITY
+DB_SSL_CA=/etc/budget-app/heatwave-ca.pem
+```
+
+4. Before restarting the public API, prove the protected application environment can connect and migrate/read schema with the verified identity:
+
+```bash
+sudo systemd-run --wait --collect --pipe \
+  --unit=budget-phase6-schema-check-$(date +%s) \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/alembic current
+
+sudo systemd-run --wait --collect --pipe \
+  --unit=budget-phase6-security-audit-$(date +%s) \
+  --service-type=exec \
+  --uid=budgetapp \
+  --gid=budgetapp \
+  --working-directory=/opt/budget-app/current/backend \
+  --property=EnvironmentFile=/etc/budget-app/budget.env \
+  /opt/budget-app/venv/bin/python -m app.cli security-audit
+```
+
+The `database_tls` check must report `pass` with the detail that the CA chain and server identity are verified. Then restart `budget-api`, check `/api/health` and `/api/ready`, exercise the scheduled workers, and run strict `release-readiness --require-production --strict-operations`. A Phase 6 production cutover is not complete while the database TLS check is a failure.

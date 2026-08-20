@@ -220,14 +220,15 @@ def stream_advisor_message(
     mode = infer_mode(payload.message)
     request_id = getattr(request.state, "request_id", None)
     try:
-        snapshot = sanitized_snapshot(db, principal.user)
-        insight = attached_insight(db, principal.user, payload.insight_id)
+        snapshot = sanitized_snapshot(db, principal.budget_user, privacy_user=principal.user)
+        insight = attached_insight(db, principal.budget_user, payload.insight_id, privacy_user=principal.user)
         if payload.report_section is not None and payload.report_range is not None:
             snapshot["attached_report"] = advisor_report_context(
                 db,
-                principal.user,
+                principal.budget_user,
                 section=payload.report_section,
                 range_key=payload.report_range,
+                privacy_user=principal.user,
             )
         history = recent_history(db, principal.user, conversation.id)
         provider = provider_for_settings(settings)
@@ -242,7 +243,7 @@ def stream_advisor_message(
             if not isinstance(arguments, dict):
                 arguments = {}
             try:
-                result = execute_tool(db, principal.user, name, arguments)
+                result = execute_tool(db, principal.budget_user, name, arguments, privacy_user=principal.user)
             except ApiError as exc:
                 result = {"error": exc.code, "message": exc.message}
             tool_results.append({"name": name, "result": result})
@@ -289,6 +290,8 @@ def stream_advisor_message(
         title = str(reply.pop("action_plan_title", "") or "")
         summary = str(reply.pop("action_plan_summary", "") or "")
         reply["proposal_id"] = None
+        if principal.user.id != principal.budget_user.id:
+            return
         if not store_history or not isinstance(suggestions, list) or not suggestions:
             return
         safe_suggestions = [item for item in suggestions if isinstance(item, dict)]

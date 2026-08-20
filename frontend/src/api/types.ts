@@ -99,6 +99,9 @@ export interface AuthSessionsResponse { sessions: AuthSessionItem[]; }
 export interface UserInvitation {
   id: number;
   label: string | null;
+  invite_type: "independent" | "shared";
+  budget_owner_user_id: number | null;
+  accepted_user_id: number | null;
   status: "pending" | "accepted" | "revoked" | "expired";
   created_at: string;
   expires_at: string;
@@ -111,9 +114,27 @@ export interface UserInvitationsResponse { invitations: UserInvitation[]; }
 
 export interface InvitationDetails {
   label: string | null;
+  invite_type: "independent" | "shared";
+  budget_owner_username: string | null;
   expires_at: string;
   google_enabled: boolean;
   challenge_token: string;
+}
+
+export interface FamilyMember {
+  id: number;
+  username: string;
+  email: string;
+  role: "owner" | "member";
+  is_current: boolean;
+}
+
+export interface FamilyStatus {
+  budget_owner_user_id: number;
+  budget_owner_username: string;
+  role: "owner" | "member";
+  shared: boolean;
+  members: FamilyMember[];
 }
 
 export interface OnboardingStatus { complete: boolean; step: number; }
@@ -470,6 +491,10 @@ export interface RecurringStream {
   next_expected_date: string;
   occurrence_count: number;
   price_change_pct: string | null;
+  is_subscription: boolean;
+  subscription_detected: boolean;
+  subscription_override: boolean | null;
+  subscription_status: "active" | "paused" | "cancelled";
   account: { id: number; name: string; display_name: string; mask: string | null; currency: string };
 }
 
@@ -478,6 +503,28 @@ export interface RecurringStreamsResponse {
   streams: RecurringStream[];
   monthly_outflow_estimate: string;
   monthly_inflow_estimate: string;
+}
+
+export interface SubscriptionItem {
+  id: number;
+  display_name: string;
+  cadence: RecurringStream["cadence"];
+  average_amount: string;
+  last_amount: string;
+  next_expected_date: string;
+  price_change_pct: string | null;
+  status: "active" | "paused" | "cancelled";
+  detected: boolean;
+  account: RecurringStream["account"];
+}
+
+export interface SubscriptionsResponse {
+  currency: string;
+  active_count: number;
+  monthly_total: string;
+  annual_total: string;
+  upcoming_30_days: SubscriptionItem[];
+  subscriptions: SubscriptionItem[];
 }
 
 export type FinancialCalendarEventKind = "income" | "expense" | "subscription" | "debt" | "savings" | "refund";
@@ -1237,7 +1284,7 @@ export interface OperationsStatus {
 
 export type DashboardCardId =
   | "net_worth" | "cash_available" | "income" | "spending" | "net_cash_flow" | "savings_rate"
-  | "cash_flow" | "top_spending" | "ask_budget" | "budget" | "insights" | "recent_transactions"
+  | "cash_flow" | "top_spending" | "subscriptions" | "ask_budget" | "budget" | "insights" | "recent_transactions"
   | "accounts" | "data_freshness";
 export type DashboardCardSize = "compact" | "standard" | "hero";
 export type DashboardPreset = "everyday" | "minimal" | "planning" | "analytics" | "custom";

@@ -34,7 +34,7 @@ def get_month_budget(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return month_budget_view(db, principal.user, month)
+    return month_budget_view(db, principal.budget_user, month)
 
 
 @router.put("/months/{month}", response_model=MonthlyBudgetView)
@@ -46,7 +46,7 @@ def save_month_budget(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    put_monthly_budget(db, principal.user, month, payload.model_dump())
+    put_monthly_budget(db, principal.budget_user, month, payload.model_dump())
     add_audit_event(
         db,
         settings,
@@ -57,7 +57,7 @@ def save_month_budget(
         detail=month,
     )
     db.commit()
-    return month_budget_view(db, principal.user, month)
+    return month_budget_view(db, principal.budget_user, month)
 
 
 @router.delete("/months/{month}", response_model=MonthlyBudgetView)
@@ -68,7 +68,7 @@ def clear_month_budget(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    delete_monthly_budget(db, principal.user, month)
+    delete_monthly_budget(db, principal.budget_user, month)
     add_audit_event(
         db,
         settings,
@@ -79,7 +79,7 @@ def clear_month_budget(
         detail=month,
     )
     db.commit()
-    return month_budget_view(db, principal.user, month)
+    return month_budget_view(db, principal.budget_user, month)
 
 
 @router.post("/months/{month}/copy-previous", response_model=MonthlyBudgetView)
@@ -90,7 +90,7 @@ def copy_month_budget(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    copy_previous_month(db, principal.user, month)
+    copy_previous_month(db, principal.budget_user, month)
     add_audit_event(
         db,
         settings,
@@ -101,7 +101,7 @@ def copy_month_budget(
         detail=month,
     )
     db.commit()
-    return month_budget_view(db, principal.user, month)
+    return month_budget_view(db, principal.budget_user, month)
 
 
 @router.get("/years/{year}/plan", response_model=AnnualBudgetPlanView)
@@ -110,7 +110,7 @@ def get_annual_plan(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return annual_plan_view(db, principal.user, year)
+    return annual_plan_view(db, principal.budget_user, year)
 
 
 @router.put("/years/{year}/plan", response_model=AnnualBudgetPlanView)
@@ -122,7 +122,7 @@ def save_annual_plan(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    put_annual_plan(db, principal.user, year, payload.model_dump())
+    put_annual_plan(db, principal.budget_user, year, payload.model_dump())
     add_audit_event(
         db,
         settings,
@@ -133,7 +133,7 @@ def save_annual_plan(
         detail=str(year),
     )
     db.commit()
-    return annual_plan_view(db, principal.user, year)
+    return annual_plan_view(db, principal.budget_user, year)
 
 
 @router.get("/years/{year}", response_model=YearBudgetView)
@@ -142,4 +142,4 @@ def get_year_budget(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return year_budget_view(db, principal.user, year)
+    return year_budget_view(db, principal.budget_user, year)

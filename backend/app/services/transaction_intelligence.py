@@ -20,6 +20,13 @@ CADENCES: tuple[tuple[str, int, int, int], ...] = (
     ("annual", 330, 400, 365),
 )
 
+SUBSCRIPTION_MERCHANT_HINTS = (
+    "netflix", "spotify", "hulu", "disney", "paramount", "peacock", "youtube",
+    "apple.com/bill", "icloud", "google one", "adobe", "microsoft", "xbox",
+    "playstation", "dropbox", "canva", "notion", "github", "discord", "openai",
+    "chatgpt", "anthropic", "max.com", "audible", "prime membership",
+)
+
 
 def normalize_merchant(value: str | None) -> str:
     text = (value or "").strip()
@@ -236,11 +243,26 @@ def _cadence(intervals: list[int]) -> tuple[str, int] | None:
     return None
 
 
+def _subscription_detected(items: list[Transaction], merchant_key: str, kind: str) -> bool:
+    if kind != "expense":
+        return False
+    latest = items[-1]
+    category = effective_category(latest)
+    if category is not None and category.stable_key == "subscriptions":
+        return True
+    normalized = merchant_key.casefold()
+    return any(hint in normalized for hint in SUBSCRIPTION_MERCHANT_HINTS)
+
+
 def rebuild_recurring_streams(db: Session, user: User) -> int:
     transactions = list(
         db.scalars(
             select(Transaction)
-            .options(joinedload(Transaction.account))
+            .options(
+                joinedload(Transaction.account),
+                joinedload(Transaction.category),
+                joinedload(Transaction.user_category_override),
+            )
             .where(
                 Transaction.user_id == user.id,
                 Transaction.pending.is_(False),
@@ -259,6 +281,15 @@ def rebuild_recurring_streams(db: Session, user: User) -> int:
             continue
         groups[(transaction.account_id, merchant.casefold(), kind)].append(transaction)
 
+    existing = {
+        (stream.account_id, stream.merchant_key, stream.kind, stream.cadence): (
+            stream.subscription_override,
+            stream.subscription_status,
+        )
+        for stream in db.scalars(
+            select(RecurringStream).where(RecurringStream.user_id == user.id)
+        ).all()
+    }
     db.execute(delete(RecurringStream).where(RecurringStream.user_id == user.id))
     created = 0
     for (account_id, merchant_key, kind), items in groups.items():
@@ -284,6 +315,10 @@ def rebuild_recurring_streams(db: Session, user: User) -> int:
         if previous_average > 0:
             change_pct = (last_amount - previous_average) / previous_average * Decimal("100")
         display_name = normalize_merchant(effective_merchant(items[-1])) or items[-1].description
+        subscription_override, subscription_status = existing.get(
+            (account_id, merchant_key, kind, cadence_name),
+            (None, "active"),
+        )
         db.add(
             RecurringStream(
                 user_id=user.id,
@@ -298,6 +333,9 @@ def rebuild_recurring_streams(db: Session, user: User) -> int:
                 next_expected_date=dates[-1] + timedelta(days=cadence_days),
                 occurrence_count=len(items),
                 price_change_pct=change_pct,
+                subscription_detected=_subscription_detected(items, merchant_key, kind),
+                subscription_override=subscription_override,
+                subscription_status=subscription_status,
                 active=True,
             )
         )

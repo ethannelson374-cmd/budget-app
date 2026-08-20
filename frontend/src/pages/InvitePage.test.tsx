@@ -19,6 +19,8 @@ describe("InvitePage link registration", () => {
     vi.mocked(apiRequest).mockReset().mockImplementation(async (path, init) => {
       if (path === "/auth/invitations/exchange" && init?.method === "POST") return {
         label: "Family invite",
+        invite_type: "shared",
+        budget_owner_username: "owner",
         expires_at: "2026-08-24T06:00:00Z",
         google_enabled: true,
         challenge_token: "challenge-abcdefghijklmnopqrstuvwxyz",
@@ -38,6 +40,7 @@ describe("InvitePage link registration", () => {
     expect(await screen.findByRole("heading", { name: "Welcome to Budget" })).toBeInTheDocument();
     await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith("/auth/invitations/exchange", expect.objectContaining({ method: "POST" })));
     expect(await screen.findByText("Family invite")).toBeInTheDocument();
+    expect(screen.getByText(/Shared Budget · owner/)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Email"), "family@example.com");
     await user.type(screen.getByLabelText("Username"), "family");

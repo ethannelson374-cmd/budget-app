@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.core.security import cookie_name, csrf_digest
+from app.models import User
 from app.services.auth import Principal, load_principal
+from app.services.family import budget_user
 
 
 def get_settings_from_request(request: Request) -> Settings:
@@ -68,3 +70,11 @@ def require_csrf(
     ):
         raise ApiError(403, "origin_failed", "The request origin could not be verified")
     return principal
+
+
+def require_budget_user(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> User:
+    """Resolve the financial owner for the current shared Budget membership."""
+    return budget_user(db, principal.user)

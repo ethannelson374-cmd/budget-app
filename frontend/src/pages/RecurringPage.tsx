@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiRequest } from "../api/client";
 import { queryKeys } from "../api/queries";
-import type { FinancialCalendarEvent, FinancialCalendarView, RecurringStreamsResponse } from "../api/types";
+import type { FinancialCalendarEvent, FinancialCalendarView, RecurringStreamsResponse, SubscriptionsResponse } from "../api/types";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
@@ -174,6 +174,34 @@ function MonthView({ data, selectedId, onSelect }: { data: FinancialCalendarView
   );
 }
 
+function SubscriptionTracker({ recurring, subscriptions }: { recurring?: RecurringStreamsResponse; subscriptions?: SubscriptionsResponse }) {
+  const queryClient = useQueryClient();
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const update = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: { is_subscription?: boolean; status?: "active" | "paused" | "cancelled" } }) =>
+      apiRequest<SubscriptionsResponse>(`/recurring/${id}/subscription`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onMutate: ({ id }) => setBusyId(id),
+    onSettled: async () => {
+      setBusyId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.recurring }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions }),
+        queryClient.invalidateQueries({ queryKey: ["financial-calendar"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      ]);
+    },
+  });
+  const candidates = (recurring?.streams ?? []).filter((stream) => stream.kind === "expense" && !stream.is_subscription).slice(0, 8);
+  const items = subscriptions?.subscriptions ?? [];
+  return (
+    <section className="panel subscription-tracker-panel">
+      <div className="panel-heading subscription-tracker-heading"><div><span className="eyebrow">Subscription intelligence</span><h2>Subscriptions</h2><p>Recurring services are tracked separately so Budget can show your committed monthly cost, upcoming charges, and price changes.</p></div>{subscriptions && <div className="subscription-commitment"><strong>{formatMoney(subscriptions.monthly_total, subscriptions.currency)}</strong><span>/ month</span><small>{formatMoney(subscriptions.annual_total, subscriptions.currency)} / year</small></div>}</div>
+      {items.length ? <div className="subscription-manager-list">{items.map((item) => <article key={item.id} className={`subscription-manager-row ${item.status}`}><div className="subscription-manager-orb" aria-hidden="true">S</div><div className="subscription-manager-copy"><strong>{item.display_name}</strong><span>{item.account.display_name} · {item.cadence} · next {formatDate(item.next_expected_date, true)}</span>{item.price_change_pct && Math.abs(numberFromMoney(item.price_change_pct)) >= 5 ? <small className={numberFromMoney(item.price_change_pct) > 0 ? "negative" : "positive"}>{formatPercent(item.price_change_pct)} vs prior average</small> : <small>{item.detected ? "Detected by Budget" : "Marked by you"}</small>}</div><div className="subscription-manager-value"><strong>{formatMoney(item.average_amount, subscriptions!.currency)}</strong><small>{item.status}</small></div><div className="subscription-manager-actions">{item.status === "active" ? <button type="button" disabled={busyId === item.id} onClick={() => update.mutate({ id: item.id, payload: { status: "paused" } })}>Pause</button> : <button type="button" disabled={busyId === item.id} onClick={() => update.mutate({ id: item.id, payload: { status: "active" } })}>Activate</button>}<button type="button" disabled={busyId === item.id} onClick={() => update.mutate({ id: item.id, payload: { is_subscription: false } })}>Not a subscription</button></div></article>)}</div> : <EmptyState title="No subscriptions tracked yet" message="Budget will suggest likely subscriptions from recurring expenses, or you can mark one below." />}
+      {candidates.length > 0 && <div className="subscription-candidates"><div className="subscription-candidate-heading"><strong>Recurring expenses</strong><span>Know one of these is a subscription?</span></div>{candidates.map((stream) => <button key={stream.id} type="button" disabled={busyId === stream.id} onClick={() => update.mutate({ id: stream.id, payload: { is_subscription: true, status: "active" } })}><span><strong>{stream.display_name}</strong><small>{stream.cadence} · {stream.account.display_name}</small></span><span>{formatMoney(stream.average_amount, recurring!.currency)} <b>Track +</b></span></button>)}</div>}
+    </section>
+  );
+}
+
 function RecurringPatterns({ data }: { data: FinancialCalendarView }) {
   return (
     <section className="panel calendar-pattern-panel">
@@ -194,6 +222,8 @@ export function RecurringPage() {
   const [mode, setMode] = useState<CalendarMode>("timeline");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const calendarQuery = useQuery({ queryKey: queryKeys.financialCalendar(month), queryFn: () => apiRequest<FinancialCalendarView>(`/financial-calendar?month=${month}`) });
+  const recurringQuery = useQuery({ queryKey: queryKeys.recurring, queryFn: () => apiRequest<RecurringStreamsResponse>("/recurring") });
+  const subscriptionsQuery = useQuery({ queryKey: queryKeys.subscriptions, queryFn: () => apiRequest<SubscriptionsResponse>("/subscriptions") });
   const rebuild = useMutation({
     mutationFn: () => apiRequest<RecurringStreamsResponse>("/recurring/rebuild", { method: "POST" }),
     onSuccess: async (data) => {
@@ -246,6 +276,7 @@ export function RecurringPage() {
             </div>
           </section>
 
+          <SubscriptionTracker recurring={recurringQuery.data} subscriptions={subscriptionsQuery.data} />
           <RecurringPatterns data={data} />
         </>
       )}

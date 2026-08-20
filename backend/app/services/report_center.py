@@ -194,7 +194,9 @@ def advisor_report_context(
     *,
     section: ReportSection,
     range_key: ReportRange,
+    privacy_user: User | None = None,
 ) -> dict[str, object]:
+    privacy = privacy_user or user
     payload = build_report_payload(db, user, range_key=range_key, sections=[section])
     context = dict(cast(dict[str, object], payload[section]))
     # Keep attached reports bounded for AI context while preserving Budget's
@@ -205,7 +207,7 @@ def advisor_report_context(
     elif section == "spending":
         categories = cast(list[dict[str, object]], context.get("categories") or [])
         context["categories"] = categories[:20]
-        if not user.settings.advisor_share_merchants:
+        if not privacy.settings.advisor_share_merchants:
             context["top_merchants"] = []
     elif section == "budget":
         categories = cast(list[dict[str, object]], context.get("categories") or [])
@@ -213,7 +215,7 @@ def advisor_report_context(
     elif section == "goals":
         trajectory = cast(list[dict[str, object]], context.get("trajectory") or [])
         context["trajectory"] = _sample_rows(trajectory, 24)
-        if not user.settings.advisor_share_planning_names:
+        if not privacy.settings.advisor_share_planning_names:
             for key, label in (("goals", "Goal"), ("debts", "Debt")):
                 rows = cast(list[dict[str, object]], context.get(key) or [])
                 context[key] = [

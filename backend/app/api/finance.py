@@ -28,6 +28,8 @@ from app.schemas.api import (
     OnboardingProgressRequest,
     OnboardingStatusView,
     SettingsPatch,
+    SubscriptionUpdateRequest,
+    SubscriptionsView,
     TransactionCreate,
     TransactionIntelligencePatch,
     TransactionPatch,
@@ -57,6 +59,7 @@ from app.services.manual_finance import (
     update_manual_transaction,
 )
 from app.services.setup import validate_category_keys
+from app.services.subscriptions import is_subscription as stream_is_subscription, subscriptions_view, update_subscription
 from app.services.transaction_intelligence import (
     create_rule,
     delete_rule,
@@ -172,7 +175,7 @@ def get_category_selection(
     categories = list(
         db.scalars(
             select(Category)
-            .where(Category.user_id == principal.user.id)
+            .where(Category.user_id == principal.budget_user.id)
             .order_by(Category.name, Category.id)
         ).all()
     )
@@ -191,7 +194,7 @@ def update_category_selection(
     categories = list(
         db.scalars(
             select(Category)
-            .where(Category.user_id == principal.user.id)
+            .where(Category.user_id == principal.budget_user.id)
             .order_by(Category.name, Category.id)
         ).all()
     )
@@ -199,7 +202,7 @@ def update_category_selection(
     for definition in DEFAULT_CATEGORIES:
         if definition["key"] not in existing:
             category = Category(
-                user_id=principal.user.id,
+                user_id=principal.budget_user.id,
                 stable_key=definition["key"],
                 name=definition["name"],
                 icon=definition["icon"],
@@ -231,7 +234,7 @@ def get_accounts(
     accounts = db.scalars(
         select(Account)
         .options(joinedload(Account.institution))
-        .where(Account.user_id == principal.user.id)
+        .where(Account.user_id == principal.budget_user.id)
         .order_by(Account.name, Account.id)
     ).all()
     return {"accounts": [account_view(account) for account in accounts]}
@@ -245,7 +248,7 @@ def create_account(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    account = create_manual_account(db, principal.user, payload.model_dump())
+    account = create_manual_account(db, principal.budget_user, payload.model_dump())
     add_audit_event(
         db,
         settings,
@@ -270,7 +273,7 @@ def update_account(
 ) -> dict[str, object]:
     account = update_manual_account(
         db,
-        principal.user,
+        principal.budget_user,
         account_id,
         payload.model_dump(exclude_unset=True),
     )
@@ -295,7 +298,7 @@ def delete_account(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
-    delete_manual_account(db, principal.user, account_id)
+    delete_manual_account(db, principal.budget_user, account_id)
     add_audit_event(
         db,
         settings,
@@ -321,7 +324,7 @@ def get_cash_flow(
 ) -> dict[str, object]:
     return cash_flow_sankey(
         db,
-        principal.user,
+        principal.budget_user,
         range_key=range_key,
         month=month,
         year=year,
@@ -336,7 +339,7 @@ def get_dashboard(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return dashboard_data(db, principal.user, month)
+    return dashboard_data(db, principal.budget_user, month)
 
 
 @router.get("/dashboard/preferences", response_model=DashboardPreferencesView)
@@ -402,7 +405,7 @@ def get_transactions(
 ) -> dict[str, object]:
     return transaction_page(
         db,
-        principal.user,
+        principal.budget_user,
         page=page,
         page_size=page_size,
         start_date=start_date,
@@ -427,7 +430,7 @@ def create_transaction(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    transaction = create_manual_transaction(db, principal.user, payload.model_dump())
+    transaction = create_manual_transaction(db, principal.budget_user, payload.model_dump())
     add_audit_event(
         db,
         settings,
@@ -452,7 +455,7 @@ def update_transaction(
 ) -> dict[str, object]:
     transaction = update_manual_transaction(
         db,
-        principal.user,
+        principal.budget_user,
         transaction_id,
         payload.model_dump(exclude_unset=True),
     )
@@ -477,7 +480,7 @@ def delete_transaction(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
-    delete_manual_transaction(db, principal.user, transaction_id)
+    delete_manual_transaction(db, principal.budget_user, transaction_id)
     add_audit_event(
         db,
         settings,
@@ -502,7 +505,7 @@ def update_transaction_intelligence(
 ) -> dict[str, object]:
     transaction = override_transaction(
         db,
-        principal.user,
+        principal.budget_user,
         transaction_id,
         category_id=payload.category_id,
         category_supplied="category_id" in payload.model_fields_set,
@@ -513,7 +516,7 @@ def update_transaction_intelligence(
         excluded_from_spending=payload.excluded_from_spending,
         excluded_supplied="excluded_from_spending" in payload.model_fields_set,
     )
-    rebuild_recurring_streams(db, principal.user)
+    rebuild_recurring_streams(db, principal.budget_user)
     add_audit_event(
         db, settings, action="transaction.intelligence_update", outcome="success",
         request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
@@ -549,7 +552,7 @@ def get_transaction_rules(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.budget_user)]}
 
 
 @router.post("/transaction-rules", response_model=TransactionRulesView, status_code=201)
@@ -561,20 +564,20 @@ def add_transaction_rule(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     create_rule(
-        db, principal.user, name=payload.name, match_field=payload.match_field,
+        db, principal.budget_user, name=payload.name, match_field=payload.match_field,
         pattern=payload.pattern, category_id=payload.category_id,
         display_merchant=payload.display_merchant, kind_override=payload.kind_override,
         excluded_from_spending=payload.excluded_from_spending, priority=payload.priority,
         enabled=payload.enabled,
     )
-    rebuild_recurring_streams(db, principal.user)
+    rebuild_recurring_streams(db, principal.budget_user)
     add_audit_event(
         db, settings, action="transaction_rule.create", outcome="success",
         request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
         detail="rule_created",
     )
     db.commit()
-    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.budget_user)]}
 
 
 @router.delete("/transaction-rules/{rule_id}", response_model=TransactionRulesView)
@@ -585,15 +588,15 @@ def remove_transaction_rule(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    delete_rule(db, principal.user, rule_id)
-    rebuild_recurring_streams(db, principal.user)
+    delete_rule(db, principal.budget_user, rule_id)
+    rebuild_recurring_streams(db, principal.budget_user)
     add_audit_event(
         db, settings, action="transaction_rule.delete", outcome="success",
         request_id=getattr(request.state, "request_id", None), user_id=principal.user.id,
         detail=f"rule:{rule_id}",
     )
     db.commit()
-    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.user)]}
+    return {"rules": [_rule_view(rule) for rule in list_rules(db, principal.budget_user)]}
 
 
 def _monthly_equivalent(amount: Decimal, cadence: str) -> Decimal:
@@ -610,7 +613,7 @@ def recurring(
     principal: Principal = Depends(require_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    streams = list_recurring_streams(db, principal.user)
+    streams = list_recurring_streams(db, principal.budget_user)
     outflow = Decimal("0")
     inflow = Decimal("0")
     items: list[dict[str, object]] = []
@@ -628,6 +631,10 @@ def recurring(
             "next_expected_date": stream.next_expected_date,
             "occurrence_count": stream.occurrence_count,
             "price_change_pct": str(stream.price_change_pct) if stream.price_change_pct is not None else None,
+            "is_subscription": stream_is_subscription(stream),
+            "subscription_detected": bool(stream.subscription_detected),
+            "subscription_override": stream.subscription_override,
+            "subscription_status": stream.subscription_status,
             "account": {
                 "id": stream.account.id, "name": stream.account.name,
                 "display_name": f"{stream.account.name} {mask}" if mask else stream.account.name,
@@ -635,7 +642,48 @@ def recurring(
             },
         })
     from app.services.views import money
-    return {"currency": principal.user.settings.currency, "streams": items, "monthly_outflow_estimate": money(outflow), "monthly_inflow_estimate": money(inflow)}
+    return {"currency": principal.budget_user.settings.currency, "streams": items, "monthly_outflow_estimate": money(outflow), "monthly_inflow_estimate": money(inflow)}
+
+
+@router.get("/subscriptions", response_model=SubscriptionsView)
+def subscriptions(
+    principal: Principal = Depends(require_principal),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return subscriptions_view(db, principal.budget_user)
+
+
+@router.patch("/recurring/{stream_id}/subscription", response_model=SubscriptionsView)
+def patch_subscription(
+    stream_id: int,
+    payload: SubscriptionUpdateRequest,
+    request: Request,
+    principal: Principal = Depends(require_csrf),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    if not payload.model_fields_set:
+        raise ApiError(422, "subscription_update_empty", "Choose a subscription setting to update")
+    update_subscription(
+        db,
+        principal.budget_user,
+        stream_id,
+        is_subscription_value=(
+            payload.is_subscription if "is_subscription" in payload.model_fields_set else None
+        ),
+        status=payload.status if "status" in payload.model_fields_set else None,
+    )
+    add_audit_event(
+        db,
+        settings,
+        action="subscription.update",
+        outcome="success",
+        request_id=getattr(request.state, "request_id", None),
+        user_id=principal.user.id,
+        detail=f"stream:{stream_id}",
+    )
+    db.commit()
+    return subscriptions_view(db, principal.budget_user)
 
 
 @router.post("/recurring/rebuild", response_model=RecurringStreamsView)
@@ -643,6 +691,6 @@ def rebuild_recurring(
     principal: Principal = Depends(require_csrf),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    rebuild_recurring_streams(db, principal.user)
+    rebuild_recurring_streams(db, principal.budget_user)
     db.commit()
     return recurring(principal, db)

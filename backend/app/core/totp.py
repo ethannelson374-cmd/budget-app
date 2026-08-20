@@ -26,15 +26,25 @@ def totp_code(secret: str, *, timestamp: int | None = None, step: int = 30, digi
     return str(value % (10**digits)).zfill(digits)
 
 
-def verify_totp(secret: str, code: str, *, timestamp: int | None = None, window: int = 1) -> bool:
+def matching_totp_counter(
+    secret: str, code: str, *, timestamp: int | None = None, window: int = 1, step: int = 30
+) -> int | None:
     candidate = code.strip().replace(" ", "")
     if len(candidate) != 6 or not candidate.isdigit():
-        return False
+        return None
     current = timestamp if timestamp is not None else int(time.time())
-    return any(
-        hmac.compare_digest(totp_code(secret, timestamp=current + offset * 30), candidate)
-        for offset in range(-window, window + 1)
-    )
+    current_counter = current // step
+    for offset in range(-window, window + 1):
+        counter = current_counter + offset
+        if counter < 0:
+            continue
+        if hmac.compare_digest(totp_code(secret, timestamp=counter * step, step=step), candidate):
+            return counter
+    return None
+
+
+def verify_totp(secret: str, code: str, *, timestamp: int | None = None, window: int = 1) -> bool:
+    return matching_totp_counter(secret, code, timestamp=timestamp, window=window) is not None
 
 
 def otpauth_uri(secret: str, *, email: str, issuer: str = "Budget") -> str:

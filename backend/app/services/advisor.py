@@ -198,14 +198,15 @@ def _json_safe(value: object) -> object:
         return [_json_safe(item) for item in value]
     return value
 
-def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
+def sanitized_snapshot(db: Session, user: User, *, privacy_user: User | None = None) -> dict[str, object]:
+    privacy = privacy_user or user
     today = datetime.now(ZoneInfo(user.settings.timezone)).date()
     month = month_budget_view(db, user, today.strftime("%Y-%m"))
     goals = list_goals(db, user)
     debts = list_debts(db, user)
     forecast = forecast_view(db, user)
     insights = list_insights(db, user, status="active")
-    safe_insights = [_privacy_safe_insight(cast(dict[str, object], item), user.settings.advisor_share_merchants) for item in cast(list[dict[str, object]], insights["insights"])[:8]]
+    safe_insights = [_privacy_safe_insight(cast(dict[str, object], item), privacy.settings.advisor_share_merchants) for item in cast(list[dict[str, object]], insights["insights"])[:8]]
     snapshot = {
         "as_of": today.isoformat(),
         "currency": user.settings.currency,
@@ -233,12 +234,12 @@ def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
         "goals": {
             "total_target": goals["total_target"], "total_current": goals["total_current"],
             "monthly_contributions": goals["monthly_contributions"],
-            "items": [_planning_item(item, label="Goal", share_names=user.settings.advisor_share_planning_names, keys=("id", "name", "goal_type", "target_amount", "current_amount", "remaining_amount", "monthly_contribution", "target_date", "projected_date", "active")) for item in cast(list[dict[str, object]], goals["goals"])[:12]],
+            "items": [_planning_item(item, label="Goal", share_names=privacy.settings.advisor_share_planning_names, keys=("id", "name", "goal_type", "target_amount", "current_amount", "remaining_amount", "monthly_contribution", "target_date", "projected_date", "active")) for item in cast(list[dict[str, object]], goals["goals"])[:12]],
         },
         "debts": {
             "strategy": debts["strategy"], "total_balance": debts["total_balance"], "planned_monthly_payment": debts["planned_monthly_payment"],
             "interest_saved": debts["interest_saved"], "planned_debt_free_date": debts["planned_debt_free_date"],
-            "items": [_planning_item(item, label="Debt", share_names=user.settings.advisor_share_planning_names, keys=("id", "name", "debt_type", "balance", "apr", "minimum_payment", "extra_payment", "planned_payoff_date", "interest_saved", "active")) for item in cast(list[dict[str, object]], debts["debts"])[:12]],
+            "items": [_planning_item(item, label="Debt", share_names=privacy.settings.advisor_share_planning_names, keys=("id", "name", "debt_type", "balance", "apr", "minimum_payment", "extra_payment", "planned_payoff_date", "interest_saved", "active")) for item in cast(list[dict[str, object]], debts["debts"])[:12]],
         },
         "forecast": {
             "cash_available": forecast["cash_available"], "goal_reserves": forecast["goal_reserves"], "spendable_cash": forecast["spendable_cash"],
@@ -246,21 +247,22 @@ def sanitized_snapshot(db: Session, user: User) -> dict[str, object]:
         },
         "active_insights": safe_insights,
         "privacy": {
-            "merchant_names_shared": user.settings.advisor_share_merchants,
-            "transaction_descriptions_shared": user.settings.advisor_include_descriptions,
-            "planning_names_shared": user.settings.advisor_share_planning_names,
+            "merchant_names_shared": privacy.settings.advisor_share_merchants,
+            "transaction_descriptions_shared": privacy.settings.advisor_include_descriptions,
+            "planning_names_shared": privacy.settings.advisor_share_planning_names,
         },
     }
     return cast(dict[str, object], _json_safe(snapshot))
 
 
-def attached_insight(db: Session, user: User, insight_id: int | None) -> dict[str, object] | None:
+def attached_insight(db: Session, user: User, insight_id: int | None, *, privacy_user: User | None = None) -> dict[str, object] | None:
+    privacy = privacy_user or user
     if insight_id is None:
         return None
     row = db.scalar(select(InsightRecord).where(InsightRecord.id == insight_id, InsightRecord.user_id == user.id))
     if row is None:
         raise ApiError(404, "insight_not_found", "The insight was not found")
-    return cast(dict[str, object], _json_safe(_privacy_safe_insight(cast(dict[str, object], insight_view(row)), user.settings.advisor_share_merchants)))
+    return cast(dict[str, object], _json_safe(_privacy_safe_insight(cast(dict[str, object], insight_view(row)), privacy.settings.advisor_share_merchants)))
 
 
 def _decimal_arg(value: object, *, minimum: Decimal | None = None, maximum: Decimal | None = None) -> Decimal:
@@ -367,9 +369,10 @@ def _spending_trends_by_category(db: Session, user: User, today: date) -> dict[s
     }
 
 
-def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object]) -> dict[str, object]:
+def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object], *, privacy_user: User | None = None) -> dict[str, object]:
+    privacy = privacy_user or user
     if name == "get_advisor_snapshot":
-        return sanitized_snapshot(db, user)
+        return sanitized_snapshot(db, user, privacy_user=privacy)
     if name == "get_cash_forecast":
         days = _int_arg(arguments.get("days"), minimum=30, maximum=90)
         if days not in {30, 60, 90}:
@@ -383,7 +386,7 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         goal = next((item for item in goals if item["id"] == goal_id), None)
         if goal is None:
             raise ApiError(404, "goal_not_found", "Goal was not found")
-        return _planning_item(goal, label="Goal", share_names=user.settings.advisor_share_planning_names, keys=tuple(goal.keys()))
+        return _planning_item(goal, label="Goal", share_names=privacy.settings.advisor_share_planning_names, keys=tuple(goal.keys()))
     if name == "get_debt_projection":
         debt_id = _int_arg(arguments.get("debt_id"), minimum=1, maximum=2_147_483_647)
         extra = _decimal_arg(arguments.get("extra_payment"), minimum=Decimal("0"), maximum=Decimal("10000000"))
@@ -392,7 +395,7 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         if debt is None:
             raise ApiError(404, "debt_not_found", "Debt was not found")
         scenario = scenario_view(db, user, {"extra_debt_payment": extra, "goal_contribution_adjustment": Decimal("0"), "spending_reduction": Decimal("0"), "new_monthly_expense": Decimal("0")})
-        safe_debt = _planning_item(debt, label="Debt", share_names=user.settings.advisor_share_planning_names, keys=tuple(debt.keys()))
+        safe_debt = _planning_item(debt, label="Debt", share_names=privacy.settings.advisor_share_planning_names, keys=tuple(debt.keys()))
         return {"debt": safe_debt, "extra_payment": str(extra), "scenario_debt_free_date": scenario["scenario_debt_free_date"], "interest_saved": scenario["interest_saved"], "cash_impact_90_days": scenario["cash_impact_90_days"]}
     if name == "run_cash_scenario":
         payload = {key: _decimal_arg(arguments.get(key), minimum=Decimal("0"), maximum=Decimal("10000000")) for key in ("extra_debt_payment", "spending_reduction", "new_monthly_expense")}
@@ -426,7 +429,7 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         today = datetime.now(ZoneInfo(user.settings.timezone)).date()
         return _spending_trends_by_category(db, user, today)
     if name == "get_merchant_spending":
-        if not user.settings.advisor_share_merchants:
+        if not privacy.settings.advisor_share_merchants:
             return {"error": "merchant_sharing_disabled"}
         months = _int_arg(arguments.get("months"), minimum=1, maximum=12)
         merchant = str(arguments.get("merchant") or "").strip()[:160]
@@ -442,7 +445,7 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
             if kind == "expense": total += -tx.amount
             elif kind == "refund": total -= tx.amount
             item={"date": tx.posted_date.isoformat(), "merchant": name_value, "amount": str(tx.amount), "kind": kind}
-            if user.settings.advisor_include_descriptions: item["description"] = tx.description[:255]
+            if privacy.settings.advisor_include_descriptions: item["description"] = tx.description[:255]
             matches.append(item)
         return {"currency": user.settings.currency, "merchant": merchant, "months": months, "total_spending": str(total), "transactions": matches[-25:]}
     if name == "get_recurring_summary":
@@ -451,12 +454,12 @@ def execute_tool(db: Session, user: User, name: str, arguments: dict[str, object
         expenses=[stream for stream in streams if stream.kind == "expense"]
         monthly=sum((stream.average_amount*factors.get(stream.cadence,Decimal("0")) for stream in expenses),Decimal("0"))
         result: dict[str, object]={"currency":user.settings.currency,"monthly_estimate":str(monthly),"annualized":str(monthly*12),"stream_count":len(expenses)}
-        if user.settings.advisor_share_merchants:
+        if privacy.settings.advisor_share_merchants:
             result["largest"]=[{"name":stream.display_name,"cadence":stream.cadence,"average_amount":str(stream.average_amount)} for stream in sorted(expenses,key=lambda x:x.average_amount,reverse=True)[:10]]
         return result
     if name == "get_active_insights":
         items=cast(list[dict[str,object]], list_insights(db,user,status="active")["insights"])
-        return {"insights":[_privacy_safe_insight(item,user.settings.advisor_share_merchants) for item in items[:12]]}
+        return {"insights":[_privacy_safe_insight(item,privacy.settings.advisor_share_merchants) for item in items[:12]]}
     raise ApiError(422, "advisor_tool_not_allowed", "The requested Advisor tool is not allowed")
 
 

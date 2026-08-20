@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
-import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView, TrendsView } from "../api/types";
+import type { AdvisorStatus, CashFlowSankeyData, DashboardData, DashboardOnboarding, DashboardPreferences, InsightsResponse, MonthlyBudgetView, SubscriptionsResponse, TrendsView } from "../api/types";
 import { ToastProvider } from "../toast/ToastContext";
 import { DashboardPage } from "./DashboardPage";
 
@@ -74,10 +74,11 @@ const budget: MonthlyBudgetView = {
 
 const preferences: DashboardPreferences = { preset: "everyday", onboarding_dismissed_at: null, cards: [
   { id: "net_worth", size: "compact", visible: true }, { id: "cash_available", size: "compact", visible: true }, { id: "income", size: "compact", visible: true }, { id: "spending", size: "compact", visible: true }, { id: "net_cash_flow", size: "compact", visible: true }, { id: "savings_rate", size: "compact", visible: true },
-  { id: "cash_flow", size: "hero", visible: true }, { id: "top_spending", size: "standard", visible: true }, { id: "ask_budget", size: "hero", visible: true }, { id: "budget", size: "standard", visible: true }, { id: "insights", size: "hero", visible: true }, { id: "recent_transactions", size: "hero", visible: true }, { id: "accounts", size: "standard", visible: true }, { id: "data_freshness", size: "compact", visible: true }
+  { id: "cash_flow", size: "hero", visible: true }, { id: "top_spending", size: "standard", visible: true }, { id: "subscriptions", size: "standard", visible: true }, { id: "ask_budget", size: "hero", visible: true }, { id: "budget", size: "standard", visible: true }, { id: "insights", size: "hero", visible: true }, { id: "recent_transactions", size: "hero", visible: true }, { id: "accounts", size: "standard", visible: true }, { id: "data_freshness", size: "compact", visible: true }
 ] };
 const onboarding: DashboardOnboarding = { tasks: [], completed: 0, total: 5, complete: false, dismissed: true, dismissed_at: "2026-08-14T12:00:00Z" };
 const advisorStatus: AdvisorStatus = { available: true, enabled: true, store_history: true, provider: "gemini", model: "test" };
+const subscriptions: SubscriptionsResponse = { currency: "USD", active_count: 1, monthly_total: "19.9900", annual_total: "239.8800", upcoming_30_days: [{ id: 9, display_name: "StreamBox", cadence: "monthly", average_amount: "19.9900", last_amount: "19.9900", next_expected_date: "2026-08-24", price_change_pct: "11.1000", status: "active", detected: true, account: { id: 1, name: "Checking", display_name: "Checking •••• 1234", mask: "•••• 1234", currency: "USD" } }], subscriptions: [{ id: 9, display_name: "StreamBox", cadence: "monthly", average_amount: "19.9900", last_amount: "19.9900", next_expected_date: "2026-08-24", price_change_pct: "11.1000", status: "active", detected: true, account: { id: 1, name: "Checking", display_name: "Checking •••• 1234", mask: "•••• 1234", currency: "USD" } }] };
 
 
 const trends: TrendsView = {
@@ -122,6 +123,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path === "/subscriptions") return Promise.resolve(subscriptions as never);
       if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
       if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       return Promise.resolve(dashboard as never);
@@ -143,6 +145,8 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("link", { name: /Open budget/ })).toBeInTheDocument();
     expect(screen.getByText("$4,400.00")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Restaurants spending is over budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Subscriptions" })).toBeInTheDocument();
+    expect(screen.getByText("$239.88")).toBeInTheDocument();
   });
 
   it("offers a working retry after a dashboard server failure", async () => {
@@ -154,6 +158,7 @@ describe("DashboardPage", () => {
       if (path === "/dashboard/preferences") return Promise.resolve(preferences as never);
       if (path === "/dashboard/onboarding") return Promise.resolve(onboarding as never);
       if (path === "/advisor/status") return Promise.resolve(advisorStatus as never);
+      if (path === "/subscriptions") return Promise.resolve(subscriptions as never);
       if (path.startsWith("/cash-flow?")) return Promise.resolve(cashFlow as never);
       if (path.startsWith("/trends?")) return Promise.resolve(trends as never);
       dashboardCalls += 1;

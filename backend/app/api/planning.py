@@ -63,7 +63,7 @@ def _audit(
 def get_goals(
     principal: Principal = Depends(require_principal), db: Session = Depends(get_db)
 ) -> dict[str, object]:
-    return list_goals(db, principal.user)
+    return list_goals(db, principal.budget_user)
 
 
 @router.post("/goals", response_model=FinancialGoalsView, status_code=201)
@@ -74,10 +74,10 @@ def post_goal(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    goal = create_goal(db, principal.user, payload.model_dump())
+    goal = create_goal(db, principal.budget_user, payload.model_dump())
     _audit(db, settings, request, principal, "planning.goal.create", str(goal.id))
     db.commit()
-    return list_goals(db, principal.user)
+    return list_goals(db, principal.budget_user)
 
 
 @router.patch("/goals/{goal_id}", response_model=FinancialGoalsView)
@@ -89,10 +89,10 @@ def patch_goal(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    update_goal(db, principal.user, goal_id, payload.model_dump(exclude_unset=True))
+    update_goal(db, principal.budget_user, goal_id, payload.model_dump(exclude_unset=True))
     _audit(db, settings, request, principal, "planning.goal.update", str(goal_id))
     db.commit()
-    return list_goals(db, principal.user)
+    return list_goals(db, principal.budget_user)
 
 
 @router.post("/goals/{goal_id}/contributions", response_model=FinancialGoalsView)
@@ -106,7 +106,7 @@ def post_goal_contribution(
 ) -> dict[str, object]:
     add_goal_contribution(
         db,
-        principal.user,
+        principal.budget_user,
         goal_id,
         payload.amount,
         payload.contribution_date,
@@ -114,7 +114,7 @@ def post_goal_contribution(
     )
     _audit(db, settings, request, principal, "planning.goal.contribution", str(goal_id))
     db.commit()
-    return list_goals(db, principal.user)
+    return list_goals(db, principal.budget_user)
 
 
 @router.delete("/goals/{goal_id}", response_model=OkView)
@@ -125,7 +125,7 @@ def remove_goal(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
-    delete_goal(db, principal.user, goal_id)
+    delete_goal(db, principal.budget_user, goal_id)
     _audit(db, settings, request, principal, "planning.goal.delete", str(goal_id))
     db.commit()
     return {"ok": True}
@@ -135,7 +135,7 @@ def remove_goal(
 def get_debts(
     principal: Principal = Depends(require_principal), db: Session = Depends(get_db)
 ) -> dict[str, object]:
-    result = list_debts(db, principal.user)
+    result = list_debts(db, principal.budget_user)
     db.commit()
     return result
 
@@ -148,10 +148,10 @@ def post_debt(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    debt = create_debt(db, principal.user, payload.model_dump())
+    debt = create_debt(db, principal.budget_user, payload.model_dump())
     _audit(db, settings, request, principal, "planning.debt.create", str(debt.id))
     db.commit()
-    return list_debts(db, principal.user)
+    return list_debts(db, principal.budget_user)
 
 
 @router.patch("/debts/{debt_id}", response_model=DebtsView)
@@ -163,10 +163,10 @@ def patch_debt(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    update_debt(db, principal.user, debt_id, payload.model_dump(exclude_unset=True))
+    update_debt(db, principal.budget_user, debt_id, payload.model_dump(exclude_unset=True))
     _audit(db, settings, request, principal, "planning.debt.update", str(debt_id))
     db.commit()
-    return list_debts(db, principal.user)
+    return list_debts(db, principal.budget_user)
 
 
 @router.delete("/debts/{debt_id}", response_model=OkView)
@@ -177,7 +177,7 @@ def remove_debt(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, bool]:
-    delete_debt(db, principal.user, debt_id)
+    delete_debt(db, principal.budget_user, debt_id)
     _audit(db, settings, request, principal, "planning.debt.delete", str(debt_id))
     db.commit()
     return {"ok": True}
@@ -191,17 +191,17 @@ def put_strategy(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
-    update_debt_strategy(db, principal.user, payload.strategy, payload.monthly_extra_budget)
+    update_debt_strategy(db, principal.budget_user, payload.strategy, payload.monthly_extra_budget)
     _audit(db, settings, request, principal, "planning.debt.strategy", payload.strategy)
     db.commit()
-    return list_debts(db, principal.user)
+    return list_debts(db, principal.budget_user)
 
 
 @router.get("/forecast", response_model=ForecastView)
 def get_forecast(
     principal: Principal = Depends(require_principal), db: Session = Depends(get_db)
 ) -> dict[str, object]:
-    result = forecast_view(db, principal.user)
+    result = forecast_view(db, principal.budget_user)
     db.commit()
     return result
 
@@ -215,11 +215,11 @@ def put_forecast_assumptions(
     settings: Settings = Depends(get_settings_from_request),
 ) -> dict[str, object]:
     update_forecast_assumptions(
-        db, principal.user, payload.reserve_balance, payload.include_budget_reserve
+        db, principal.budget_user, payload.reserve_balance, payload.include_budget_reserve
     )
     _audit(db, settings, request, principal, "planning.forecast.assumptions", "updated")
     db.commit()
-    return forecast_view(db, principal.user)
+    return forecast_view(db, principal.budget_user)
 
 
 @router.post("/forecast/scenario", response_model=ForecastScenarioView)
@@ -228,6 +228,6 @@ def post_scenario(
     principal: Principal = Depends(require_csrf),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    result = scenario_view(db, principal.user, payload.model_dump())
+    result = scenario_view(db, principal.budget_user, payload.model_dump())
     db.rollback()
     return result

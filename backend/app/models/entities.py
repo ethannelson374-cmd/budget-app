@@ -83,6 +83,23 @@ class UserSettings(TimestampMixin, Base):
     user: Mapped[User] = relationship(back_populates="settings")
 
 
+class BudgetMembership(Base):
+    __tablename__ = "budget_memberships"
+    __table_args__ = (
+        CheckConstraint("role IN ('owner','member')", name="budget_membership_role_allowed"),
+        Index("ix_budget_memberships_owner", "budget_owner_user_id", "user_id"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    budget_owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), default="member", nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class UserDashboardPreference(TimestampMixin, Base):
     __tablename__ = "user_dashboard_preferences"
 
@@ -186,9 +203,14 @@ class AuthIdentity(Base):
 class UserInvitation(Base):
     __tablename__ = "user_invitations"
     __table_args__ = (
+        CheckConstraint(
+            "invite_type IN ('independent','shared')",
+            name="user_invitation_type_allowed",
+        ),
         Index("ix_user_invitations_email_status", "normalized_email", "expires_at"),
         Index("ix_user_invitations_inviter", "invited_by_user_id", "created_at"),
         Index("ix_user_invitations_expires", "expires_at"),
+        Index("ix_user_invitations_budget_owner", "budget_owner_user_id", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -201,6 +223,13 @@ class UserInvitation(Base):
     token_digest: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     challenge_digest: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     challenge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invite_type: Mapped[str] = mapped_column(String(16), default="independent", nullable=False)
+    budget_owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    accepted_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -261,6 +290,7 @@ class UserTotp(Base):
     secret_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     secret_nonce: Mapped[str] = mapped_column(String(64), nullable=False)
     recovery_codes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    last_used_counter: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -565,11 +595,19 @@ class RecurringStream(TimestampMixin, Base):
             "cadence IN ('weekly','biweekly','monthly','quarterly','annual')",
             name="recurring_stream_cadence_allowed",
         ),
+        CheckConstraint(
+            "subscription_status IN ('active','paused','cancelled')",
+            name="recurring_stream_subscription_status_allowed",
+        ),
         UniqueConstraint(
             "user_id", "account_id", "merchant_key", "kind", "cadence",
             name="uq_recurring_stream_identity",
         ),
         Index("ix_recurring_streams_user_next", "user_id", "active", "next_expected_date"),
+        Index(
+            "ix_recurring_streams_user_subscription",
+            "user_id", "subscription_status", "next_expected_date",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -585,6 +623,9 @@ class RecurringStream(TimestampMixin, Base):
     next_expected_date: Mapped[date] = mapped_column(Date, nullable=False)
     occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False)
     price_change_pct: Mapped[Decimal | None] = mapped_column(Numeric(9, 4), nullable=True)
+    subscription_detected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    subscription_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    subscription_status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     account: Mapped[Account] = relationship(viewonly=True)

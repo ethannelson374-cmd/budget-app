@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import cast
 
 from pydantic import SecretStr
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
@@ -21,7 +21,7 @@ from app.core.security import (
     utc_now,
     verify_password,
 )
-from app.core.totp import new_totp_secret, otpauth_uri, verify_totp
+from app.core.totp import matching_totp_counter, new_totp_secret, otpauth_uri
 from app.integrations.google_oidc import GoogleIdentity, authorization_url
 from app.models import (
     AuthIdentity,
@@ -38,6 +38,7 @@ from app.models import (
 from app.services.auth import revoke_user_sessions
 from app.services.catalog import DEFAULT_CATEGORIES
 from app.services.email_delivery import EmailDeliveryError, password_reset_email, send_email
+from app.services.family import budget_owner_id, create_membership
 
 INVITATION_TTL = timedelta(days=7)
 PASSWORD_RESET_TTL = timedelta(minutes=30)
@@ -45,6 +46,7 @@ OAUTH_STATE_TTL = timedelta(minutes=10)
 INVITATION_CHALLENGE_TTL = timedelta(minutes=20)
 TWO_FACTOR_CHALLENGE_TTL = timedelta(minutes=5)
 RECOVERY_CODE_COUNT = 8
+MAX_ACTIVE_INVITATIONS_PER_USER = 10
 
 
 def _token_digest(settings: Settings, domain: str, token: str) -> str:
@@ -78,6 +80,9 @@ def invitation_view(
     return {
         "id": invitation.id,
         "label": invitation.label or invitation.email,
+        "invite_type": invitation.invite_type,
+        "budget_owner_user_id": invitation.budget_owner_user_id,
+        "accepted_user_id": invitation.accepted_user_id,
         "status": invitation_status(invitation),
         "created_at": invitation.created_at,
         "expires_at": invitation.expires_at,
@@ -137,22 +142,44 @@ def _unique_username(db: Session, preferred: str) -> str:
 def create_invitation(
     db: Session,
     settings: Settings,
-    admin: User,
+    inviter: User,
     *,
     label: str | None,
+    invite_type: str,
     base_url: str,
 ) -> dict[str, object]:
-    _require_admin(admin)
+    if not inviter.settings.onboarding_complete:
+        raise ApiError(403, "onboarding_required", "Finish first-time setup before inviting family")
+    if invite_type not in {"independent", "shared"}:
+        raise ApiError(422, "invite_type_invalid", "Choose a valid invitation type")
     now = utc_now()
+    pending = int(
+        db.scalar(
+            select(func.count(UserInvitation.id)).where(
+                UserInvitation.invited_by_user_id == inviter.id,
+                UserInvitation.accepted_at.is_(None),
+                UserInvitation.revoked_at.is_(None),
+                UserInvitation.expires_at > now,
+            )
+        )
+        or 0
+    )
+    if pending >= MAX_ACTIVE_INVITATIONS_PER_USER:
+        raise ApiError(409, "invite_limit_reached", "Revoke or wait for an existing invite before creating another")
+
     token = secrets.token_urlsafe(32)
+    owner_id = budget_owner_id(db, inviter) if invite_type == "shared" else None
     invitation = UserInvitation(
-        invited_by_user_id=admin.id,
+        invited_by_user_id=inviter.id,
         email=None,
         normalized_email=None,
         label=label.strip() if label else None,
         token_digest=_token_digest(settings, "invitation", token),
         challenge_digest=None,
         challenge_expires_at=None,
+        invite_type=invite_type,
+        budget_owner_user_id=owner_id,
+        accepted_user_id=None,
         created_at=now,
         expires_at=now + INVITATION_TTL,
         accepted_at=None,
@@ -163,25 +190,18 @@ def create_invitation(
     invite_url = f"{base_url.rstrip('/')}/join/{token}"
     return invitation_view(invitation, invite_url=invite_url)
 
-def list_invitations(db: Session, admin: User) -> list[dict[str, object]]:
-    _require_admin(admin)
-    rows = db.scalars(
-        select(UserInvitation)
-        .where(UserInvitation.invited_by_user_id == admin.id)
-        .order_by(UserInvitation.created_at.desc())
-    ).all()
+
+def list_invitations(db: Session, user: User) -> list[dict[str, object]]:
+    query = select(UserInvitation)
+    if not user.is_admin:
+        query = query.where(UserInvitation.invited_by_user_id == user.id)
+    rows = db.scalars(query.order_by(UserInvitation.created_at.desc())).all()
     return [invitation_view(row) for row in rows]
 
 
-def revoke_invitation(db: Session, admin: User, invitation_id: int) -> None:
-    _require_admin(admin)
-    row = db.scalar(
-        select(UserInvitation).where(
-            UserInvitation.id == invitation_id,
-            UserInvitation.invited_by_user_id == admin.id,
-        )
-    )
-    if row is None:
+def revoke_invitation(db: Session, user: User, invitation_id: int) -> None:
+    row = db.get(UserInvitation, invitation_id)
+    if row is None or (not user.is_admin and row.invited_by_user_id != user.id):
         raise ApiError(404, "invitation_not_found", "The invitation was not found")
     if row.accepted_at is not None:
         raise ApiError(409, "invitation_already_accepted", "The invitation has already been accepted")
@@ -207,8 +227,11 @@ def exchange_invitation_token(
     invitation.challenge_digest = _token_digest(settings, "invitation-challenge", challenge)
     invitation.challenge_expires_at = utc_now() + INVITATION_CHALLENGE_TTL
     db.flush()
+    owner = db.get(User, invitation.budget_owner_user_id) if invitation.budget_owner_user_id else None
     return {
         "label": invitation.label or invitation.email,
+        "invite_type": invitation.invite_type,
+        "budget_owner_username": owner.username if owner is not None else None,
         "expires_at": invitation.expires_at,
         "google_enabled": settings.google_configured,
         "challenge_token": challenge,
@@ -267,7 +290,15 @@ def accept_password_invitation(
     )
     db.add(user)
     db.flush()
+    create_membership(
+        db,
+        user,
+        budget_owner_user_id=(
+            invitation.budget_owner_user_id if invitation.invite_type == "shared" else None
+        ),
+    )
     _add_default_categories(db, user)
+    invitation.accepted_user_id = user.id
     invitation.accepted_at = now
     invitation.challenge_digest = None
     invitation.challenge_expires_at = None
@@ -468,6 +499,7 @@ def begin_totp_setup(db: Session, settings: Settings, user: User) -> dict[str, s
             secret_ciphertext=ciphertext,
             secret_nonce=nonce,
             recovery_codes_json="[]",
+            last_used_counter=None,
             created_at=now,
             enabled_at=None,
         )
@@ -476,6 +508,7 @@ def begin_totp_setup(db: Session, settings: Settings, user: User) -> dict[str, s
         row.secret_ciphertext = ciphertext
         row.secret_nonce = nonce
         row.recovery_codes_json = "[]"
+        row.last_used_counter = None
         row.created_at = now
         row.enabled_at = None
     db.flush()
@@ -501,12 +534,17 @@ def confirm_totp(db: Session, settings: Settings, user: User, code: str) -> list
     row = _totp_row(db, user.id)
     if row is None:
         raise ApiError(409, "totp_setup_required", "Start two-factor setup first")
-    if not verify_totp(_totp_secret(settings, row), code):
+    counter = matching_totp_counter(_totp_secret(settings, row), code)
+    if counter is None:
         raise ApiError(400, "totp_invalid", "The verification code is incorrect")
     recovery_codes = [secrets.token_hex(5).upper() for _ in range(RECOVERY_CODE_COUNT)]
     row.recovery_codes_json = json.dumps(
         [_recovery_digest(settings, user.id, item) for item in recovery_codes], separators=(",", ":")
     )
+    # The setup code is itself a valid authenticator credential. Recording its
+    # counter prevents the same 30-second code from being replayed immediately
+    # after 2FA is enabled.
+    row.last_used_counter = counter
     row.enabled_at = utc_now()
     db.flush()
     return recovery_codes
@@ -523,8 +561,23 @@ def verify_second_factor(
     row = _totp_row(db, user.id)
     if row is None or row.enabled_at is None:
         return False
-    if verify_totp(_totp_secret(settings, row), code):
-        return True
+    counter = matching_totp_counter(_totp_secret(settings, row), code)
+    if counter is not None:
+        # Consume counters atomically. The conditional UPDATE closes the race
+        # where two requests present the same valid TOTP at the same time.
+        consumed = db.execute(
+            update(UserTotp)
+            .where(
+                UserTotp.user_id == user.id,
+                UserTotp.enabled_at.is_not(None),
+                or_(UserTotp.last_used_counter.is_(None), UserTotp.last_used_counter < counter),
+            )
+            .values(last_used_counter=counter)
+        )
+        if consumed.rowcount == 1:
+            row.last_used_counter = counter
+            return True
+        return False
     try:
         stored = cast(list[str], json.loads(row.recovery_codes_json))
     except (json.JSONDecodeError, TypeError):
@@ -758,6 +811,13 @@ def complete_google_flow(
     )
     db.add(user)
     db.flush()
+    create_membership(
+        db,
+        user,
+        budget_owner_user_id=(
+            invitation.budget_owner_user_id if invitation.invite_type == "shared" else None
+        ),
+    )
     _add_default_categories(db, user)
     db.add(
         AuthIdentity(
@@ -768,6 +828,7 @@ def complete_google_flow(
             created_at=now,
         )
     )
+    invitation.accepted_user_id = user.id
     invitation.accepted_at = now
     invitation.challenge_digest = None
     invitation.challenge_expires_at = None

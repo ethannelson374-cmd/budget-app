@@ -54,8 +54,16 @@ def _database_tls(settings: Settings) -> dict[str, str]:
     if settings.db_ssl_mode == "VERIFY_IDENTITY":
         return _check("database_tls", "pass", "Database TLS verifies the CA chain and server identity")
     if settings.db_ssl_mode == "VERIFY_CA":
-        return _check("database_tls", "warn", "Database TLS verifies the CA chain but not the hostname")
-    return _check("database_tls", "warn", "Database traffic is encrypted, but the server certificate identity is not verified")
+        return _check(
+            "database_tls",
+            "fail" if settings.is_production else "warn",
+            "Database TLS verifies the CA chain but not the hostname",
+        )
+    return _check(
+        "database_tls",
+        "fail" if settings.is_production else "warn",
+        "Database traffic is encrypted, but the server certificate identity is not verified",
+    )
 
 
 def _schema(db: Session) -> dict[str, str]:

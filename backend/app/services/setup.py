@@ -10,6 +10,7 @@ from app.core.security import constant_time_matches, hash_password, normalize_id
 from app.models import Category, InstallationState, User, UserSettings
 from app.schemas.api import SetupRequest
 from app.services.catalog import CATEGORY_BY_KEY, DEFAULT_CATEGORIES
+from app.services.family import create_membership
 
 INSTALLATION_ROW_ID = 1
 
@@ -96,6 +97,7 @@ def create_initial_user(
         )
         db.add(user)
         db.flush()
+        create_membership(db, user)
         for definition in DEFAULT_CATEGORIES:
             db.add(
                 Category(
