@@ -2298,3 +2298,189 @@ input,select,textarea{border-color:var(--border-strong);background:color-mix(in 
 .sankey-inspector{margin-top:0}
 .cash-flow-footnote{margin-top:14px;padding-top:2px}
 @media(max-width:620px){.cash-flow-range-controls-bottom{width:100%;justify-content:center;margin:18px auto}.cash-flow-range-controls-bottom .cash-flow-range-tabs{width:100%}.embedded-page>.page-header{padding:14px}.plan-tabs{width:100%}.plan-tabs button{flex:1;min-width:92px}}
+
+/* Liquid-glass material refinement: retain the aurora palette while making shared
+   controls clearer, more tactile, and less frosted. */
+:root {
+  --control-rim: color-mix(in srgb, var(--glass-specular) 76%, var(--glass-line));
+  --control-shadow: 0 9px 22px rgb(7 18 45 / 16%), 0 2px 5px rgb(7 18 45 / 12%), inset 0 1px 0 var(--control-rim), inset 0 -2px 5px color-mix(in srgb, var(--glass-deep-shadow) 35%, transparent);
+  --control-inset: inset 0 2px 5px rgb(16 39 79 / 11%), inset 0 1px 0 rgb(255 255 255 / 30%);
+}
+
+.panel,
+.metric-card,
+.account-card,
+.state-card,
+.filter-panel,
+.auth-card,
+.confirm-dialog {
+  background:
+    linear-gradient(112deg, rgb(255 255 255 / 14%), transparent 25%),
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--aurora-violet) 10%, transparent), transparent 36%),
+    var(--glass-surface);
+  backdrop-filter: blur(28px) saturate(165%) contrast(104%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%) contrast(104%);
+}
+
+.metric-card,
+.panel,
+.account-card {
+  box-shadow: 0 18px 46px rgb(3 14 40 / 15%), 0 4px 10px rgb(5 18 43 / 10%), inset 0 1px 0 var(--control-rim), inset 0 -1px 0 color-mix(in srgb, var(--aurora-blue) 13%, transparent);
+}
+
+input,
+select,
+textarea {
+  border-color: color-mix(in srgb, var(--control-rim) 52%, var(--border-strong));
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 11%), transparent 48%),
+    color-mix(in srgb, var(--surface-raised) 48%, transparent);
+  box-shadow: var(--control-inset);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--control-rim));
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in srgb, var(--brand) 78%, var(--control-rim));
+  background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 14%, transparent), var(--control-inset), inset 0 1px 0 rgb(255 255 255 / 42%);
+}
+
+.button {
+  border-radius: 999px;
+  box-shadow: var(--control-shadow);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-position 520ms cubic-bezier(.2,.8,.2,1), filter 180ms ease;
+}
+
+.button::before {
+  z-index: 0;
+  opacity: .58;
+  transform: translateX(-13%);
+  transition: transform 440ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
+}
+
+.button > * {
+  position: relative;
+  z-index: 1;
+}
+
+.button.primary {
+  background-size: 165% 165%;
+  background-position: 5% 35%;
+  box-shadow: 0 12px 27px rgb(15 159 189 / 20%), 0 3px 8px rgb(3 15 45 / 18%), inset 0 1px 0 rgb(255 255 255 / 72%), inset 0 -3px 7px rgb(18 79 132 / 24%);
+}
+
+.button:hover:not(:disabled) {
+  box-shadow: 0 15px 30px rgb(4 18 48 / 22%), 0 0 19px color-mix(in srgb, var(--aurora-blue) 12%, transparent), inset 0 1px 0 rgb(255 255 255 / 80%), inset 0 -2px 5px color-mix(in srgb, var(--glass-deep-shadow) 38%, transparent);
+}
+
+.button:hover:not(:disabled)::before {
+  opacity: .86;
+  transform: translateX(13%);
+}
+
+.button.primary:hover:not(:disabled) {
+  background-position: 86% 66%;
+}
+
+.button:active:not(:disabled) {
+  box-shadow: 0 3px 7px rgb(3 16 43 / 19%), inset 0 3px 8px color-mix(in srgb, var(--glass-deep-shadow) 52%, transparent), inset 0 1px 0 rgb(255 255 255 / 40%);
+}
+
+.segmented-control,
+.cash-flow-range-tabs,
+.trend-range-tabs,
+.calendar-view-tabs,
+.plan-tabs,
+.workspace-tabs {
+  position: relative;
+  isolation: isolate;
+  border-color: color-mix(in srgb, var(--control-rim) 72%, var(--border));
+  background: linear-gradient(145deg, rgb(255 255 255 / 11%), color-mix(in srgb, var(--surface-raised) 19%, transparent));
+  box-shadow: var(--control-inset), inset 0 1px 0 rgb(255 255 255 / 18%);
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+.segmented-control button,
+.cash-flow-range-tabs button,
+.trend-range-tabs button,
+.calendar-view-tabs button,
+.plan-tabs button,
+.workspace-tabs button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 999px;
+  transition: color 170ms ease, background 170ms ease, box-shadow 170ms ease, border-color 170ms ease, filter 170ms ease;
+}
+
+.segmented-control button::before,
+.cash-flow-range-tabs button::before,
+.trend-range-tabs button::before,
+.calendar-view-tabs button::before,
+.plan-tabs button::before,
+.workspace-tabs button::before {
+  position: absolute;
+  z-index: -1;
+  top: 1px;
+  right: 14%;
+  left: 14%;
+  height: 42%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 44%), transparent);
+  content: "";
+  opacity: 0;
+  transition: opacity 170ms ease;
+}
+
+.segmented-control button.active,
+.cash-flow-range-tabs button.active,
+.trend-range-tabs button.active,
+.calendar-view-tabs button.active,
+.plan-tabs button.active,
+.workspace-tabs button.active {
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--control-rim));
+  color: var(--text);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 22%, transparent), color-mix(in srgb, var(--aurora-blue) 18%, transparent), color-mix(in srgb, var(--aurora-violet) 13%, transparent));
+  box-shadow: 0 6px 15px rgb(8 28 70 / 18%), inset 0 1px 0 rgb(255 255 255 / 48%), inset 0 -2px 5px rgb(18 49 101 / 17%);
+}
+
+.segmented-control button.active::before,
+.cash-flow-range-tabs button.active::before,
+.trend-range-tabs button.active::before,
+.calendar-view-tabs button.active::before,
+.plan-tabs button.active::before,
+.workspace-tabs button.active::before {
+  opacity: .82;
+}
+
+.confirm-dialog-backdrop {
+  background: rgb(2 11 33 / 52%);
+  backdrop-filter: blur(10px) saturate(125%);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+}
+
+.confirm-dialog {
+  box-shadow: 0 32px 88px rgb(0 4 27 / 42%), inset 0 1px 0 rgb(255 255 255 / 50%), inset 0 -1px 0 color-mix(in srgb, var(--aurora-blue) 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .button::before,
+  .segmented-control button,
+  .cash-flow-range-tabs button,
+  .trend-range-tabs button,
+  .calendar-view-tabs button,
+  .plan-tabs button,
+  .workspace-tabs button {
+    transition: none !important;
+  }
+}
