@@ -538,11 +538,12 @@ PUBLIC_APP_URL=https://budget.od3ssa.com
 GOOGLE_CLIENT_ID=<google-web-client-id>
 GOOGLE_CLIENT_SECRET=<google-web-client-secret>
 GOOGLE_REDIRECT_URI=https://budget.od3ssa.com/api/v1/auth/google/callback
+REGISTRATION_MODE=open
 ```
 
 Do not put the Google client secret in Vite variables or the frontend bundle. The callback travels through the existing same-origin Nginx `/api/` proxy; no new listener or inbound port is required.
 
-Existing password users should connect Google while already authenticated in Settings. Budget deliberately refuses to silently merge a new Google identity into an existing account based on email alone. New Google-first users require a valid invitation and must use the Google account matching the invited email.
+Existing password users should connect Google while already authenticated in Settings. Budget deliberately refuses to silently merge a new Google identity into an existing account based on email alone. With `REGISTRATION_MODE=open`, a new Google-first user with a verified Google email receives an independent Budget and starts onboarding; shared invitations continue to join the inviter's Budget. Set `REGISTRATION_MODE=invite_only` to require invitations for normal registration or `disabled` to turn normal registration off. Invitation acceptance remains available in every mode.
 
 ### Optional SMTP delivery
 

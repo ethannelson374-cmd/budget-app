@@ -26,7 +26,7 @@ export interface SetupStatus {
   demo_mode: boolean;
   bootstrap_required: boolean;
   google_auth_enabled: boolean;
-  invite_only: boolean;
+  registration_mode: "open" | "invite_only" | "disabled";
   email_delivery_configured: boolean;
 }
 
@@ -81,7 +81,7 @@ export interface SecurityStatus {
   google_connected: boolean;
   two_factor_enabled: boolean;
   email_delivery_configured: boolean;
-  invite_only: boolean;
+  registration_mode: "open" | "invite_only" | "disabled";
 }
 
 export interface AuthSessionItem {

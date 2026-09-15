@@ -36,6 +36,7 @@ from app.schemas.api import (
     PasswordResetDeliveryView,
     PasswordResetRequest,
     PasswordResetStatusView,
+    RegistrationRequest,
     SecurityStatusView,
     SessionListView,
     TotpConfirmRequest,
@@ -43,7 +44,21 @@ from app.schemas.api import (
     TotpSetupView,
     TwoFactorLoginRequest,
 )
-from app.services.auth import Principal, add_audit_event, issue_session
+from app.services.auth import (
+    Principal,
+    add_audit_event,
+    issue_session,
+    login_attempt_guard,
+    record_login_failure,
+    registration_throttle_keys,
+    throttled_for,
+)
+from app.services.family import (
+    detach_family_member,
+    family_status,
+    leave_shared_budget,
+    require_no_budget_dependents,
+)
 from app.services.identity import (
     accept_password_invitation,
     admin_password_reset,
@@ -61,6 +76,7 @@ from app.services.identity import (
     list_sessions,
     oauth_state,
     password_reset_status,
+    register_password_account,
     request_password_reset,
     reset_password,
     revoke_invitation,
@@ -70,7 +86,6 @@ from app.services.identity import (
     unlink_google,
     verify_account_delete_password,
 )
-from app.services.family import detach_family_member, family_status, leave_shared_budget, require_no_budget_dependents
 from app.services.plaid import disconnect
 from app.services.setup import INSTALLATION_ROW_ID
 from app.services.views import user_view
@@ -296,6 +311,78 @@ def accept_invitation(
     return {"user": user_view(user), "csrf_token": csrf_token}
 
 
+@router.post("/register", response_model=AuthView)
+def register(
+    payload: RegistrationRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings_from_request),
+) -> dict[str, object]:
+    """Create a private budget owner account without changing invitation flows."""
+    with login_attempt_guard():
+        now = utc_now()
+        keys = registration_throttle_keys(settings, str(payload.email), _client_ip(request))
+        retry_after = throttled_for(db, keys, now)
+        if retry_after:
+            add_audit_event(
+                db,
+                settings,
+                action="auth.registration",
+                outcome="blocked",
+                request_id=_request_id(request),
+                identity=str(payload.email),
+            )
+            db.commit()
+            raise ApiError(
+                429,
+                "registration_rate_limited",
+                "Too many account creation attempts. Try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        try:
+            user = register_password_account(
+                db,
+                settings,
+                email=str(payload.email),
+                username=payload.username,
+                password=payload.password,
+            )
+        except ApiError as exc:
+            record_login_failure(db, keys, now)
+            add_audit_event(
+                db,
+                settings,
+                action="auth.registration",
+                outcome="blocked" if exc.status_code == 403 else "failure",
+                request_id=_request_id(request),
+                identity=str(payload.email),
+                detail=exc.code,
+            )
+            db.commit()
+            raise
+        # Count successful account creation too, to bound bulk account creation.
+        record_login_failure(db, keys, now)
+        token, csrf_token, _ = issue_session(
+            db,
+            settings,
+            user,
+            client_ip=_client_ip(request),
+            user_agent=request.headers.get("User-Agent"),
+        )
+        add_audit_event(
+            db,
+            settings,
+            action="auth.registration",
+            outcome="success",
+            request_id=_request_id(request),
+            user_id=user.id,
+        )
+        db.commit()
+    _set_session_cookie(response, settings, token)
+    return {"user": user_view(user), "csrf_token": csrf_token}
+
+
 @router.get("/invitations", response_model=InvitationListView)
 def user_invitations(
     principal: Principal = Depends(require_principal),
@@ -353,8 +440,12 @@ def user_revoke_invitation(
 ) -> dict[str, bool]:
     revoke_invitation(db, principal.user, invitation_id)
     add_audit_event(
-        db, settings, action="auth.invitation.revoke", outcome="success",
-        request_id=_request_id(request), user_id=principal.user.id,
+        db,
+        settings,
+        action="auth.invitation.revoke",
+        outcome="success",
+        request_id=_request_id(request),
+        user_id=principal.user.id,
         detail=f"invitation:{invitation_id}",
     )
     db.commit()
@@ -396,8 +487,12 @@ def admin_revoke_invitation(
         raise ApiError(403, "admin_required", "Administrator access is required")
     revoke_invitation(db, principal.user, invitation_id)
     add_audit_event(
-        db, settings, action="auth.invitation.revoke", outcome="success",
-        request_id=_request_id(request), user_id=principal.user.id,
+        db,
+        settings,
+        action="auth.invitation.revoke",
+        outcome="success",
+        request_id=_request_id(request),
+        user_id=principal.user.id,
         detail=f"invitation:{invitation_id}",
     )
     db.commit()
@@ -422,8 +517,12 @@ def remove_family_member(
 ) -> dict[str, object]:
     detach_family_member(db, principal.user, member_user_id)
     add_audit_event(
-        db, settings, action="auth.family.member_remove", outcome="success",
-        request_id=_request_id(request), user_id=principal.user.id,
+        db,
+        settings,
+        action="auth.family.member_remove",
+        outcome="success",
+        request_id=_request_id(request),
+        user_id=principal.user.id,
         detail=f"member:{member_user_id}",
     )
     db.commit()
@@ -440,8 +539,12 @@ def leave_family_budget(
     previous_owner_id = principal.budget_user.id
     leave_shared_budget(db, principal.user)
     add_audit_event(
-        db, settings, action="auth.family.leave", outcome="success",
-        request_id=_request_id(request), user_id=principal.user.id,
+        db,
+        settings,
+        action="auth.family.leave",
+        outcome="success",
+        request_id=_request_id(request),
+        user_id=principal.user.id,
         detail=f"previous_owner:{previous_owner_id}",
     )
     db.commit()
@@ -613,7 +716,9 @@ def google_callback(
     settings: Settings = Depends(get_settings_from_request),
 ) -> RedirectResponse:
     if error or not code or not state:
-        return RedirectResponse(url=f"/login?auth_error={quote(error or 'google_cancelled')}", status_code=302)
+        return RedirectResponse(
+            url=f"/login?auth_error={quote(error or 'google_cancelled')}", status_code=302
+        )
     state_row = None
     try:
         state_row = oauth_state(db, settings, state)
@@ -657,8 +762,18 @@ def google_callback(
     except (ApiError, GoogleOIDCError) as exc:
         db.rollback()
         code_value = exc.code if isinstance(exc, ApiError) else "google_provider_error"
-        destination = "/settings" if state_row is not None and state_row.purpose == "link" else ("/join" if state_row is not None and state_row.invitation_id is not None else "/login")
-        return RedirectResponse(url=f"{destination}?auth_error={quote(code_value)}", status_code=302)
+        destination = (
+            "/settings"
+            if state_row is not None and state_row.purpose == "link"
+            else (
+                "/join"
+                if state_row is not None and state_row.invitation_id is not None
+                else "/login"
+            )
+        )
+        return RedirectResponse(
+            url=f"{destination}?auth_error={quote(code_value)}", status_code=302
+        )
 
 
 @router.delete("/google", response_model=OkView)

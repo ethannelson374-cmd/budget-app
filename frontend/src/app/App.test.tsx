@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 vi.mock("../api/queries", () => ({
-  useSetupStatus: () => ({ isPending: false, isError: false, data: { initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false }, refetch: vi.fn() }),
+  useSetupStatus: () => ({ isPending: false, isError: false, data: { initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, registration_mode: "invite_only", email_delivery_configured: false }, refetch: vi.fn() }),
   useSetupOptions: () => ({ isPending: false, isError: false }),
   queryKeys: { setup: ["setup-status"] },
 }));

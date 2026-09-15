@@ -91,6 +91,7 @@ def invitation_view(
         "invite_url": invite_url,
     }
 
+
 def _require_admin(user: User) -> None:
     if not user.is_admin:
         raise ApiError(403, "admin_required", "Administrator access is required")
@@ -134,7 +135,10 @@ def _unique_username(db: Session, preferred: str) -> str:
         return candidate
     for suffix in range(2, 10_000):
         trial = f"{candidate[:72]}-{suffix}"
-        if db.scalar(select(User.id).where(User.normalized_username == normalize_identity(trial))) is None:
+        if (
+            db.scalar(select(User.id).where(User.normalized_username == normalize_identity(trial)))
+            is None
+        ):
             return trial
     raise ApiError(503, "username_unavailable", "A username could not be assigned")
 
@@ -165,7 +169,11 @@ def create_invitation(
         or 0
     )
     if pending >= MAX_ACTIVE_INVITATIONS_PER_USER:
-        raise ApiError(409, "invite_limit_reached", "Revoke or wait for an existing invite before creating another")
+        raise ApiError(
+            409,
+            "invite_limit_reached",
+            "Revoke or wait for an existing invite before creating another",
+        )
 
     token = secrets.token_urlsafe(32)
     owner_id = budget_owner_id(db, inviter) if invite_type == "shared" else None
@@ -204,7 +212,9 @@ def revoke_invitation(db: Session, user: User, invitation_id: int) -> None:
     if row is None or (not user.is_admin and row.invited_by_user_id != user.id):
         raise ApiError(404, "invitation_not_found", "The invitation was not found")
     if row.accepted_at is not None:
-        raise ApiError(409, "invitation_already_accepted", "The invitation has already been accepted")
+        raise ApiError(
+            409, "invitation_already_accepted", "The invitation has already been accepted"
+        )
     row.revoked_at = utc_now()
 
 
@@ -219,15 +229,15 @@ def invitation_from_token(db: Session, settings: Settings, token: str) -> UserIn
     return row
 
 
-def exchange_invitation_token(
-    db: Session, settings: Settings, token: str
-) -> dict[str, object]:
+def exchange_invitation_token(db: Session, settings: Settings, token: str) -> dict[str, object]:
     invitation = invitation_from_token(db, settings, token)
     challenge = secrets.token_urlsafe(32)
     invitation.challenge_digest = _token_digest(settings, "invitation-challenge", challenge)
     invitation.challenge_expires_at = utc_now() + INVITATION_CHALLENGE_TTL
     db.flush()
-    owner = db.get(User, invitation.budget_owner_user_id) if invitation.budget_owner_user_id else None
+    owner = (
+        db.get(User, invitation.budget_owner_user_id) if invitation.budget_owner_user_id else None
+    )
     return {
         "label": invitation.label or invitation.email,
         "invite_type": invitation.invite_type,
@@ -241,7 +251,8 @@ def exchange_invitation_token(
 def invitation_from_challenge(db: Session, settings: Settings, challenge: str) -> UserInvitation:
     row = db.scalar(
         select(UserInvitation).where(
-            UserInvitation.challenge_digest == _token_digest(settings, "invitation-challenge", challenge)
+            UserInvitation.challenge_digest
+            == _token_digest(settings, "invitation-challenge", challenge)
         )
     )
     if (
@@ -250,7 +261,9 @@ def invitation_from_challenge(db: Session, settings: Settings, challenge: str) -
         or row.challenge_expires_at is None
         or as_utc(row.challenge_expires_at) <= utc_now()
     ):
-        raise ApiError(404, "invitation_invalid", "The invitation session is invalid or has expired")
+        raise ApiError(
+            404, "invitation_invalid", "The invitation session is invalid or has expired"
+        )
     return row
 
 
@@ -267,9 +280,10 @@ def accept_password_invitation(
     normalized_email = normalize_identity(email)
     if db.scalar(select(User.id).where(User.normalized_email == normalized_email)) is not None:
         raise ApiError(409, "account_exists", "A Budget account already uses that email address")
-    if db.scalar(
-        select(User.id).where(User.normalized_username == normalize_identity(username))
-    ) is not None:
+    if (
+        db.scalar(select(User.id).where(User.normalized_username == normalize_identity(username)))
+        is not None
+    ):
         raise ApiError(409, "username_exists", "That username is already in use")
     inviter = db.scalar(
         select(User)
@@ -305,9 +319,52 @@ def accept_password_invitation(
     db.flush()
     return user
 
+
+def register_password_account(
+    db: Session,
+    settings: Settings,
+    *,
+    email: str,
+    username: str,
+    password: str,
+) -> User:
+    """Create an independent first-run account when public registration is enabled."""
+    if settings.registration_mode != "open":
+        raise ApiError(403, "registration_unavailable", "Account creation is not available")
+    normalized_email = normalize_identity(email)
+    # Do not confirm that this email belongs to an existing account.
+    if db.scalar(select(User.id).where(User.normalized_email == normalized_email)) is not None:
+        raise ApiError(409, "registration_unavailable", "Account creation could not be completed")
+    if (
+        db.scalar(select(User.id).where(User.normalized_username == normalize_identity(username)))
+        is not None
+    ):
+        raise ApiError(409, "username_exists", "That username is already in use")
+    now = utc_now()
+    user = User(
+        username=username,
+        normalized_username=normalize_identity(username),
+        email=email,
+        normalized_email=normalized_email,
+        password_hash=hash_password(password),
+        is_admin=False,
+        email_verified_at=None,
+        last_login_at=now,
+        settings=_new_user_settings(),
+    )
+    db.add(user)
+    db.flush()
+    create_membership(db, user)
+    _add_default_categories(db, user)
+    db.flush()
+    return user
+
+
 def security_status(db: Session, settings: Settings, user: User) -> dict[str, object]:
     google = db.scalar(
-        select(AuthIdentity.id).where(AuthIdentity.user_id == user.id, AuthIdentity.provider == "google")
+        select(AuthIdentity.id).where(
+            AuthIdentity.user_id == user.id, AuthIdentity.provider == "google"
+        )
     )
     totp = db.get(UserTotp, user.id)
     return {
@@ -318,7 +375,7 @@ def security_status(db: Session, settings: Settings, user: User) -> dict[str, ob
         "google_connected": google is not None,
         "two_factor_enabled": bool(totp and totp.enabled_at is not None),
         "email_delivery_configured": settings.email_configured,
-        "invite_only": True,
+        "registration_mode": settings.registration_mode,
     }
 
 
@@ -348,7 +405,9 @@ def list_sessions(db: Session, user: User, current_session_id: int) -> list[dict
 
 def revoke_named_session(db: Session, user: User, session_id: int, current_session_id: int) -> bool:
     row = db.scalar(
-        select(SessionRecord).where(SessionRecord.id == session_id, SessionRecord.user_id == user.id)
+        select(SessionRecord).where(
+            SessionRecord.id == session_id, SessionRecord.user_id == user.id
+        )
     )
     if row is None:
         raise ApiError(404, "session_not_found", "The session was not found")
@@ -374,7 +433,9 @@ def revoke_other_sessions(db: Session, user: User, current_session_id: int) -> i
     return len(rows)
 
 
-def _new_password_reset(db: Session, settings: Settings, user: User) -> tuple[PasswordResetToken, str]:
+def _new_password_reset(
+    db: Session, settings: Settings, user: User
+) -> tuple[PasswordResetToken, str]:
     now = utc_now()
     db.execute(
         delete(PasswordResetToken).where(
@@ -464,10 +525,14 @@ def reset_password(db: Session, settings: Settings, *, token: str, password: str
     )
     now = utc_now()
     if row is None or row.used_at is not None or as_utc(row.expires_at) <= now:
-        raise ApiError(400, "password_reset_invalid", "The password reset link is invalid or has expired")
+        raise ApiError(
+            400, "password_reset_invalid", "The password reset link is invalid or has expired"
+        )
     user = db.get(User, row.user_id)
     if user is None:
-        raise ApiError(400, "password_reset_invalid", "The password reset link is invalid or has expired")
+        raise ApiError(
+            400, "password_reset_invalid", "The password reset link is invalid or has expired"
+        )
     user.password_hash = hash_password(password)
     user.email_verified_at = user.email_verified_at or now
     row.used_at = now
@@ -539,7 +604,8 @@ def confirm_totp(db: Session, settings: Settings, user: User, code: str) -> list
         raise ApiError(400, "totp_invalid", "The verification code is incorrect")
     recovery_codes = [secrets.token_hex(5).upper() for _ in range(RECOVERY_CODE_COUNT)]
     row.recovery_codes_json = json.dumps(
-        [_recovery_digest(settings, user.id, item) for item in recovery_codes], separators=(",", ":")
+        [_recovery_digest(settings, user.id, item) for item in recovery_codes],
+        separators=(",", ":"),
     )
     # The setup code is itself a valid authenticator credential. Recording its
     # counter prevents the same 30-second code from being replayed immediately
@@ -713,7 +779,11 @@ def oauth_state(db: Session, settings: Settings, state: str) -> OAuthState:
         .with_for_update()
     )
     if row is None or as_utc(row.expires_at) <= utc_now():
-        raise ApiError(400, "google_state_invalid", "The Google sign-in request expired or could not be verified")
+        raise ApiError(
+            400,
+            "google_state_invalid",
+            "The Google sign-in request expired or could not be verified",
+        )
     return row
 
 
@@ -725,7 +795,9 @@ def complete_google_flow(
     identity: GoogleIdentity,
 ) -> tuple[User, str]:
     if _token_digest(settings, "google-oauth-nonce", identity.nonce) != state_row.nonce_digest:
-        raise ApiError(400, "google_nonce_invalid", "The Google sign-in response could not be verified")
+        raise ApiError(
+            400, "google_nonce_invalid", "The Google sign-in response could not be verified"
+        )
     normalized_email = normalize_identity(identity.email)
     existing_identity = db.scalar(
         select(AuthIdentity).where(
@@ -742,9 +814,13 @@ def complete_google_flow(
         if user is None:
             raise ApiError(404, "user_not_found", "The user was not found")
         if existing_identity is not None and existing_identity.user_id != user.id:
-            raise ApiError(409, "google_already_linked", "That Google account is linked to another Budget user")
+            raise ApiError(
+                409, "google_already_linked", "That Google account is linked to another Budget user"
+            )
         current = db.scalar(
-            select(AuthIdentity).where(AuthIdentity.user_id == user.id, AuthIdentity.provider == "google")
+            select(AuthIdentity).where(
+                AuthIdentity.user_id == user.id, AuthIdentity.provider == "google"
+            )
         )
         if current is None:
             db.add(
@@ -757,7 +833,9 @@ def complete_google_flow(
                 )
             )
         elif current.subject != identity.subject:
-            raise ApiError(409, "google_already_linked", "A different Google account is already connected")
+            raise ApiError(
+                409, "google_already_linked", "A different Google account is already connected"
+            )
         else:
             current.email = identity.email
         user.email_verified_at = user.email_verified_at or utc_now()
@@ -767,10 +845,14 @@ def complete_google_flow(
 
     if existing_identity is not None:
         user = db.scalar(
-            select(User).options(selectinload(User.settings)).where(User.id == existing_identity.user_id)
+            select(User)
+            .options(selectinload(User.settings))
+            .where(User.id == existing_identity.user_id)
         )
         if user is None:
-            raise ApiError(401, "google_identity_invalid", "The Google account could not be signed in")
+            raise ApiError(
+                401, "google_identity_invalid", "The Google account could not be signed in"
+            )
         existing_identity.email = identity.email
         user.email_verified_at = user.email_verified_at or utc_now()
         db.delete(state_row)
@@ -778,7 +860,9 @@ def complete_google_flow(
         return user, state_row.return_to
 
     existing_user = db.scalar(
-        select(User).options(selectinload(User.settings)).where(User.normalized_email == normalized_email)
+        select(User)
+        .options(selectinload(User.settings))
+        .where(User.normalized_email == normalized_email)
     )
     if existing_user is not None:
         raise ApiError(
@@ -787,11 +871,29 @@ def complete_google_flow(
             "A Budget account already uses this email. Sign in with your password and connect Google from Settings.",
         )
 
-    invitation = db.get(UserInvitation, state_row.invitation_id) if state_row.invitation_id else None
-    if invitation is None or not _active_invitation(invitation):
-        raise ApiError(403, "invitation_required", "A valid Budget invitation is required to create an account")
-    inviter = db.scalar(
-        select(User).options(selectinload(User.settings)).where(User.id == invitation.invited_by_user_id)
+    invitation = (
+        db.get(UserInvitation, state_row.invitation_id) if state_row.invitation_id else None
+    )
+    if invitation is not None and not _active_invitation(invitation):
+        raise ApiError(
+            403, "invitation_required", "A valid Budget invitation is required to create an account"
+        )
+    if invitation is None and settings.registration_mode != "open":
+        raise ApiError(
+            403, "invitation_required", "A valid Budget invitation is required to create an account"
+        )
+    if not identity.email_verified:
+        raise ApiError(
+            403, "google_email_unverified", "Google must provide a verified email address"
+        )
+    inviter = (
+        db.scalar(
+            select(User)
+            .options(selectinload(User.settings))
+            .where(User.id == invitation.invited_by_user_id)
+        )
+        if invitation is not None
+        else None
     )
     preferred = identity.email.split("@", 1)[0]
     if identity.name:
@@ -815,7 +917,9 @@ def complete_google_flow(
         db,
         user,
         budget_owner_user_id=(
-            invitation.budget_owner_user_id if invitation.invite_type == "shared" else None
+            invitation.budget_owner_user_id
+            if invitation is not None and invitation.invite_type == "shared"
+            else None
         ),
     )
     _add_default_categories(db, user)
@@ -828,23 +932,28 @@ def complete_google_flow(
             created_at=now,
         )
     )
-    invitation.accepted_user_id = user.id
-    invitation.accepted_at = now
-    invitation.challenge_digest = None
-    invitation.challenge_expires_at = None
+    if invitation is not None:
+        invitation.accepted_user_id = user.id
+        invitation.accepted_at = now
+        invitation.challenge_digest = None
+        invitation.challenge_expires_at = None
     db.delete(state_row)
     db.flush()
-    return user, state_row.return_to
+    return user, "/onboarding"
 
 
 def unlink_google(db: Session, user: User) -> None:
     row = db.scalar(
-        select(AuthIdentity).where(AuthIdentity.user_id == user.id, AuthIdentity.provider == "google")
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == user.id, AuthIdentity.provider == "google"
+        )
     )
     if row is None:
         raise ApiError(404, "google_not_linked", "Google is not connected to this account")
     if user.password_hash is None:
-        raise ApiError(409, "password_required", "Set a password before disconnecting your only sign-in method")
+        raise ApiError(
+            409, "password_required", "Set a password before disconnecting your only sign-in method"
+        )
     db.delete(row)
 
 
@@ -873,7 +982,9 @@ def verify_account_delete_password(user: User, password: str | None) -> None:
     if user.password_hash is None:
         return
     if not password:
-        raise ApiError(400, "password_required", "Enter your current password to delete the account")
+        raise ApiError(
+            400, "password_required", "Enter your current password to delete the account"
+        )
     valid, _ = verify_password(user.password_hash, password)
     if not valid:
         raise ApiError(403, "invalid_credentials", "The password is incorrect")
@@ -884,7 +995,8 @@ def can_delete_admin(db: Session, user: User) -> None:
         return
     other_users = int(db.scalar(select(func.count(User.id)).where(User.id != user.id)) or 0)
     other_admins = int(
-        db.scalar(select(func.count(User.id)).where(User.id != user.id, User.is_admin.is_(True))) or 0
+        db.scalar(select(func.count(User.id)).where(User.id != user.id, User.is_admin.is_(True)))
+        or 0
     )
     if other_users and not other_admins:
         raise ApiError(

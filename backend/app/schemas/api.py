@@ -93,6 +93,12 @@ class InvitationAcceptRequest(StrictModel):
     password: Annotated[str, Field(min_length=12, max_length=128)]
 
 
+class RegistrationRequest(StrictModel):
+    email: EmailStr
+    username: Annotated[str, Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")]
+    password: Annotated[str, Field(min_length=12, max_length=128)]
+
+
 class OnboardingProgressRequest(StrictModel):
     step: Annotated[int, Field(ge=0, le=6)]
 
@@ -326,7 +332,7 @@ class SecurityStatusView(ViewModel):
     google_connected: bool
     two_factor_enabled: bool
     email_delivery_configured: bool
-    invite_only: bool
+    registration_mode: Literal["open", "invite_only", "disabled"]
 
 
 class FamilyMemberView(ViewModel):
@@ -540,7 +546,7 @@ class SetupStatusView(ViewModel):
     demo_mode: bool
     bootstrap_required: bool
     google_auth_enabled: bool
-    invite_only: bool
+    registration_mode: Literal["open", "invite_only", "disabled"]
     email_delivery_configured: bool
 
 
@@ -634,7 +640,9 @@ class DashboardView(ViewModel):
 
 
 CashFlowRange = Literal["month", "year", "custom"]
-CashFlowNodeKind = Literal["income_source", "refund", "shortfall", "hub", "expense", "debt", "savings"]
+CashFlowNodeKind = Literal[
+    "income_source", "refund", "shortfall", "hub", "expense", "debt", "savings"
+]
 CashFlowLinkKind = Literal["income", "refund", "shortfall", "expense", "debt", "savings"]
 
 
@@ -1159,12 +1167,8 @@ class YearBudgetView(ViewModel):
     categories: list[YearBudgetCategoryView]
 
 
-GoalType = Literal[
-    "emergency_fund", "savings", "down_payment", "vacation", "purchase", "custom"
-]
-DebtType = Literal[
-    "credit_card", "auto", "student", "personal", "mortgage", "medical", "other"
-]
+GoalType = Literal["emergency_fund", "savings", "down_payment", "vacation", "purchase", "custom"]
+DebtType = Literal["credit_card", "auto", "student", "personal", "mortgage", "medical", "other"]
 DebtStrategy = Literal["avalanche", "snowball", "custom"]
 
 
@@ -1173,9 +1177,9 @@ class FinancialGoalCreate(StrictModel):
     goal_type: GoalType = "savings"
     target_amount: Annotated[Decimal, Field(gt=0, max_digits=19, decimal_places=4)]
     current_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal("0")
-    monthly_contribution: Annotated[
-        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
-    ] = Decimal("0")
+    monthly_contribution: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = (
+        Decimal("0")
+    )
     target_date: date | None = None
     linked_account_id: Annotated[int, Field(gt=0)] | None = None
     priority: Annotated[int, Field(ge=1, le=10000)] = 100
@@ -1188,9 +1192,9 @@ class FinancialGoalPatch(StrictModel):
     goal_type: GoalType | None = None
     target_amount: Annotated[Decimal, Field(gt=0, max_digits=19, decimal_places=4)] | None = None
     current_amount: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None = None
-    monthly_contribution: Annotated[
-        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
-    ] | None = None
+    monthly_contribution: (
+        Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] | None
+    ) = None
     target_date: date | None = None
     linked_account_id: Annotated[int, Field(gt=0)] | None = None
     priority: Annotated[int, Field(ge=1, le=10000)] | None = None
@@ -1334,18 +1338,18 @@ class ForecastView(ViewModel):
 
 
 class ForecastScenarioWrite(StrictModel):
-    extra_debt_payment: Annotated[
-        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
-    ] = Decimal("0")
-    goal_contribution_adjustment: Annotated[
-        Decimal, Field(max_digits=19, decimal_places=4)
-    ] = Decimal("0")
-    spending_reduction: Annotated[
-        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
-    ] = Decimal("0")
-    new_monthly_expense: Annotated[
-        Decimal, Field(ge=0, max_digits=19, decimal_places=4)
-    ] = Decimal("0")
+    extra_debt_payment: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal(
+        "0"
+    )
+    goal_contribution_adjustment: Annotated[Decimal, Field(max_digits=19, decimal_places=4)] = (
+        Decimal("0")
+    )
+    spending_reduction: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal(
+        "0"
+    )
+    new_monthly_expense: Annotated[Decimal, Field(ge=0, max_digits=19, decimal_places=4)] = Decimal(
+        "0"
+    )
 
 
 class ForecastScenarioView(ViewModel):
@@ -1843,11 +1847,24 @@ class OperationsStatusView(ViewModel):
     backup_storage: OperationalStorageView
     attention: list[str]
 
+
 # Phase 4 Stage 3 — per-user dashboard experience and guided onboarding
 DashboardCardId = Literal[
-    "net_worth", "cash_available", "income", "spending", "net_cash_flow", "savings_rate",
-    "cash_flow", "top_spending", "subscriptions", "ask_budget", "budget", "insights", "recent_transactions",
-    "accounts", "data_freshness",
+    "net_worth",
+    "cash_available",
+    "income",
+    "spending",
+    "net_cash_flow",
+    "savings_rate",
+    "cash_flow",
+    "top_spending",
+    "subscriptions",
+    "ask_budget",
+    "budget",
+    "insights",
+    "recent_transactions",
+    "accounts",
+    "data_freshness",
 ]
 DashboardCardSize = Literal["compact", "standard", "hero"]
 DashboardPreset = Literal["everyday", "minimal", "planning", "analytics", "custom"]
@@ -1893,6 +1910,7 @@ class DashboardOnboardingView(ViewModel):
     dismissed: bool
     dismissed_at: datetime | None
 
+
 # Phase 4 Stage 4 — deterministic financial notifications and summaries
 NotificationSeverity = Literal["info", "opportunity", "important", "critical"]
 NotificationStatusFilter = Literal["all", "unread"]
@@ -1906,9 +1924,9 @@ class NotificationPreferencesPatch(StrictModel):
     goal_milestones: bool | None = None
     recurring_changes: bool | None = None
     large_transaction_alerts: bool | None = None
-    large_transaction_threshold: Annotated[
-        Decimal, Field(ge=1, le=1000000, max_digits=19, decimal_places=4)
-    ] | None = None
+    large_transaction_threshold: (
+        Annotated[Decimal, Field(ge=1, le=1000000, max_digits=19, decimal_places=4)] | None
+    ) = None
     weekly_summary: bool | None = None
     monthly_summary: bool | None = None
 

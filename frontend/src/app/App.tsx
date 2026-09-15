@@ -7,6 +7,7 @@ import { AppShell } from "../components/AppShell";
 import { Brand } from "../components/Brand";
 import { ErrorState, PageLoading } from "../components/States";
 import { LoginPage } from "../pages/LoginPage";
+import { SignupPage } from "../pages/SignupPage";
 import { InvitePage } from "../pages/InvitePage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
@@ -75,6 +76,18 @@ function LoginRoute() {
   return <LoginPage setupStatus={setup.data} />;
 }
 
+function SignupRoute() {
+  const setup = useSetupStatus();
+  const { status, user } = useAuth();
+  if (setup.isPending || status === "loading") return <PageLoading label="Preparing account creation" />;
+  if (setup.isError) return <SetupError error={setup.error} retry={() => void setup.refetch()} />;
+  if (!setup.data.initialized) return <Navigate to="/setup" replace />;
+  if (status === "unavailable") return <AuthUnavailable />;
+  if (status === "authenticated") return <Navigate to={user?.settings.onboarding_complete === false ? "/onboarding" : "/dashboard"} replace />;
+  if (setup.data.registration_mode !== "open") return <Navigate to="/login" replace />;
+  return <SignupPage googleEnabled={setup.data.google_auth_enabled} />;
+}
+
 function ProtectedRoute() {
   const setup = useSetupStatus();
   const { status, user } = useAuth();
@@ -132,6 +145,7 @@ export function App() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/setup" element={<SetupRoute />} />
       <Route path="/login" element={<LoginRoute />} />
+      <Route path="/signup" element={<SignupRoute />} />
       <Route path="/join/:token" element={<InvitePage />} />
       <Route path="/join" element={<InvitePage />} />
       <Route path="/invite" element={<InvitePage />} />

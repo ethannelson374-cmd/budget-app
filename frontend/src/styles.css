@@ -1918,6 +1918,8 @@ input,select,textarea{border-color:var(--border-strong);background:color-mix(in 
 .join-invite-meta small { color: var(--text-muted); }
 
 .onboarding-shell { position: relative; min-height: 100vh; overflow: hidden; color: var(--text); background: radial-gradient(circle at 13% 15%, rgba(26,215,207,.22), transparent 34%), radial-gradient(circle at 84% 20%, rgba(99,64,255,.3), transparent 38%), linear-gradient(135deg, #0b2430 0%, #121a35 45%, #26205f 100%); }
+.auth-signup-link { margin: 2px 0 0; text-align: center; color: var(--text-muted); font-size: .82rem; }
+.auth-signup-link a { color: var(--brand); font-weight: 700; }
 .onboarding-aurora { position: fixed; inset: -20%; pointer-events: none; opacity: .72; filter: blur(60px); background: radial-gradient(circle at 30% 35%, rgba(0,235,220,.22), transparent 22%), radial-gradient(circle at 68% 46%, rgba(72,72,255,.25), transparent 26%), radial-gradient(circle at 53% 78%, rgba(185,86,255,.12), transparent 22%); animation: onboarding-aurora-drift 16s ease-in-out infinite alternate; }
 @keyframes onboarding-aurora-drift { to { transform: translate3d(3%, -2%, 0) scale(1.04); } }
 .onboarding-topbar { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; max-width: 1080px; margin: 0 auto; padding: 28px 28px 10px; color: rgba(255,255,255,.7); font-size: .75rem; }

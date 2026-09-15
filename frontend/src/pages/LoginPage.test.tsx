@@ -10,7 +10,7 @@ const verifyTwoFactor = vi.fn();
 const demoLogin = vi.fn();
 vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ login, verifyTwoFactor, demoLogin }) }));
 
-const status = { initialized: true, demo_mode: true, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false };
+const status = { initialized: true, demo_mode: true, bootstrap_required: false, google_auth_enabled: false, registration_mode: "open" as const, email_delivery_configured: false };
 
 describe("LoginPage", () => {
   beforeEach(() => {
@@ -37,6 +37,11 @@ describe("LoginPage", () => {
     expect(login).toHaveBeenCalledWith("owner@example.test", "legacy8");
     expect(password).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Explore the demo" })).not.toBeInTheDocument();
+  });
+
+  it("links people to public account creation when registration is open", () => {
+    render(<MemoryRouter><LoginPage setupStatus={status} /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: "Create account." })).toHaveAttribute("href", "/signup");
   });
 
   it("has no serious automated accessibility violations", async () => {

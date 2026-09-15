@@ -127,6 +127,7 @@ repository `.env` file.
 | `BOOTSTRAP_TOKEN` | One-time 256-bit production setup credential |
 | `ALLOWED_HOSTS` | Comma-separated public and loopback hosts accepted by FastAPI |
 | `LOG_LEVEL` | Application log level |
+| `REGISTRATION_MODE` | `open` enables public password/Google account creation; `invite_only` requires an invite for new accounts; `disabled` disables normal registration. Invitations continue to work in every mode. |
 | `DB_HOST` | HeatWave internal FQDN matching its TLS certificate |
 | `DB_PORT` | MySQL TCP port, normally `3306` |
 | `DB_NAME` | Dedicated application schema |
@@ -569,13 +570,13 @@ Migration `20260814_0012` adds owner-scoped saved report configurations and exac
 
 ### Phase 4 Stage 1 — private-family identity and account security
 
-Phase 4 begins by replacing Budget's one-owner-only authentication assumptions with a small, invite-only multi-user identity layer. The initial owner remains the administrator. Administrators can invite family members by email; accepting an invitation creates a fully owner-scoped Budget user with a fresh onboarding state and the existing default category catalog. There is no public registration endpoint.
+Phase 4 begins by replacing Budget's one-owner-only authentication assumptions with a small multi-user identity layer. The initial owner remains the administrator. Administrators can invite family members by email; accepting an invitation creates a fully owner-scoped Budget user with a fresh onboarding state and the existing default category catalog.
 
 Users can authenticate with a local password or an explicitly linked Google OpenID Connect identity. A Google account is never silently attached merely because its email matches an existing Budget user: an existing local user must sign in first and link Google from Settings. A Google-first account can be created only from a valid invitation whose email matches Google's verified email claim. Invitation acceptance also verifies the invited email because possession of the single-use invitation is the account-creation proof; Google accounts additionally require Google's verified-email claim.
 
 Security Settings now includes active-session management, password reset, Google connection management, optional TOTP for password sign-in, one-time recovery codes, administrator invitation/user controls, and self-service account deletion. Password reset invalidates all existing sessions. TOTP secrets and recovery codes are encrypted at rest with the existing application encryption key. Google OAuth state and nonce values, invitation tokens, reset tokens, session tokens, and 2FA challenge tokens are stored only as keyed digests rather than plaintext.
 
-Google and SMTP are optional. With `EMAIL_DELIVERY=disabled`, the administrator can copy private invitation and password-reset links directly from Settings, which keeps the app useful for a small trusted family deployment without adding a mail provider. Migration `20260814_0013` adds the Stage 1 identity/security records and marks the existing owner as the first administrator.
+Google and SMTP are optional. With `EMAIL_DELIVERY=disabled`, the administrator can copy private invitation and password-reset links directly from Settings, which keeps the app useful for a small trusted family deployment without adding a mail provider. Public registration is controlled by `REGISTRATION_MODE`; use `open` in production to enable self-service accounts, while shared invitations remain the path for joining another user's Budget. Migration `20260814_0013` adds the Stage 1 identity/security records and marks the existing owner as the first administrator.
 
 ### Phase 4 Stage 2 — reliability and backups
 

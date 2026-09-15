@@ -44,7 +44,7 @@ def setup_status(
         "bootstrap_required": not initialized
         and (settings.is_production or settings.bootstrap_token is not None),
         "google_auth_enabled": settings.google_configured,
-        "invite_only": True,
+        "registration_mode": settings.registration_mode,
         "email_delivery_configured": settings.email_configured,
     }
 

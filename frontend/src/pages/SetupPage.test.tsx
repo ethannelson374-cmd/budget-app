@@ -79,7 +79,7 @@ describe("SetupWizard secret handling", () => {
     };
     vi.mocked(apiRequest).mockResolvedValue(session);
     const client = new QueryClient();
-    client.setQueryData(["setup-status"], { initialized: false, demo_mode: false, bootstrap_required: true, google_auth_enabled: false, invite_only: true, email_delivery_configured: false });
+    client.setQueryData(["setup-status"], { initialized: false, demo_mode: false, bootstrap_required: true, google_auth_enabled: false, registration_mode: "invite_only", email_delivery_configured: false });
     const user = userEvent.setup();
     render(<QueryClientProvider client={client}><MemoryRouter><SetupWizard options={options} bootstrapRequired /></MemoryRouter></QueryClientProvider>);
 
@@ -87,7 +87,7 @@ describe("SetupWizard secret handling", () => {
 
     await waitFor(() => expect(establishSession).toHaveBeenCalledWith(session));
     expect(apiRequest).toHaveBeenCalledTimes(1);
-    expect(client.getQueryData(["setup-status"])).toEqual({ initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, invite_only: true, email_delivery_configured: false });
+    expect(client.getQueryData(["setup-status"])).toEqual({ initialized: true, demo_mode: false, bootstrap_required: false, google_auth_enabled: false, registration_mode: "invite_only", email_delivery_configured: false });
   });
 
   it("has no serious automated accessibility violations", async () => {

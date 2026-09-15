@@ -41,7 +41,7 @@ export function SecuritySettings() {
 
   return (
     <section className="settings-security" aria-labelledby="security-settings-heading">
-      <div className="settings-section-heading"><div><span className="eyebrow">Identity & security</span><h2 id="security-settings-heading">Sign-in and account access</h2><p>Budget uses private invite links. Manage sign-in methods, sessions, and family access here.</p></div></div>
+      <div className="settings-section-heading"><div><span className="eyebrow">Identity & security</span><h2 id="security-settings-heading">Sign-in and account access</h2><p>Manage sign-in methods, sessions, and shared Budget invitations here.</p></div></div>
       <div className="security-grid">
         <SignInMethods status={security.data} refreshSecurity={() => void security.refetch()} />
         <TwoFactorCard status={security.data} refreshSecurity={() => void security.refetch()} />

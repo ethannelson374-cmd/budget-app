@@ -83,6 +83,16 @@ def throttle_keys(settings: Settings, identity: str, client_ip: str) -> list[tup
     ]
 
 
+def registration_throttle_keys(
+    settings: Settings, email: str, client_ip: str
+) -> list[tuple[str, int]]:
+    """Use keyed, privacy-preserving counters for public account creation."""
+    return [
+        (private_identifier(settings, "registration-email", normalize_identity(email)), 3),
+        (private_identifier(settings, "registration-ip", client_ip), 10),
+    ]
+
+
 def throttled_for(db: Session, keys: list[tuple[str, int]], now: datetime) -> int | None:
     remaining = 0
     for key, _ in keys:

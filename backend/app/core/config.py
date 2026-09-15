@@ -16,6 +16,7 @@ DatabaseSSLMode = Literal["REQUIRED", "VERIFY_CA", "VERIFY_IDENTITY"]
 PlaidEnvironment = Literal["sandbox", "production"]
 AiProvider = Literal["openai", "gemini"]
 EmailDeliveryMode = Literal["disabled", "smtp"]
+RegistrationMode = Literal["open", "invite_only", "disabled"]
 
 
 def _strict_bool(value: Any) -> bool:
@@ -98,6 +99,8 @@ class Settings(BaseSettings):
     bootstrap_token: SecretStr | None = None
     allowed_hosts: str = "localhost,127.0.0.1"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # Existing installations remain private unless an operator explicitly opens registration.
+    registration_mode: RegistrationMode = "invite_only"
 
     app_secret: SecretStr | None = None
     session_secret: SecretStr | None = None
@@ -176,6 +179,11 @@ class Settings(BaseSettings):
     @field_validator("email_delivery", mode="before")
     @classmethod
     def normalize_email_delivery(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("registration_mode", mode="before")
+    @classmethod
+    def normalize_registration_mode(cls, value: Any) -> Any:
         return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("plaid_env", mode="before")
@@ -331,15 +339,21 @@ class Settings(BaseSettings):
 
         if self.ai_enabled:
             if self.ai_provider == "openai" and self.openai_api_key is None:
-                raise ValueError("OPENAI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=openai")
+                raise ValueError(
+                    "OPENAI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=openai"
+                )
             if self.ai_provider == "gemini" and self.gemini_api_key is None:
-                raise ValueError("GEMINI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=gemini")
+                raise ValueError(
+                    "GEMINI_API_KEY is required when AI_ENABLED=true and AI_PROVIDER=gemini"
+                )
 
         google_values = (self.google_client_id, self.google_client_secret)
         if any(value is not None for value in google_values) and not all(
             value is not None for value in google_values
         ):
-            raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together")
+            raise ValueError(
+                "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together"
+            )
         if self.google_configured and self.google_redirect_uri is None:
             raise ValueError("GOOGLE_REDIRECT_URI is required when Google sign-in is configured")
         smtp_credentials = (self.smtp_username, self.smtp_password)
@@ -348,12 +362,18 @@ class Settings(BaseSettings):
         ):
             raise ValueError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
         if self.email_delivery == "smtp":
-            if self.smtp_host is None or self.smtp_from_email is None or self.public_app_url is None:
+            if (
+                self.smtp_host is None
+                or self.smtp_from_email is None
+                or self.public_app_url is None
+            ):
                 raise ValueError(
                     "SMTP_HOST, SMTP_FROM_EMAIL, and PUBLIC_APP_URL are required when EMAIL_DELIVERY=smtp"
                 )
         if self.app_env == "production":
-            if self.google_redirect_uri is not None and not self.google_redirect_uri.startswith("https://"):
+            if self.google_redirect_uri is not None and not self.google_redirect_uri.startswith(
+                "https://"
+            ):
                 raise ValueError("GOOGLE_REDIRECT_URI must use HTTPS in production")
             if self.public_app_url is not None and not self.public_app_url.startswith("https://"):
                 raise ValueError("PUBLIC_APP_URL must use HTTPS in production")
@@ -419,9 +439,7 @@ class Settings(BaseSettings):
                     "values: " + ", ".join(weak_secrets)
                 )
             secret_material = [
-                value.get_secret_value()
-                for value in required_secrets.values()
-                if value is not None
+                value.get_secret_value() for value in required_secrets.values() if value is not None
             ]
             if len(set(secret_material)) != len(secret_material):
                 raise ValueError("APP_SECRET, SESSION_SECRET, and ENCRYPTION_KEY must be distinct")
@@ -464,7 +482,11 @@ class Settings(BaseSettings):
 
     @property
     def email_configured(self) -> bool:
-        return self.email_delivery == "smtp" and self.smtp_host is not None and self.smtp_from_email is not None
+        return (
+            self.email_delivery == "smtp"
+            and self.smtp_host is not None
+            and self.smtp_from_email is not None
+        )
 
     @property
     def ai_configured(self) -> bool:
